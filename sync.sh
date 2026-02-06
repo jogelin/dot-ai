@@ -7,21 +7,52 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_FILE="$SCRIPT_DIR/SKILL.md"
 
-# Find workspace root (nearest git root, or fallback to parent of .ai/)
+# Find workspace root.
+# If called via symlink (e.g. .ai/skills/dot-ai → ~/dev/dot-ai),
+# resolve from the symlink location (PWD-relative), not the script target.
+# Accepts an explicit root as first argument.
 find_workspace_root() {
-  local dir="$SCRIPT_DIR"
+  # Explicit argument takes priority
+  if [[ -n "${1:-}" ]]; then
+    echo "$1"
+    return
+  fi
+
+  # Try to resolve from the symlink source (the calling path)
+  # $0 may be the symlink path if invoked as `.ai/skills/dot-ai/sync.sh`
+  local call_dir
+  call_dir="$(cd "$(dirname "$0")" && pwd -P 2>/dev/null || echo "$SCRIPT_DIR")"
+
+  # If call_dir is inside a .ai/skills/ tree, derive root from there
+  if [[ "$call_dir" == */.ai/skills/* ]]; then
+    echo "${call_dir%%/.ai/skills/*}"
+    return
+  fi
+
+  # Fallback: walk up from cwd looking for .ai/
+  local dir="$PWD"
   while [[ "$dir" != "/" ]]; do
-    if [[ -d "$dir/.git" ]]; then
+    if [[ -d "$dir/.ai" ]]; then
       echo "$dir"
       return
     fi
     dir="$(dirname "$dir")"
   done
-  # Fallback: go up from .ai/skills/dot-ai/ → .ai/ → workspace
-  echo "$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+  # Last resort: walk up from script dir looking for .ai/ (not .git)
+  dir="$SCRIPT_DIR"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -d "$dir/.ai" && "$dir" != "$SCRIPT_DIR" ]]; then
+      echo "$dir"
+      return
+    fi
+    dir="$(dirname "$dir")"
+  done
+
+  echo "$PWD"
 }
 
-ROOT="$(find_workspace_root)"
+ROOT="$(find_workspace_root "${1:-}")"
 SKILL_REL="$(python3 -c "import os; print(os.path.relpath('$SKILL_FILE', '$ROOT'))")"
 
 MARKER_START="<!-- dot-ai start -->"
@@ -80,6 +111,18 @@ if [[ -f "$CLAUDE_FILE" ]] || command -v claude &>/dev/null; then
   content="<!-- Auto-managed by dot-ai. Do not edit between markers. -->
 @$SKILL_REL"
   inject_markers "$CLAUDE_FILE" "$content"
+  synced=$((synced + 1))
+fi
+
+# --- OpenClaw ---
+# OpenClaw loads .ai/AGENTS.md as project context in the system prompt.
+# Inject instruction to read the dot-ai skill at boot.
+OPENCLAW_FILE="$ROOT/.ai/AGENTS.md"
+if [[ -f "$OPENCLAW_FILE" ]] || command -v openclaw &>/dev/null; then
+  content="<!-- Auto-managed by dot-ai. Do not edit between markers. -->
+**Boot requirement:** Read and follow \`$SKILL_REL\` at every session start.
+This skill defines the workspace convention (file structure, routing, memory, skills)."
+  inject_markers "$OPENCLAW_FILE" "$content"
   synced=$((synced + 1))
 fi
 
