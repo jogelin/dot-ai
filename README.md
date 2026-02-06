@@ -105,4 +105,4 @@ MIT
 
 ## Author
 
-Joël Gelin ([@jogelin](https://github.com/jogelin))
+Jonathan Gelin ([@jogelin](https://github.com/jogelin))
