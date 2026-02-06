@@ -165,48 +165,43 @@ inject_markers() {
 sync_agents() {
   local synced=0
 
+  # Only update agent configs that already exist in the project.
+  # sync.sh does NOT create new agent configs — the user sets up their agents first.
+
   # --- Claude Code ---
-  CLAUDE_FILE="$ROOT/CLAUDE.md"
-  if [[ -f "$CLAUDE_FILE" ]] || command -v claude &>/dev/null; then
-    content="<!-- Auto-managed by dot-ai. Do not edit between markers. -->
+  if [[ -f "$ROOT/CLAUDE.md" ]]; then
+    inject_markers "$ROOT/CLAUDE.md" "<!-- Auto-managed by dot-ai. Do not edit between markers. -->
 @$SKILL_REL"
-    inject_markers "$CLAUDE_FILE" "$content"
     synced=$((synced + 1))
   fi
 
   # --- OpenClaw ---
-  OPENCLAW_FILE="$ROOT/.ai/AGENTS.md"
-  if [[ -f "$OPENCLAW_FILE" ]] || command -v openclaw &>/dev/null; then
-    content="<!-- Auto-managed by dot-ai. Do not edit between markers. -->
+  if [[ -f "$ROOT/.ai/AGENTS.md" ]]; then
+    inject_markers "$ROOT/.ai/AGENTS.md" "<!-- Auto-managed by dot-ai. Do not edit between markers. -->
 **Boot requirement:** Read and follow \`$SKILL_REL\` at every session start.
 This skill defines the workspace convention (file structure, routing, memory, skills)."
-    inject_markers "$OPENCLAW_FILE" "$content"
     synced=$((synced + 1))
   fi
 
   # --- OpenAI Codex ---
-  CODEX_FILE="$ROOT/AGENTS.md"
-  if [[ -f "$CODEX_FILE" ]]; then
-    content="<!-- Auto-managed by dot-ai. Do not edit between markers. -->
+  if [[ -f "$ROOT/AGENTS.md" ]]; then
+    inject_markers "$ROOT/AGENTS.md" "<!-- Auto-managed by dot-ai. Do not edit between markers. -->
 Read and follow \`$SKILL_REL\` for workspace conventions."
-    inject_markers "$CODEX_FILE" "$content"
     synced=$((synced + 1))
   fi
 
   # --- Windsurf ---
   if [[ -d "$ROOT/.windsurf" ]] || [[ -f "$ROOT/.windsurfrules" ]]; then
-    content="# dot-ai workspace convention
+    inject_markers "$ROOT/.windsurf/rules/dot-ai.md" "# dot-ai workspace convention
 # Activation: Always On
 Read and follow \`$SKILL_REL\` for workspace conventions."
-    inject_markers "$ROOT/.windsurf/rules/dot-ai.md" "$content"
     synced=$((synced + 1))
   fi
 
   # --- Cursor ---
   if [[ -d "$ROOT/.cursor" ]] || [[ -f "$ROOT/.cursorrules" ]]; then
-    content="# dot-ai workspace convention
+    inject_markers "$ROOT/.cursor/rules/dot-ai.md" "# dot-ai workspace convention
 Read and follow \`$SKILL_REL\` for workspace conventions."
-    inject_markers "$ROOT/.cursor/rules/dot-ai.md" "$content"
     synced=$((synced + 1))
   fi
 
