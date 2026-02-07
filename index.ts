@@ -2,10 +2,11 @@
 // Registers hooks for workspace convention enforcement and model routing
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { OpenClawPluginApi, OpenClawPluginDefinition } from "./types.js";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { MODEL_ROUTING_CONTENT } from "./constants.js";
 
-const plugin: OpenClawPluginDefinition = {
+// Plugin definition following official OpenClaw SDK pattern
+const plugin = {
   id: "dot-ai",
   name: "dot-ai — Universal AI Workspace Convention",
   version: "0.2.0",
