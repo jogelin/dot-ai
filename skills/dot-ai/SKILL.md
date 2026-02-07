@@ -458,7 +458,7 @@ Each file type has a dedicated sync sub-skill for validation and generation.
 
 **Pattern:** Audit calls sync skills to validate, sync skills have authority on structure.
 
-Sub-skills are located in `skills/dot-ai/sub-skills/<name>/SKILL.md`.
+Sub-skills are located in `skills/<name>/SKILL.md` (sibling directories to `skills/dot-ai/`).
 They **complement** this skill — they don't replace it. This file remains
 the framework (conventions, structure, boot, routing). Sub-skills handle
 the operational details.
