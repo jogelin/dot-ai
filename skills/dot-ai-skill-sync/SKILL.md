@@ -13,17 +13,23 @@ Called by `dot-ai-audit` for validation.
 
 ## Validation Checklist
 
-### Required Frontmatter Fields
+### Frontmatter Fields
 
 ```yaml
 ---
 name: <skill-name>          # REQUIRED, kebab-case
 description: <one-line>     # REQUIRED, <150 chars
 triggers: [...]             # REQUIRED, array of valid triggers
-internal: true
-parent: dot-ai
+internal: true              # OPTIONAL, only for sub-skills (not user-invocable)
+parent: dot-ai              # OPTIONAL, only when internal: true
+status: planned             # OPTIONAL, mark as planned/experimental/deprecated
 ---
 ```
+
+**Field semantics:**
+- `internal: true` + `parent: <name>` → sub-skill, part of a larger skill system
+- No `internal` field → public skill, user-invocable
+- `status: planned` → documented but not yet implemented
 
 ### Valid Trigger Values
 

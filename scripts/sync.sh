@@ -1,27 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# dot-ai sync — Ensures the dot-ai skill is properly installed and
-# all detected AI agents are configured to load it at boot.
+# dot-ai sync — Configures non-plugin AI agents to use dot-ai conventions
 #
 # Usage:
 #   bash sync.sh [workspace-root]
+#
+# IMPORTANT: This script is ONLY for agents WITHOUT native plugin systems:
+#   - Cursor (uses .cursor/rules/)
+#   - Codex (uses AGENTS.md)
+#   - Continue.dev (uses .continuerc.json)
+#
+# OpenClaw and Claude Code use the native plugin system and don't need this script.
+# Windsurf now has a plugin system - use that instead.
 #
 # What it does:
 #   1. Detects the workspace root (or accepts it as argument)
 #   2. Ensures .ai/ structure exists (creates AGENTS.md as convention file)
 #   3. Ensures the skill is accessible at .ai/skills/dot-ai/ (symlinks if needed)
 #   4. Injects boot reference into .ai/AGENTS.md (dot-ai convention file)
-#   5. Updates existing agent configs (CLAUDE.md, Codex, Cursor, Windsurf)
+#   5. Updates existing non-plugin agent configs (Codex, Cursor)
 #      — never creates agent-specific files that don't already exist
 
 # Resolve the REAL physical location of this script (not the symlink path)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-SKILL_FILE="$SCRIPT_DIR/SKILL.md"
 
-if [[ ! -f "$SKILL_FILE" ]]; then
-  echo "❌ SKILL.md not found at $SCRIPT_DIR"
-  echo "   sync.sh must be run from the dot-ai skill directory."
+# The skill directory is either:
+# - Same as SCRIPT_DIR if called from within skills/dot-ai/
+# - ../skills/dot-ai/ if called from scripts/
+if [[ -f "$SCRIPT_DIR/SKILL.md" ]]; then
+  SKILL_DIR="$SCRIPT_DIR"
+elif [[ -f "$SCRIPT_DIR/../skills/dot-ai/SKILL.md" ]]; then
+  SKILL_DIR="$(cd "$SCRIPT_DIR/../skills/dot-ai" && pwd -P)"
+else
+  echo "❌ Could not locate dot-ai SKILL.md"
+  echo "   Expected at: $SCRIPT_DIR/SKILL.md"
+  echo "            or: $SCRIPT_DIR/../skills/dot-ai/SKILL.md"
   exit 1
 fi
 
@@ -55,7 +69,17 @@ MARKER_END="<!-- dot-ai end -->"
 SKILL_REL=".ai/skills/dot-ai/SKILL.md"
 
 log() { echo "  $1"; }
-relpath() { python3 -c "import os; print(os.path.relpath('$1', '$ROOT'))"; }
+
+# Check if python3 is available, fallback to simpler path computation
+if command -v python3 &>/dev/null; then
+  relpath() { python3 -c "import os; print(os.path.relpath('$1', '$ROOT'))"; }
+else
+  relpath() {
+    # Fallback: simple prefix removal
+    local path="$1"
+    echo "${path#$ROOT/}"
+  }
+fi
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -129,8 +153,8 @@ ensure_skill_location() {
     local link_target
     link_target="$(readlink "$target")"
     [[ "$link_target" != /* ]] && link_target="$(cd "$(dirname "$target")" && cd "$(dirname "$link_target")" && pwd)/$(basename "$link_target")"
-    if [[ "$link_target" == "$SCRIPT_DIR" ]]; then
-      log "✓ Skill at .ai/skills/dot-ai/ → $SCRIPT_DIR"
+    if [[ "$link_target" == "$SKILL_DIR" ]]; then
+      log "✓ Skill at .ai/skills/dot-ai/ → $SKILL_DIR"
       return
     fi
   fi
@@ -138,13 +162,13 @@ ensure_skill_location() {
   # Already the actual directory?
   if [[ -d "$target" && ! -L "$target" && -f "$target/SKILL.md" ]]; then
     local resolved; resolved="$(cd "$target" && pwd -P)"
-    [[ "$resolved" == "$SCRIPT_DIR" ]] && { log "✓ Skill at .ai/skills/dot-ai/"; return; }
+    [[ "$resolved" == "$SKILL_DIR" ]] && { log "✓ Skill at .ai/skills/dot-ai/"; return; }
   fi
 
   # Remove stale and create fresh symlink
   [[ -e "$target" || -L "$target" ]] && rm -rf "$target"
-  ln -s "$SCRIPT_DIR" "$target"
-  log "🔗 Linked .ai/skills/dot-ai/ → $SCRIPT_DIR"
+  ln -s "$SKILL_DIR" "$target"
+  log "🔗 Linked .ai/skills/dot-ai/ → $SKILL_DIR"
 }
 
 # ─── Step 3: Inject boot ref into .ai/AGENTS.md ────────────────────────────
@@ -160,24 +184,13 @@ This skill defines the workspace convention (file structure, routing, memory, sk
 sync_agents() {
   local synced=0
 
-  # Claude Code
-  if [[ -f "$ROOT/CLAUDE.md" ]]; then
-    inject_markers "$ROOT/CLAUDE.md" "<!-- Auto-managed by dot-ai. Do not edit between markers. -->
-@$SKILL_REL"
-    synced=$((synced + 1))
-  fi
+  # NOTE: Claude Code and OpenClaw use the native plugin system
+  # and should NOT be synced via this script.
+  # This script only handles agents WITHOUT plugin systems.
 
   # OpenAI Codex (AGENTS.md at repo root, distinct from .ai/AGENTS.md)
   if [[ -f "$ROOT/AGENTS.md" ]]; then
     inject_markers "$ROOT/AGENTS.md" "<!-- Auto-managed by dot-ai. Do not edit between markers. -->
-Read and follow \`$SKILL_REL\` for workspace conventions."
-    synced=$((synced + 1))
-  fi
-
-  # Windsurf
-  if [[ -d "$ROOT/.windsurf" || -f "$ROOT/.windsurfrules" ]]; then
-    inject_markers "$ROOT/.windsurf/rules/dot-ai.md" "# dot-ai workspace convention
-# Activation: Always On
 Read and follow \`$SKILL_REL\` for workspace conventions."
     synced=$((synced + 1))
   fi
@@ -189,9 +202,23 @@ Read and follow \`$SKILL_REL\` for workspace conventions."
     synced=$((synced + 1))
   fi
 
+  # Windsurf (rules-based, no native plugin system)
+  if [[ -d "$ROOT/.windsurf" || -f "$ROOT/.windsurfrules" ]]; then
+    inject_markers "$ROOT/.windsurf/rules/dot-ai.md" "# dot-ai workspace convention
+# Activation: Always On
+Read and follow \`$SKILL_REL\` for workspace conventions."
+    synced=$((synced + 1))
+  fi
+
+  # Continue.dev (if .continuerc.json exists)
+  if [[ -f "$ROOT/.continuerc.json" ]]; then
+    log "ℹ️  Continue.dev detected - add reference to $SKILL_REL manually in .continuerc.json"
+  fi
+
   echo ""
   if [[ $synced -eq 0 ]]; then
-    log "ℹ️  No external agent configs found (CLAUDE.md, AGENTS.md, .cursor/, .windsurf/)"
+    log "ℹ️  No agents requiring sync found (AGENTS.md, .cursor/, .windsurf/)"
+    log "    OpenClaw/Claude Code → use plugin install"
   else
     log "✅ Updated $synced agent config(s)"
   fi
@@ -201,7 +228,7 @@ Read and follow \`$SKILL_REL\` for workspace conventions."
 
 echo "dot-ai sync"
 echo "  Workspace: $ROOT"
-echo "  Skill source: $SCRIPT_DIR"
+echo "  Skill source: $SKILL_DIR"
 echo ""
 
 echo "📦 Structure"

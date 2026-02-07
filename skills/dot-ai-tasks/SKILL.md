@@ -92,19 +92,19 @@ When a task needs context (research, notes, progress), create a file in `tasks/`
 
 > Status: 🟡 In Progress | Project: van-management | Priority: 🔴
 
-## Objectif
+## Objective
 What this task aims to achieve (1-2 lines).
 
 ## Notes
 Research, findings, decisions, links, code snippets...
 (This is the bulk of the file — freeform, whatever is useful)
 
-## Étapes
+## Steps
 - [x] Step 1 completed
 - [ ] Step 2 pending
 - [ ] Step 3 pending
 
-## Décisions
+## Decisions
 - Decision 1: rationale
 - Decision 2: rationale
 ```

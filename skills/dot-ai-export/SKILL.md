@@ -141,10 +141,12 @@ dot-ai-export --format json --output public/workspace.json
 
 ### 2. CI/CD Pipeline
 
+⚠️ **Note:** Standalone export.sh script is planned for future release. For now, invoke the skill directly via Claude Code or OpenClaw.
+
 ```yaml
-# .github/workflows/workspace-audit.yml
+# .github/workflows/workspace-audit.yml (planned implementation)
 - name: Export workspace
-  run: .ai/skills/dot-ai/sub-skills/dot-ai-export/export.sh --format json
+  run: claude skill invoke dot-ai-export --format json --output workspace-export.json
 
 - name: Check for urgent tasks
   run: |

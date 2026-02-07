@@ -1,4 +1,6 @@
 {
+  "$schema": "https://claude.ai/schemas/hooks.json",
+  "_comment": "Empty matcher means 'match all sessions/subagents'",
   "hooks": {
     "SessionStart": [
       {

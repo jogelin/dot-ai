@@ -6,84 +6,84 @@ triggers: [always]
 
 # Model Routing
 
-Règles de sélection automatique de modèle. Ce skill DOIT être consulté avant chaque `sessions_spawn` et chaque décision de switch de modèle en session principale.
+Automatic model selection rules. This skill MUST be consulted before each `sessions_spawn` and each model switch decision in the main session.
 
-## Modèles disponibles
+## Available Models
 
-| Alias | Model ID | Coût relatif | Context | Reasoning |
-|-------|----------|-------------|---------|-----------|
+| Alias | Model ID | Relative Cost | Context | Reasoning |
+|-------|----------|--------------|---------|-----------|
 | **opus** | `anthropic/claude-opus-4-6` | $$$$$ | 1M | ✅ |
 | **sonnet** | `anthropic/claude-sonnet-4` | $$ | 200K | ✅ |
 | **haiku** | `anthropic/claude-haiku` | $ | 200K | ❌ |
 
-## Règles de sélection — Sub-agents (`sessions_spawn`)
+## Selection Rules — Sub-agents (`sessions_spawn`)
 
-### Haiku (défaut pour exécution)
-- OCR, extraction de données
-- Audit, vérification, bulk ops
-- Scraping, collecte d'info
-- Lecture/résumé de fichiers
-- Mise à jour de fichiers (BACKLOG, indexes)
-- Formatage, reports HTML
-- Toute tâche avec instructions claires et peu d'ambiguïté
+### Haiku (default for execution)
+- OCR, data extraction
+- Audit, verification, bulk operations
+- Scraping, information gathering
+- File reading/summarization
+- File updates (BACKLOG, indexes)
+- Formatting, HTML reports
+- Any task with clear instructions and little ambiguity
 
-### Sonnet (dev standard)
-- Développement, refactoring, code review
-- Recherche web extensive (multiple URLs)
-- Analyse et synthèse de contenu
-- Rédaction d'articles/documentation
-- Exploration de codebase
+### Sonnet (standard development)
+- Development, refactoring, code review
+- Extensive web research (multiple URLs)
+- Content analysis and synthesis
+- Article/documentation writing
+- Codebase exploration
 
-### Opus (raisonnement complexe)
-- Planification, architecture, décisions stratégiques
-- Problèmes ambigus nécessitant du jugement
-- Peer review de code complexe
-- **NE JAMAIS spawner un sub-agent Opus sauf si explicitement demandé**
+### Opus (complex reasoning)
+- Planning, architecture, strategic decisions
+- Ambiguous problems requiring judgment
+- Complex code peer review
+- **NEVER spawn an Opus sub-agent unless explicitly requested**
 
-## Règles de sélection — Session principale
+## Selection Rules — Main Session
 
-### Quand rester en Opus
-- Conversation directe avec Jo (décisions, planification)
-- Raisonnement complexe, multi-étapes
-- Première discussion sur un nouveau sujet
+### When to stay in Opus
+- Direct conversation with Jo (decisions, planning)
+- Complex, multi-step reasoning
+- First discussion on a new topic
 
-### Quand switcher vers Sonnet
-- Phase d'exploration/recherche (web_fetch multiples)
-- Édition de fichiers, mise à jour docs
-- Conversation casual, Q&A rapide
+### When to switch to Sonnet
+- Exploration/research phase (multiple web_fetch)
+- File editing, documentation updates
+- Casual conversation, quick Q&A
 - Brainstorming (Opus = overkill)
-- **Switcher proactivement** — ne pas attendre que Jo le remarque
+- **Switch proactively** — don't wait for Jo to notice
 
-### Quand switcher vers Haiku
-- Heartbeat checks (déjà configuré dans OpenClaw)
-- Tâches mécaniques répétitives
+### When to switch to Haiku
+- Heartbeat checks (already configured in OpenClaw)
+- Repetitive mechanical tasks
 
 ## Rate Limit Awareness
 
-### Règles de protection
-- Max 8 sub-agents concurrents (configuré dans OpenClaw)
-- Si > 4 sub-agents actifs : utiliser Haiku pour les nouveaux (même si Sonnet serait mieux)
-- Si rate limit hit : basculer immédiatement vers le tier inférieur
-- Espacer les spawns de sub-agents de 2-3 secondes minimum
+### Protection Rules
+- Max 8 concurrent sub-agents (configured in OpenClaw)
+- If > 4 active sub-agents: use Haiku for new ones (even if Sonnet would be better)
+- If rate limit hit: immediately fall back to lower tier
+- Space sub-agent spawns by minimum 2-3 seconds
 
 ### Anti-patterns
-- ❌ Ne JAMAIS spawner 5+ sub-agents Opus en parallèle
-- ❌ Ne JAMAIS faire de web_fetch multiples dans le contexte principal en Opus
-- ❌ Ne JAMAIS utiliser Opus pour un sub-agent de collecte/extraction
-- ❌ Ne JAMAIS oublier de spécifier le modèle dans `sessions_spawn`
+- ❌ NEVER spawn 5+ Opus sub-agents in parallel
+- ❌ NEVER do multiple web_fetch in main context while in Opus
+- ❌ NEVER use Opus for a data collection/extraction sub-agent
+- ❌ NEVER forget to specify the model in `sessions_spawn`
 
 ## Context Budget
 
-### Seuils de vigilance
-- **< 50% contexte** : fonctionnement normal
-- **50-70% contexte** : envisager de déléguer les lectures à des sub-agents
-- **> 70% contexte** : switcher vers Sonnet si en Opus, déléguer agressivement
-- **> 85% contexte** : ne plus lire de fichiers, travailler uniquement avec ce qui est en mémoire
+### Vigilance Thresholds
+- **< 50% context**: normal operation
+- **50-70% context**: consider delegating reads to sub-agents
+- **> 70% context**: switch to Sonnet if in Opus, delegate aggressively
+- **> 85% context**: stop reading files, work only with what's in memory
 
 ## Tracking
 
-À chaque `sessions_spawn`, mentalement vérifier :
-1. ✅ Modèle spécifié ? (ne pas laisser le défaut Opus)
-2. ✅ Modèle approprié au type de tâche ?
-3. ✅ Nombre de sub-agents actifs OK ?
-4. ✅ Le contexte principal est-il préservé ?
+For each `sessions_spawn`, mentally verify:
+1. ✅ Model specified? (don't leave default Opus)
+2. ✅ Model appropriate for task type?
+3. ✅ Number of active sub-agents OK?
+4. ✅ Is main context preserved?

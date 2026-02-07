@@ -19,7 +19,7 @@ dot-ai provides:
 ### OpenClaw
 
 ```bash
-openclaw plugins install @dot-ai/plugin
+openclaw plugins install dot-ai
 openclaw gateway restart
 ```
 
@@ -28,10 +28,10 @@ openclaw gateway restart
 ```bash
 claude plugin install /path/to/dot-ai-plugin
 # or from npm:
-claude plugin install @dot-ai/plugin
+claude plugin install dot-ai
 ```
 
-### Cursor / Windsurf / Codex
+### Windsurf / Cursor / Continue.dev / Codex
 
 These tools don't have a plugin system — use the sync script instead:
 
@@ -40,10 +40,10 @@ These tools don't have a plugin system — use the sync script instead:
 ```
 
 This generates:
-- Cursor: `.cursor/rules/dot-ai.md`
 - Windsurf: `.windsurf/rules/dot-ai.md`
-- Codex: Injects into `AGENTS.md`
-- Claude Code: Injects `@import` into `CLAUDE.md`
+- Cursor: `.cursor/rules/dot-ai.md`
+- Codex: Injects into `AGENTS.md` (root level)
+- Continue.dev: Manual reference in `.continuerc.json`
 
 ## What's Included
 
@@ -80,11 +80,14 @@ This generates:
 After installing the plugin:
 
 1. Create a `.ai/` directory in your project root
-2. Add an `AGENTS.md` (or let the plugin scaffold it)
+2. Add an `AGENTS.md` file (minimum requirement)
 3. The plugin will automatically:
+   - Detect the dot-ai workspace structure
    - Load the workspace context at session start
    - Enforce task management conventions
    - Optimize model selection for sub-agents
+
+**Note:** The plugin automatically detects any workspace with a `.ai/AGENTS.md` file. You don't need to install the dot-ai skills locally - the plugin provides them globally.
 
 ## Workspace Structure
 

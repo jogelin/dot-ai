@@ -14,11 +14,12 @@
   },
   "files": [
     "index.ts",
+    "types.ts",
+    "constants.ts",
     "openclaw.plugin.json",
     ".claude-plugin/",
     "hooks/",
     "skills/",
-    "scripts/",
-    "templates/"
+    "scripts/"
   ]
 }

@@ -32,6 +32,8 @@
     "skills/dot-ai-agent-sync",
     "skills/dot-ai-skill-sync",
     "skills/dot-ai-backlog-sync",
+    "skills/dot-ai-memory-sync",
+    "skills/dot-ai-tools-sync",
     "skills/dot-ai-migrate",
     "skills/dot-ai-export",
     "skills/model-routing"
