@@ -72,12 +72,16 @@ log() { echo "  $1"; }
 
 # Check if python3 is available, fallback to simpler path computation
 if command -v python3 &>/dev/null; then
-  relpath() { python3 -c "import os; print(os.path.relpath('$1', '$ROOT'))"; }
+  relpath() { python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" "$1" "$ROOT"; }
 else
   relpath() {
     # Fallback: simple prefix removal
     local path="$1"
-    echo "${path#$ROOT/}"
+    if [[ "$path" == "$ROOT"/* ]]; then
+      echo "${path#$ROOT/}"
+    else
+      echo "$path"
+    fi
   }
 fi
 
@@ -100,8 +104,8 @@ inject_markers() {
     local tmp blockfile
     tmp=$(mktemp); blockfile=$(mktemp)
     echo "$block" > "$blockfile"
-    awk '
-      /dot-ai start/ { while((getline line < "'"$blockfile"'") > 0) print line; skip=1; next }
+    awk -v bf="$blockfile" '
+      /dot-ai start/ { while((getline line < bf) > 0) print line; skip=1; next }
       /dot-ai end/ { skip=0; next }
       !skip { print }
     ' "$file" > "$tmp"

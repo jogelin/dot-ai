@@ -1,25 +1,5 @@
 // Shared constants for hook content injection
 
-export const DOT_AI_BOOTSTRAP_CONTENT = [
-  "## dot-ai Convention (auto-injected by plugin)",
-  "",
-  "This workspace follows the **dot-ai convention**.",
-  "",
-  "### Boot Sequence",
-  "**You MUST output a boot log as your first message.** Follow the boot sequence in `skills/dot-ai/SKILL.md`.",
-  "",
-  "### Critical Rules (always active)",
-  "- Read `skills/dot-ai/SKILL.md` for workspace structure, routing, and memory rules",
-  "- Route every prompt through dot-ai (check `memory/projects-index.md`)",
-  "- Use `dot-ai-tasks` for ALL task management:",
-  "  - BACKLOG.md = index (lightweight)",
-  "  - tasks/<slug>.md = details (on-demand)",
-  "  - Project tasks → `projects/<name>/.ai/memory/tasks/`",
-  "  - Cross-project tasks → `.ai/memory/tasks/`",
-  "- **data/ = structured exploitable data ONLY** (no research, no drafts)",
-  "- Specify model in EVERY `sessions_spawn` (never leave default)",
-].join("\n");
-
 export const MODEL_ROUTING_CONTENT = [
   "## Model Routing (auto-injected by plugin)",
   "",

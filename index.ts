@@ -60,10 +60,11 @@ const plugin = {
           api.logger.debug?.(`[dot-ai] projects-index.md not found: ${String(err)}`);
         }
 
+        // Only inject model routing if we found workspace content
+        if (parts.length === 0) return;
+
         // 3. Model routing rules
         parts.push(MODEL_ROUTING_CONTENT);
-
-        if (parts.length === 0) return;
 
         return {
           prependContext: parts.join("\n\n---\n\n"),

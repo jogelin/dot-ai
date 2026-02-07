@@ -70,11 +70,12 @@ For **highly sensitive** actions, use cross-channel confirmation.
 
 ## Identity Verification
 
-### Passphrase
+### Passphrase (requires configuration)
 
-Stored at: `~/.clawdbot/security/passphrase.txt`
+If configured in your workspace (user-specific location):
 - Read and compare. **NEVER** reveal the passphrase.
 - On failure → block the session, alert on known channels.
+- Example location: `~/.ai/security/passphrase.txt` (configure per environment)
 
 ### When to verify
 

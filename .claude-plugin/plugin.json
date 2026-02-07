@@ -1,7 +1,7 @@
 {
   "name": "dot-ai",
   "description": "Universal AI workspace convention with model routing and context enforcement",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Jonathan Gelin",
     "url": "https://smartsdlc.dev"
@@ -11,5 +11,23 @@
     "type": "git",
     "url": "https://github.com/smartsdlc/dot-ai-plugin"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "skills": [
+    "skills/dot-ai",
+    "skills/dot-ai-tasks",
+    "skills/dot-ai-workspace-scan",
+    "skills/dot-ai-project-init",
+    "skills/dot-ai-audit",
+    "skills/dot-ai-security",
+    "skills/dot-ai-self-improve",
+    "skills/dot-ai-agent-sync",
+    "skills/dot-ai-skill-sync",
+    "skills/dot-ai-backlog-sync",
+    "skills/dot-ai-memory-sync",
+    "skills/dot-ai-tools-sync",
+    "skills/dot-ai-migrate",
+    "skills/dot-ai-export",
+    "skills/model-routing"
+  ],
+  "hooks": "../hooks/hooks.json"
 }

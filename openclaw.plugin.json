@@ -2,7 +2,7 @@
   "id": "dot-ai",
   "name": "dot-ai — Universal AI Workspace Convention",
   "description": "Workspace convention with model routing and context enforcement",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
