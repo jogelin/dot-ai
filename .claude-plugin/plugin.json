@@ -27,6 +27,7 @@
     "skills/dot-ai-tools-sync",
     "skills/dot-ai-migrate",
     "skills/dot-ai-export",
+    "skills/dot-ai-doctor",
     "skills/model-selection",
     "skills/context-strategy"
   ],

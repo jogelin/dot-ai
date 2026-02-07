@@ -50,6 +50,9 @@ const plugin = {
           'dot-ai-agent-sync',
           'dot-ai-workspace-scan',
           'dot-ai-backlog-sync',
+          'dot-ai-memory-sync',
+          'dot-ai-tools-sync',
+          'dot-ai-doctor',
           'context-strategy',
           'model-selection'
         ];
