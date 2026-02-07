@@ -8,21 +8,33 @@
     "type": "git",
     "url": "https://github.com/smartsdlc/dot-ai-plugin"
   },
-  "keywords": ["ai", "workspace", "convention", "openclaw", "claude-code", "plugin", "dot-ai"],
+  "keywords": [
+    "ai",
+    "workspace",
+    "convention",
+    "openclaw",
+    "claude-code",
+    "plugin",
+    "dot-ai"
+  ],
   "type": "module",
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "peerDependencies": {
     "openclaw": "^2026.2.0"
   },
   "files": [
     "index.ts",
-    "constants.ts",
     "openclaw.plugin.json",
     ".claude-plugin/",
     "hooks/",
     "skills/",
     "scripts/"
-  ]
+  ],
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

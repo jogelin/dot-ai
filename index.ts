@@ -3,7 +3,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { MODEL_ROUTING_CONTENT } from "./constants.js";
 
 // Plugin definition following official OpenClaw SDK pattern
 const plugin = {
@@ -16,10 +15,10 @@ const plugin = {
     api.logger.info("[dot-ai] Plugin loaded");
 
     // --- Hook: before_agent_start ---
-    // Injects full dot-ai SKILL.md + projects-index + model routing into prependContext
+    // Injects lightweight BOOTSTRAP.md + projects-index summary for minimal tokens
     api.on(
       "before_agent_start",
-      async (_event, ctx) => {
+      async (_event: unknown, ctx: { workspaceDir?: string }) => {
         const workspaceDir = ctx.workspaceDir;
         if (!workspaceDir) {
           api.logger.info("[dot-ai] No workspaceDir in context, skipping");
@@ -40,31 +39,48 @@ const plugin = {
 
         const parts: string[] = [];
 
-        // 1. Inject full SKILL.md
-        const skillMdPath = path.join(aiDir, "skills", "dot-ai", "SKILL.md");
+        // 1. Inject lightweight BOOTSTRAP.md (~100 lines vs SKILL.md's 571 lines)
+        const bootstrapPath = path.join(aiDir, "skills", "dot-ai", "BOOTSTRAP.md");
         try {
-          const content = await fs.readFile(skillMdPath, "utf-8");
-          parts.push("## dot-ai Convention (auto-injected)\n\n" + content);
-          api.logger.info("[dot-ai] Injected SKILL.md");
+          const content = await fs.readFile(bootstrapPath, "utf-8");
+          parts.push(content);
+          api.logger.info("[dot-ai] Injected BOOTSTRAP.md (lightweight)");
         } catch (err) {
-          api.logger.debug?.(`[dot-ai] SKILL.md not found: ${String(err)}`);
+          // Fallback to full SKILL.md if BOOTSTRAP.md doesn't exist (backward compat)
+          const skillMdPath = path.join(aiDir, "skills", "dot-ai", "SKILL.md");
+          try {
+            const content = await fs.readFile(skillMdPath, "utf-8");
+            parts.push("## dot-ai Convention (auto-injected)\n\n" + content);
+            api.logger.info("[dot-ai] Injected SKILL.md (BOOTSTRAP.md not found)");
+          } catch {
+            api.logger.debug?.(`[dot-ai] Neither BOOTSTRAP.md nor SKILL.md found`);
+          }
         }
 
-        // 2. Inject projects-index.md for routing
+        // 2. Inject projects-index.md summary (just the table, not full content)
         const projectsIndexPath = path.join(aiDir, "memory", "projects-index.md");
         try {
           const content = await fs.readFile(projectsIndexPath, "utf-8");
-          parts.push("## Workspace Projects Index (auto-injected)\n\n" + content);
-          api.logger.info("[dot-ai] Injected projects-index.md");
+          // Extract just the project table (lines between first | and last |)
+          const lines = content.split("\n");
+          const tableStart = lines.findIndex(l => l.trim().startsWith("|"));
+          const tableEnd = lines.findLastIndex(l => l.trim().startsWith("|"));
+
+          if (tableStart !== -1 && tableEnd !== -1) {
+            const table = lines.slice(tableStart, tableEnd + 1).join("\n");
+            parts.push("## Active Projects (auto-injected)\n\n" + table);
+            api.logger.info("[dot-ai] Injected projects-index.md (table only)");
+          } else {
+            // No table found, inject full content as fallback
+            parts.push("## Workspace Projects Index (auto-injected)\n\n" + content);
+            api.logger.info("[dot-ai] Injected projects-index.md (full)");
+          }
         } catch (err) {
           api.logger.debug?.(`[dot-ai] projects-index.md not found: ${String(err)}`);
         }
 
-        // Only inject model routing if we found workspace content
+        // Only inject if we found workspace content
         if (parts.length === 0) return;
-
-        // 3. Model routing rules
-        parts.push(MODEL_ROUTING_CONTENT);
 
         return {
           prependContext: parts.join("\n\n---\n\n"),
@@ -76,10 +92,10 @@ const plugin = {
     // --- Service registration ---
     api.registerService({
       id: "dot-ai",
-      start: (ctx) => {
+      start: (ctx: { logger: { info: (msg: string) => void } }) => {
         ctx.logger.info("[dot-ai] Workspace convention enforcement active");
       },
-      stop: (ctx) => {
+      stop: (ctx: { logger: { info: (msg: string) => void } }) => {
         ctx.logger.info("[dot-ai] Service stopped");
       },
     });
