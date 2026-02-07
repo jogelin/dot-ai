@@ -1,5 +1,5 @@
 {
-  "name": "@dot-ai/plugin",
+  "name": "dot-ai",
   "version": "0.1.0",
   "description": "Universal AI workspace convention — plugin for OpenClaw and Claude Code",
   "license": "MIT",

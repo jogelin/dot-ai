@@ -205,6 +205,59 @@ Execute this sequence at every session start:
 The workspace overview is now in memory. You are ready to route prompts.
 Do NOT load full project context yet. Wait for a prompt that matches a project.
 
+### Boot Log
+
+**Output a compact boot log at the end of the boot sequence.**
+This gives the human visibility into what happened during boot.
+
+The log MUST be the **first message** of the session (before answering any prompt).
+Use a single compact block — no walls of text.
+
+**Format:**
+
+```
+🥝 dot-ai boot
+├─ 🏠 Root context — loaded (AGENTS, SOUL, USER, IDENTITY, TOOLS)
+├─ 📝 memory/YYYY-MM-DD.md — loaded (+yesterday)
+├─ 🧠 MEMORY.md — loaded | skipped (not main session)
+├─ 📁 N projects scanned, M skills indexed
+├─ 📋 projects-index.md — fresh (Xd) | regenerated (stale) | created
+├─ 🔍 Audit — not due (last: Xd ago) | running | skipped
+└─ ✅ Ready
+```
+
+**Rules:**
+- Each line = one phase, one status
+- Use `—` separator between label and status
+- Keep it to ~7 lines max
+- If a phase had a warning/error, show it inline: `⚠️ van-management — missing AGENT.md`
+- If boot is triggered by heartbeat, skip the log (heartbeats are silent)
+
+**Examples:**
+
+Typical boot:
+```
+🥝 dot-ai boot
+├─ 🏠 Root context — loaded
+├─ 📝 memory/2026-02-07.md — created (+yesterday loaded)
+├─ 🧠 MEMORY.md — loaded
+├─ 📁 6 projects, 22 skills
+├─ 📋 projects-index.md — fresh (3d)
+└─ ✅ Ready
+```
+
+Boot with index refresh + warning:
+```
+🥝 dot-ai boot
+├─ 🏠 Root context — loaded
+├─ 📝 memory/2026-02-07.md — loaded (+yesterday)
+├─ 🧠 MEMORY.md — skipped (shared session)
+├─ 📁 6 projects, 22 skills
+├─ 📋 projects-index.md — regenerated (was 9d old)
+├─ ⚠️ todo — missing AGENT.md frontmatter
+└─ ✅ Ready
+```
+
 ### Overview Format
 
 See `dot-ai-workspace-scan` sub-skill for the scan process and output format.

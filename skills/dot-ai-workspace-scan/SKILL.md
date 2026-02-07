@@ -126,6 +126,30 @@ Chaque projet vit dans `projects/<name>/` et a son propre `.ai/AGENT.md`.
 - Manual trigger: "rescan workspace", "update projects index"
 - Audit triggers re-scan if drift detected
 
+## Boot Log Integration
+
+This sub-skill contributes to the **dot-ai boot log** (see `dot-ai` SKILL.md → Boot Log).
+
+After scanning, return a compact summary for the boot log:
+- **Project count** and **skill count** (totals)
+- **Index status**: `fresh (Xd)` | `regenerated (stale)` | `created`
+- **Warnings**: any projects with missing AGENT.md or frontmatter
+
+The parent `dot-ai` skill assembles these into the final boot log output.
+
+**Example contributions:**
+```
+├─ 📁 6 projects, 22 skills
+├─ 📋 projects-index.md — fresh (3d)
+```
+
+Or with warnings:
+```
+├─ 📁 5 projects, 18 skills
+├─ 📋 projects-index.md — regenerated (was 9d old)
+├─ ⚠️ todo — missing AGENT.md frontmatter
+```
+
 ## Error Handling
 
 - Missing `AGENT.md` → log `⚠️ <path>/.ai/ has no AGENT.md` and skip
