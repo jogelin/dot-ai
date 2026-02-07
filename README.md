@@ -1,108 +1,115 @@
-# dot-ai
+# dot-ai plugin
 
-> AI skill for universal .ai/ workspace convention. Metadata-driven, auto-audit, works with any AI tool.
+Universal AI workspace convention — dual plugin for **OpenClaw** and **Claude Code**.
 
 ## What is dot-ai?
 
-**dot-ai** is a universal workspace convention for AI assistants working in monorepos. It defines a standardized `.ai/` directory structure that works across any AI tool (Claude Code, Windsurf, Cursor, OpenAI Codex).
+A `.ai/` directory is a standardized workspace for AI assistants.
+It contains everything an AI needs to understand and work within a project:
+identity, rules, memory, skills, and project context.
 
-## Key Features
-
-- ✅ **Universal Convention** — Same `.ai/` structure at root and project level
-- ✅ **Metadata Caching** — 40x token reduction through smart caching
-- ✅ **Lazy Loading** — Load only what you need, when you need it
-- ✅ **Auto-Audit** — Weekly coherence checks with auto-fix
-- ✅ **Multi-Tool Support** — Claude Code, Windsurf, Cursor, OpenAI Codex
-- ✅ **Portable** — Zero external dependencies (Bash + YAML)
-- ✅ **Scalable** — Proven with 6 projects, 40+ skills
-
-## Architecture
-
-### Core Components
-
-- **dot-ai** — Main orchestrator skill
-- **11 sub-skills** — Specialized components (internal use only)
-  - Core: workspace-scan, project-init, tasks, audit, security, self-improve
-  - Sync: agent-sync, skill-sync, backlog-sync
-  - Utilities: migrate, export
-
-### Performance
-
-- **Boot**: ~2000 tokens (root context)
-- **Routing**: ~50 tokens (cached index)
-- **Project load**: ~1000 tokens (on-demand)
+dot-ai provides:
+- **Workspace structure** — `.ai/` convention with boot sequence and project routing
+- **Task management** — BACKLOG.md + tasks/ pattern for tracking work
+- **Model routing** — Smart model selection to optimize costs and avoid rate limits
+- **Context enforcement** — Hooks that inject rules automatically (no drift)
 
 ## Installation
 
-### 1. Copy to your workspace
+### OpenClaw
 
 ```bash
-# Clone the repo
-git clone git@github.com:jogelin/dot-ai.git
-
-# Copy to your .ai/skills/ directory
-cp -r dot-ai /path/to/your/workspace/.ai/skills/
+openclaw plugins install @dot-ai/plugin
+openclaw gateway restart
 ```
 
-### 2. Sync with your AI tool
+### Claude Code
 
 ```bash
-# From your workspace root
-.ai/skills/dot-ai/sync.sh
+claude plugin install /path/to/dot-ai-plugin
+# or from npm:
+claude plugin install @dot-ai/plugin
 ```
 
-This will configure:
-- Claude Code (`CLAUDE.md`)
-- Windsurf (`.windsurf/rules/dot-ai.md`)
-- Cursor (`.cursor/rules/dot-ai.md`)
-- OpenAI Codex (`AGENTS.md`)
+### Cursor / Windsurf / Codex
 
-### 3. Verify installation
+These tools don't have a plugin system — use the sync script instead:
 
-Ask your AI assistant:
-```
-"Run dot-ai workspace scan"
+```bash
+./scripts/sync.sh
 ```
 
-## Documentation
+This generates:
+- Cursor: `.cursor/rules/dot-ai.md`
+- Windsurf: `.windsurf/rules/dot-ai.md`
+- Codex: Injects into `AGENTS.md`
+- Claude Code: Injects `@import` into `CLAUDE.md`
 
-See [SKILL.md](./SKILL.md) for complete documentation.
+## What's Included
 
-## Version
+### Skills (13)
 
-Current version: **0.2.0**
+| Skill | Description |
+|-------|-------------|
+| `dot-ai` | Main convention — structure, boot, routing |
+| `dot-ai-tasks` | Task management, backlogs, lifecycle |
+| `dot-ai-workspace-scan` | Scan .ai/ directories, generate overview |
+| `dot-ai-project-init` | Create new project with proper structure |
+| `dot-ai-audit` | Weekly workspace coherence check |
+| `dot-ai-security` | Security conventions and audit |
+| `dot-ai-self-improve` | Auto-correction process |
+| `dot-ai-agent-sync` | Generate/maintain AGENT.md |
+| `dot-ai-skill-sync` | Validate SKILL.md structure |
+| `dot-ai-backlog-sync` | Validate BACKLOG.md structure |
+| `dot-ai-migrate` | Migrate from old convention versions |
+| `dot-ai-export` | Export workspace as JSON/YAML |
+| `model-routing` | Smart model selection and cost optimization |
 
-## Requirements
+### Hooks
 
-- Bash 4.0+
-- Standard Unix tools: `find`, `grep`, `ls`, `cat`
-- Optional: Python 3.8+ (for YAML validation), `jq` (for JSON processing)
+#### OpenClaw (`agent:bootstrap`)
+- **dot-ai-enforce** — Injects workspace convention into every session
+- **model-routing** — Injects model selection rules
 
-## Architecture Review
+#### Claude Code
+- **SessionStart** — Triggers dot-ai boot sequence
+- **SubagentStart** — Enforces model selection on sub-agents
 
-**Score: 35/35** 🏆
+## Quick Start
 
-| Criteria | Score |
-|----------|:-----:|
-| Coherence | ⭐⭐⭐⭐⭐ 5/5 |
-| Scalability | ⭐⭐⭐⭐⭐ 5/5 |
-| Maintainability | ⭐⭐⭐⭐⭐ 5/5 |
-| Portability | ⭐⭐⭐⭐⭐ 5/5 |
-| Documentation | ⭐⭐⭐⭐⭐ 5/5 |
-| Security | ⭐⭐⭐⭐⭐ 5/5 |
-| Performance | ⭐⭐⭐⭐⭐ 5/5 |
+After installing the plugin:
 
-*Production-ready, portable, scalable architecture.*
+1. Create a `.ai/` directory in your project root
+2. Add an `AGENTS.md` (or let the plugin scaffold it)
+3. The plugin will automatically:
+   - Load the workspace context at session start
+   - Enforce task management conventions
+   - Optimize model selection for sub-agents
 
-## Related
+## Workspace Structure
 
-- Blog post: [You Should Start Your OpenClaw Monorepo](https://smartsdlc.dev/blog/you-should-start-your-openclaw-monorepo/)
-- OpenClaw: [docs.openclaw.ai](https://docs.openclaw.ai/)
+```
+my-project/
+├── .ai/
+│   ├── AGENTS.md        # Operating rules
+│   ├── SOUL.md          # Persona and tone
+│   ├── USER.md          # Human context
+│   ├── IDENTITY.md      # Agent identity
+│   ├── TOOLS.md         # Tool configuration
+│   ├── MEMORY.md        # Long-term memory
+│   ├── memory/          # Daily notes
+│   │   ├── YYYY-MM-DD.md
+│   │   └── tasks/
+│   │       ├── BACKLOG.md
+│   │       └── <slug>.md
+│   ├── skills/          # Custom skills
+│   └── data/            # Structured data ONLY
+├── projects/
+│   └── <name>/
+│       ├── .ai/         # Same convention, scoped
+│       └── data/        # Project data
+```
 
 ## License
 
 MIT
-
-## Author
-
-Jonathan Gelin ([@jogelin](https://github.com/jogelin))

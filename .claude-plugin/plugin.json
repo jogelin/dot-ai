@@ -1,0 +1,15 @@
+{
+  "name": "dot-ai",
+  "description": "Universal AI workspace convention with model routing and context enforcement",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jonathan Gelin",
+    "url": "https://smartsdlc.dev"
+  },
+  "homepage": "https://github.com/smartsdlc/dot-ai-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smartsdlc/dot-ai-plugin"
+  },
+  "license": "MIT"
+}

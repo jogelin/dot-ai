@@ -1,14 +1,4 @@
-# macOS
+node_modules/
 .DS_Store
-
-# Editor
-.vscode/
-.idea/
-
-# Logs
 *.log
-
-# Temporary files
-*.tmp
-*.bak
-.omc/
+dist/

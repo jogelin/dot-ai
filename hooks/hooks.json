@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "This workspace follows the dot-ai convention. Execute the boot sequence: (1) find root .ai/, (2) load AGENTS.md → SOUL.md → USER.md → IDENTITY.md → TOOLS.md, (3) load memory/YYYY-MM-DD.md for today and yesterday, (4) scan for projects and build workspace overview. Follow model-routing rules for all sub-agent spawns."
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before starting: check model-routing rules. Use haiku for execution/extraction tasks, sonnet for development/research, opus ONLY for complex reasoning. Never use the default model without checking."
+          }
+        ]
+      }
+    ]
+  }
+}

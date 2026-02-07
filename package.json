@@ -1,0 +1,24 @@
+{
+  "name": "@dot-ai/plugin",
+  "version": "0.1.0",
+  "description": "Universal AI workspace convention — plugin for OpenClaw and Claude Code",
+  "license": "MIT",
+  "author": "Jonathan Gelin <smartsdlc.dev@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smartsdlc/dot-ai-plugin"
+  },
+  "keywords": ["ai", "workspace", "convention", "openclaw", "claude-code", "plugin", "dot-ai"],
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    ".claude-plugin/",
+    "hooks/",
+    "skills/",
+    "scripts/",
+    "templates/"
+  ]
+}

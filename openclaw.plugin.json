@@ -1,0 +1,44 @@
+{
+  "id": "dot-ai",
+  "name": "dot-ai — Universal AI Workspace Convention",
+  "description": "Workspace convention with model routing and context enforcement",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "workspaceRoot": {
+        "type": "string",
+        "description": "Root directory containing .ai/"
+      },
+      "modelRouting": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "defaultSubagentModel": { "type": "string", "default": "anthropic/claude-haiku" },
+          "maxConcurrentSubagents": { "type": "number", "default": 8 }
+        }
+      }
+    }
+  },
+  "skills": [
+    "skills/dot-ai",
+    "skills/dot-ai-tasks",
+    "skills/dot-ai-workspace-scan",
+    "skills/dot-ai-project-init",
+    "skills/dot-ai-audit",
+    "skills/dot-ai-security",
+    "skills/dot-ai-self-improve",
+    "skills/dot-ai-agent-sync",
+    "skills/dot-ai-skill-sync",
+    "skills/dot-ai-backlog-sync",
+    "skills/dot-ai-migrate",
+    "skills/dot-ai-export",
+    "skills/model-routing"
+  ],
+  "uiHints": {
+    "workspaceRoot": { "label": "Workspace Root", "placeholder": "~/dev/my-workspace/.ai" },
+    "modelRouting.enabled": { "label": "Enable Model Routing" },
+    "modelRouting.defaultSubagentModel": { "label": "Default Sub-agent Model" }
+  }
+}
