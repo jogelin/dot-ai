@@ -36,7 +36,8 @@
     "skills/dot-ai-tools-sync",
     "skills/dot-ai-migrate",
     "skills/dot-ai-export",
-    "skills/model-routing"
+    "skills/model-selection",
+    "skills/context-strategy"
   ],
   "uiHints": {
     "workspaceRoot": { "label": "Workspace Root", "placeholder": "~/dev/my-workspace/.ai" },

@@ -39,21 +39,40 @@ const plugin = {
 
         const parts: string[] = [];
 
-        // 1. Inject lightweight BOOTSTRAP.md (~100 lines vs SKILL.md's 571 lines)
-        const bootstrapPath = path.join(aiDir, "skills", "dot-ai", "BOOTSTRAP.md");
-        try {
-          const content = await fs.readFile(bootstrapPath, "utf-8");
-          parts.push(content);
-          api.logger.info("[dot-ai] Injected BOOTSTRAP.md (lightweight)");
-        } catch (err) {
-          // Fallback to full SKILL.md if BOOTSTRAP.md doesn't exist (backward compat)
-          const skillMdPath = path.join(aiDir, "skills", "dot-ai", "SKILL.md");
+        // Skills to inject (INDEX.md with fallback to SKILL.md)
+        const skillsToInject = [
+          'dot-ai',  // Uses BOOTSTRAP.md instead of INDEX.md
+          'dot-ai-export',
+          'dot-ai-audit',
+          'dot-ai-migrate',
+          'dot-ai-project-init',
+          'dot-ai-tasks',
+          'dot-ai-agent-sync',
+          'dot-ai-workspace-scan',
+          'dot-ai-backlog-sync',
+          'context-strategy',
+          'model-selection'
+        ];
+
+        // 1. Inject INDEX.md for all skills (BOOTSTRAP.md for main dot-ai skill)
+        for (const skillName of skillsToInject) {
+          const indexPath = path.join(aiDir, "skills", skillName,
+            skillName === 'dot-ai' ? 'BOOTSTRAP.md' : 'INDEX.md');
+          const skillPath = path.join(aiDir, "skills", skillName, 'SKILL.md');
+
           try {
-            const content = await fs.readFile(skillMdPath, "utf-8");
-            parts.push("## dot-ai Convention (auto-injected)\n\n" + content);
-            api.logger.info("[dot-ai] Injected SKILL.md (BOOTSTRAP.md not found)");
+            const content = await fs.readFile(indexPath, "utf-8");
+            parts.push(content);
+            api.logger.info(`[dot-ai] Injected ${skillName}/${skillName === 'dot-ai' ? 'BOOTSTRAP' : 'INDEX'}`);
           } catch {
-            api.logger.debug?.(`[dot-ai] Neither BOOTSTRAP.md nor SKILL.md found`);
+            // Fallback to full SKILL.md (backward compat)
+            try {
+              const content = await fs.readFile(skillPath, "utf-8");
+              parts.push(`## ${skillName} (auto-injected)\n\n${content}`);
+              api.logger.info(`[dot-ai] Injected ${skillName}/SKILL (INDEX not found)`);
+            } catch {
+              api.logger.debug?.(`[dot-ai] ${skillName} not found`);
+            }
           }
         }
 

@@ -1,10 +1,10 @@
 ---
-name: model-routing
+name: model-selection
 description: Smart model selection for sub-agents and main session. Cost optimization, rate limit awareness.
 triggers: [always]
 ---
 
-# Model Routing
+# Model Selection
 
 Automatic model selection rules. This skill MUST be consulted before each `sessions_spawn` and each model switch decision in the main session.
 
@@ -43,7 +43,7 @@ Automatic model selection rules. This skill MUST be consulted before each `sessi
 ## Selection Rules — Main Session
 
 ### When to stay in Opus
-- Direct conversation with Jo (decisions, planning)
+- Direct conversation with the user (decisions, planning)
 - Complex, multi-step reasoning
 - First discussion on a new topic
 
@@ -52,7 +52,7 @@ Automatic model selection rules. This skill MUST be consulted before each `sessi
 - File editing, documentation updates
 - Casual conversation, quick Q&A
 - Brainstorming (Opus = overkill)
-- **Switch proactively** — don't wait for Jo to notice
+- **Switch proactively** — don't wait for the user to notice
 
 ### When to switch to Haiku
 - Heartbeat checks (already configured in OpenClaw)
@@ -72,14 +72,6 @@ Automatic model selection rules. This skill MUST be consulted before each `sessi
 - ❌ NEVER use Opus for a data collection/extraction sub-agent
 - ❌ NEVER forget to specify the model in `sessions_spawn`
 
-## Context Budget
-
-### Vigilance Thresholds
-- **< 50% context**: normal operation
-- **50-70% context**: consider delegating reads to sub-agents
-- **> 70% context**: switch to Sonnet if in Opus, delegate aggressively
-- **> 85% context**: stop reading files, work only with what's in memory
-
 ## Tracking
 
 For each `sessions_spawn`, mentally verify:
@@ -87,3 +79,9 @@ For each `sessions_spawn`, mentally verify:
 2. ✅ Model appropriate for task type?
 3. ✅ Number of active sub-agents OK?
 4. ✅ Is main context preserved?
+
+## Cross-References
+
+- Context management: See `context-strategy` skill
+- Sub-agent delegation: See `context-strategy` skill
+- Boot sequence: See `dot-ai` skill

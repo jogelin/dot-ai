@@ -40,7 +40,7 @@ Full documentation: read `.ai/skills/dot-ai/SKILL.md` when needed.
 - Project tasks: `projects/{name}/.ai/memory/tasks/`
 - Use frontmatter: `status`, `priority`, `project`, `tags`
 
-## Model Routing (CRITICAL)
+## Model Selection (CRITICAL)
 
 **NEVER spawn sub-agent without specifying model!**
 
@@ -56,11 +56,20 @@ Full documentation: read `.ai/skills/dot-ai/SKILL.md` when needed.
 - ❌ Multiple web_fetch in Opus (delegate to Sonnet)
 - ❌ 5+ concurrent sub-agents without rate check
 
-### Context Budget
-- <50%: normal operation
-- 50-70%: delegate reads to sub-agents
-- >70%: switch to Sonnet if on Opus
-- >85%: stop reading files, work from memory
+**Full details:** Read `skills/model-selection/SKILL.md`
+
+## Context Management
+
+Monitor context usage and delegate proactively:
+
+| Context Usage | Action |
+|---------------|--------|
+| <50% | Normal operation |
+| 50-70% | Delegate reads to sub-agents |
+| >70% | Switch to Sonnet if on Opus |
+| >85% | Stop reading, work from memory |
+
+**Full details:** Read `skills/context-strategy/SKILL.md`
 
 ## Data Separation Rule
 
@@ -77,7 +86,8 @@ Invoke via skill matching (auto-detected) or explicit:
 - `dot-ai-project-init` - Initialize new project .ai/ structure
 - `dot-ai-audit` - Workspace coherence validation
 - `dot-ai-security` - Security rules and verification
-- `model-routing` - Model selection guidance (this is embedded above)
+- `model-selection` - Which model for which task
+- `context-strategy` - Context budget management
 
 **For full details:** Read `.ai/skills/dot-ai/SKILL.md` (~570 lines, load on-demand)
 
