@@ -1,111 +1,87 @@
 // dot-ai OpenClaw plugin
 // Registers hooks for workspace convention enforcement and model routing
-import fs from "fs";
-import path from "path";
-import type { PluginAPI, HookEvent } from "./types";
-import { DOT_AI_BOOTSTRAP_CONTENT, MODEL_ROUTING_CONTENT } from "./constants";
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { OpenClawPluginApi, OpenClawPluginDefinition } from "./types.js";
+import { MODEL_ROUTING_CONTENT } from "./constants.js";
 
-export const id = "dot-ai";
-export const name = "dot-ai — Universal AI Workspace Convention";
+const plugin: OpenClawPluginDefinition = {
+  id: "dot-ai",
+  name: "dot-ai — Universal AI Workspace Convention",
+  version: "0.2.0",
+  description: "Workspace convention with model routing and context enforcement",
 
-export default function register(api: PluginAPI) {
-  api.logger.info("[dot-ai] Plugin loaded");
+  register(api: OpenClawPluginApi) {
+    api.logger.info("[dot-ai] Plugin loaded");
 
-  // --- Hook 1: agent:bootstrap (dot-ai-enforce) ---
-  // Injects dot-ai convention context into bootstrapFiles
-  api.registerHook(
-    "agent:bootstrap",
-    async (event: HookEvent) => {
-      api.logger.info("[dot-ai] agent:bootstrap hook triggered (dot-ai-enforce)");
-
-      const workspaceDir = event.context?.workspaceDir;
-      if (!workspaceDir) {
-        api.logger.info("[dot-ai] No workspaceDir in event context, skipping");
-        return;
-      }
-
-      // Check if this is a dot-ai workspace (has .ai/ structure)
-      // workspaceDir may be the .ai/ dir itself or its parent
-      const aiDir = path.basename(workspaceDir) === ".ai"
-        ? workspaceDir
-        : path.join(workspaceDir, ".ai");
-      const agentsFile = path.join(aiDir, "AGENTS.md");
-
-      if (!fs.existsSync(aiDir)) {
-        api.logger.info(`[dot-ai] No .ai/ directory at ${workspaceDir}, skipping`);
-        return;
-      }
-
-      if (!fs.existsSync(agentsFile)) {
-        api.logger.info(`[dot-ai] No AGENTS.md in .ai/, skipping dot-ai injection`);
-        return;
-      }
-
-      api.logger.info("[dot-ai] dot-ai workspace detected, injecting conventions");
-
-      // Inject the full dot-ai SKILL.md so the agent has the convention in context
-      const skillMdPath = path.join(aiDir, "skills", "dot-ai", "SKILL.md");
-      if (fs.existsSync(skillMdPath)) {
-        try {
-          const skillContent = fs.readFileSync(skillMdPath, "utf-8");
-          event.context?.bootstrapFiles?.push({
-            path: "dot-ai-skill",
-            content: skillContent,
-          });
-          api.logger.info("[dot-ai] Injected full dot-ai SKILL.md into bootstrap");
-        } catch (err) {
-          api.logger.warn(`[dot-ai] Failed to read SKILL.md: ${err}`);
-          // Fallback to summary
-          event.context?.bootstrapFiles?.push({
-            path: "dot-ai-bootstrap",
-            content: DOT_AI_BOOTSTRAP_CONTENT,
-          });
+    // --- Hook: before_agent_start ---
+    // Injects full dot-ai SKILL.md + projects-index + model routing into prependContext
+    api.on(
+      "before_agent_start",
+      async (_event, ctx) => {
+        const workspaceDir = ctx.workspaceDir;
+        if (!workspaceDir) {
+          api.logger.info("[dot-ai] No workspaceDir in context, skipping");
+          return;
         }
-      } else {
-        api.logger.info("[dot-ai] No SKILL.md found, using summary bootstrap");
-        event.context?.bootstrapFiles?.push({
-          path: "dot-ai-bootstrap",
-          content: DOT_AI_BOOTSTRAP_CONTENT,
-        });
-      }
 
-      // Model routing rules
-      event.context?.bootstrapFiles?.push({
-        path: "model-routing-rules",
-        content: MODEL_ROUTING_CONTENT,
-      });
+        // Resolve .ai/ directory
+        const aiDir = path.basename(workspaceDir) === ".ai"
+          ? workspaceDir
+          : path.join(workspaceDir, ".ai");
 
-      // Inject projects-index.md for routing context
-      const projectsIndexPath = path.join(aiDir, "memory", "projects-index.md");
-      if (fs.existsSync(projectsIndexPath)) {
         try {
-          const projectsIndex = fs.readFileSync(projectsIndexPath, "utf-8");
-          event.context?.bootstrapFiles?.push({
-            path: "projects-index",
-            content: projectsIndex,
-          });
-          api.logger.info("[dot-ai] Injected projects-index.md for routing");
-        } catch (err) {
-          api.logger.warn(`[dot-ai] Failed to read projects-index.md: ${err}`);
+          await fs.access(aiDir);
+        } catch {
+          api.logger.info(`[dot-ai] No .ai/ directory at ${workspaceDir}, skipping`);
+          return;
         }
-      } else {
-        api.logger.info("[dot-ai] No projects-index.md found, skipping routing index injection");
-      }
-    },
-    {
-      name: "dot-ai-enforce",
-      description: "Injects dot-ai workspace convention into agent bootstrap"
-    }
-  );
 
-  // --- Service registration ---
-  api.registerService({
-    id: "dot-ai",
-    start: () => {
-      api.logger.info("[dot-ai] Workspace convention enforcement active");
-    },
-    stop: () => {
-      api.logger.info("[dot-ai] Service stopped");
-    },
-  });
-}
+        const parts: string[] = [];
+
+        // 1. Inject full SKILL.md
+        const skillMdPath = path.join(aiDir, "skills", "dot-ai", "SKILL.md");
+        try {
+          const content = await fs.readFile(skillMdPath, "utf-8");
+          parts.push("## dot-ai Convention (auto-injected)\n\n" + content);
+          api.logger.info("[dot-ai] Injected SKILL.md");
+        } catch (err) {
+          api.logger.debug?.(`[dot-ai] SKILL.md not found: ${String(err)}`);
+        }
+
+        // 2. Inject projects-index.md for routing
+        const projectsIndexPath = path.join(aiDir, "memory", "projects-index.md");
+        try {
+          const content = await fs.readFile(projectsIndexPath, "utf-8");
+          parts.push("## Workspace Projects Index (auto-injected)\n\n" + content);
+          api.logger.info("[dot-ai] Injected projects-index.md");
+        } catch (err) {
+          api.logger.debug?.(`[dot-ai] projects-index.md not found: ${String(err)}`);
+        }
+
+        // 3. Model routing rules
+        parts.push(MODEL_ROUTING_CONTENT);
+
+        if (parts.length === 0) return;
+
+        return {
+          prependContext: parts.join("\n\n---\n\n"),
+        };
+      },
+      { priority: 10 },
+    );
+
+    // --- Service registration ---
+    api.registerService({
+      id: "dot-ai",
+      start: (ctx) => {
+        ctx.logger.info("[dot-ai] Workspace convention enforcement active");
+      },
+      stop: (ctx) => {
+        ctx.logger.info("[dot-ai] Service stopped");
+      },
+    });
+  },
+};
+
+export default plugin;
