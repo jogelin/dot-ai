@@ -3,6 +3,7 @@ name: dot-ai-audit
 description: Weekly audit of .ai/ workspace coherence, indexes, and paths
 triggers: [heartbeat]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

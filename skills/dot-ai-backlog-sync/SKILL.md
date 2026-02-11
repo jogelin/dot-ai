@@ -3,6 +3,7 @@ name: dot-ai-backlog-sync
 description: Validate BACKLOG.md structure and check orphan task slugs
 triggers: [audit]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

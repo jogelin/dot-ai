@@ -3,6 +3,7 @@ name: dot-ai-security
 description: Security conventions and audit checklist for .ai/ workspaces
 triggers: [boot, audit]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

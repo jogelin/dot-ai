@@ -3,6 +3,7 @@ name: dot-ai-self-improve
 description: Auto-correction and knowledge documentation process
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

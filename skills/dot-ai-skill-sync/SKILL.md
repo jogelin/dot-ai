@@ -3,6 +3,7 @@ name: dot-ai-skill-sync
 description: Validate SKILL.md frontmatter and structure
 triggers: [audit]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

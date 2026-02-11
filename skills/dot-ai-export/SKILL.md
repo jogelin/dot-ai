@@ -3,6 +3,7 @@ name: dot-ai-export
 description: Export workspace structure as JSON/YAML for external tools
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

@@ -3,6 +3,7 @@ name: dot-ai-doctor
 description: Workspace health check and troubleshooting tool
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

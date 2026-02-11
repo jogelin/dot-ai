@@ -3,6 +3,7 @@ name: dot-ai-migrate
 description: Migrate workspace from old dot-ai convention version to current
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

@@ -3,6 +3,7 @@ name: dot-ai-tasks
 description: Task management across workspace. Backlog tracking, task lifecycle, notes linking.
 triggers: [always]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

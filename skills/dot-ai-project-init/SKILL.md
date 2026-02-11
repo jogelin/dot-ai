@@ -3,6 +3,7 @@ name: dot-ai-project-init
 description: Create new project with proper .ai/ structure and validation
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

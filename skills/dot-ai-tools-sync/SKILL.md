@@ -3,6 +3,7 @@ name: dot-ai-tools-sync
 description: Validate TOOLS.md tool definitions and references
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

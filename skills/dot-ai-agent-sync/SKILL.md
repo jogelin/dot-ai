@@ -3,6 +3,7 @@ name: dot-ai-agent-sync
 description: Generate and maintain AGENT.md for projects (metadata, structure, data index, skills overview)
 triggers: [manual, audit]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

@@ -3,6 +3,7 @@ name: dot-ai-memory-sync
 description: Validate memory/ directory structure and session notes
 triggers: [manual]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 

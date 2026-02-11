@@ -3,6 +3,7 @@ name: dot-ai-workspace-scan
 description: Scan .ai/ directories and generate compact workspace overview
 triggers: [boot]
 internal: true
+disable-model-invocation: true
 parent: dot-ai
 ---
 
