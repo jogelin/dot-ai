@@ -30,6 +30,8 @@ Audit orchestrates, sync sub-skills validate:
 - `dot-ai-agent-sync` — validates AGENT.md
 - `dot-ai-skill-sync` — validates SKILL.md files
 - `dot-ai-backlog-sync` — validates BACKLOG.md and task files
+- `dot-ai-memory-sync` — validates memory/ directory structure and notes
+- `dot-ai-tools-sync` — validates TOOLS.md definitions and references
 
 This ensures **single source of truth** for validation rules.
 
@@ -154,6 +156,26 @@ Validate all metadata cache files:
 
 Regenerate stale caches automatically.
 
+### 7. Validate memory structure
+
+**Delegate to:** `dot-ai-memory-sync`
+
+For each `memory/` directory (root + all projects):
+- Validates daily note naming convention
+- Checks for orphan files
+- Verifies projects-index freshness
+- Scans for exposed credentials
+
+### 8. Validate TOOLS.md files
+
+**Delegate to:** `dot-ai-tools-sync`
+
+For each `TOOLS.md` (root + all projects):
+- Validates structure and required sections
+- Checks tool definitions completeness
+- Verifies no hardcoded credentials
+- Validates scope (root vs project)
+
 ## Output Format
 
 ```
@@ -216,5 +238,10 @@ For manual runs outside heartbeat:
 
 ## Dependencies
 
+- `dot-ai-project-init` — validates .ai/ directory structure convention
 - `dot-ai-workspace-scan` — reuses scan logic for project discovery
-- `dot-ai-agent-sync` — called to fix stale auto-generated content
+- `dot-ai-agent-sync` — validates and fixes AGENT.md files
+- `dot-ai-skill-sync` — validates SKILL.md frontmatter and triggers
+- `dot-ai-backlog-sync` — validates BACKLOG.md and task file consistency
+- `dot-ai-memory-sync` — validates memory/ directory structure and notes
+- `dot-ai-tools-sync` — validates TOOLS.md definitions and references

@@ -146,7 +146,7 @@ Periodically (during audit):
 - User explicitly asks for something that takes multiple steps
 - Research or investigation is needed
 - Work spans multiple sessions
-- User says "ajoute une tâche", "todo", "backlog", "à faire"
+- User says "add a task", "todo", "backlog", "to do"
 
 ### When NOT to create a task
 - Quick one-shot questions/answers

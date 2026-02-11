@@ -69,10 +69,10 @@ Example output:
 📁 pro — Blog smartsdlc.dev, DX consulting [blog, dx, ai]
    📋 medium-digest — Digest articles Medium/Substack [heartbeat, cron]
    📋 write-blog-article — Workflow article blog [manual]
-📁 roule-caillou — Projet de vie, recherche terrain [immobilier, van]
-   📋 property-search — Veille biens immobiliers [cron]
-📁 todo — Tâches perso [tasks]
-   📋 todo — Tâches rapides [manual]
+📁 roule-caillou — Life project, land search [immobilier, van]
+   📋 property-search — Property listing watch [cron]
+📁 todo — Personal tasks [tasks]
+   📋 todo — Quick tasks [manual]
 ```
 
 ## Output Rules
@@ -92,22 +92,22 @@ Example output:
 
 # 🗺️ Projects Index
 
-Index auto-généré des projets du monorepo. Utilisé pour le routing contextuel.
-Chaque projet vit dans `projects/<name>/` et a son propre `.ai/AGENT.md`.
+Auto-generated index of monorepo projects. Used for contextual routing.
+Each project lives in `projects/<name>/` and has its own `.ai/AGENT.md`.
 
-## Projets
+## Projects
 
-| Projet | Description | Keywords |
+| Project | Description | Keywords |
 |--------|-------------|----------|
 | dashboard | Dashboard monitoring Kiwi — Astro 5 + Tailwind SSG | dashboard, stats, monitoring |
 | pro | Personal brand smartsdlc.dev — blog, CV, articles | blog, dx, ai, smartsdlc |
 ...
 
-## Skills par projet
+## Skills per project
 
 ### pro
-- `medium-digest` → collecte emails Medium/Substack, JSON | "medium", "digest"
-- `write-blog-article` → workflow article blog | "écris un article", "blog post"
+- `medium-digest` → collect Medium/Substack emails, JSON | "medium", "digest"
+- `write-blog-article` → blog article workflow | "write an article", "blog post"
 ...
 
 *Last updated: YYYY-MM-DD HH:MM*

@@ -34,7 +34,7 @@ parent: dot-ai
 
 ## Actions Requiring Confirmation (no 2FA)
 
-Ask "Tu confirmes ?" before executing:
+Ask "Can you confirm?" before executing:
 - **File deletion** (rm, trash, delete)
 - **External sends** (emails, tweets, public posts, messages to strangers)
 - **System modifications** (config, permissions, global installs)

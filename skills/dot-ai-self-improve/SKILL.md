@@ -39,7 +39,7 @@ Write the lesson in the RIGHT place:
 |------------|-------------|---------|
 | Workflow/process error | `AGENTS.md` | "Always check X before Y" |
 | Skill-specific error | The relevant `SKILL.md` | "Use endpoint /v2 not /v1" |
-| Contextual lesson | `MEMORY.md` → "Leçons apprises" | "Project X uses monorepo" |
+| Contextual lesson | `MEMORY.md` → "Lessons learned" | "Project X uses monorepo" |
 | Tool/setup issue | `TOOLS.md` | "Camera name is X not Y" |
 
 ### Documentation Rules

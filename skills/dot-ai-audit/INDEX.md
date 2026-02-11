@@ -13,6 +13,8 @@ Weekly audit of .ai/ workspace coherence, indexes, and paths
 4. **BACKLOG.md Files** — Section structure, orphan slugs/files, checkbox consistency
 5. **Path References** — Broken links in .ai/ markdown files
 6. **Cache Freshness** — projects-index.md, skills-index.json, activity-index.json, data-index.json
+7. **Memory Structure** — Daily note naming, orphan files, projects-index freshness, credentials
+8. **TOOLS.md Files** — Structure, tool definitions, credentials, scope validation
 
 ## Delegation Pattern
 Orchestrates validation via specialized sub-skills:
@@ -21,6 +23,8 @@ Orchestrates validation via specialized sub-skills:
 - `dot-ai-agent-sync` — validates and fixes AGENT.md files
 - `dot-ai-skill-sync` — validates SKILL.md frontmatter and triggers
 - `dot-ai-backlog-sync` — validates BACKLOG.md and task file consistency
+- `dot-ai-memory-sync` — validates memory/ directory structure and notes
+- `dot-ai-tools-sync` — validates TOOLS.md definitions and references
 
 This ensures single source of truth for validation rules.
 

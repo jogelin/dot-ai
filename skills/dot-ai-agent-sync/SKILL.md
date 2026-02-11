@@ -13,7 +13,7 @@ Uses markers to manage auto-generated sections while preserving manual content.
 
 ## When to Run
 
-- **Manual**: "sync agent-md pour `<project>`" or "reindex `<project>`"
+- **Manual**: "sync agent-md for `<project>`" or "reindex `<project>`"
 - **Audit**: called by `dot-ai-audit` when staleness is detected
 
 ## Marker Pattern

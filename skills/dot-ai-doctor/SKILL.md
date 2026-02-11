@@ -2,6 +2,8 @@
 name: dot-ai-doctor
 description: Workspace health check and troubleshooting tool
 triggers: [manual]
+internal: true
+parent: dot-ai
 ---
 
 # dot-ai-doctor — Health Check

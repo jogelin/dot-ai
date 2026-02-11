@@ -65,6 +65,7 @@ status: string         # Optional: "planned", "experimental", "deprecated"
 - `[manual]` - User must explicitly invoke
 - `["phrase one", "phrase two"]` - Specific phrases
 - `[heartbeat]` - Triggered by scheduled heartbeat
+- `[audit]` - Triggered by workspace audit
 
 ## Output Formats
 
