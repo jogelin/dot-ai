@@ -18,10 +18,17 @@ const plugin = {
     // Injects lightweight BOOTSTRAP.md + projects-index summary for minimal tokens
     api.on(
       "before_agent_start",
-      async (_event: unknown, ctx: { workspaceDir?: string }) => {
+      async (_event: unknown, ctx: { workspaceDir?: string; sessionKey?: string }) => {
         const workspaceDir = ctx.workspaceDir;
         if (!workspaceDir) {
           api.logger.info("[dot-ai] No workspaceDir in context, skipping");
+          return;
+        }
+
+        // Detect sub-agent sessions — inject minimal context only
+        const isSubagent = ctx.sessionKey?.includes(":subagent:") || ctx.sessionKey?.includes(":cron:");
+        if (isSubagent) {
+          api.logger.info("[dot-ai] Sub-agent/cron session detected, skipping full bootstrap injection");
           return;
         }
 
