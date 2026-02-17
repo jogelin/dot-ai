@@ -188,6 +188,12 @@ Execute this sequence at every session start:
 3. Load `memory/YYYY-MM-DD.md` for today and yesterday
 4. If main/private session: load `MEMORY.md`
 
+### Phase 1b — Check active tasks
+
+1. Read `memory/tasks/BACKLOG.md` — scan for in-progress tasks marked `[~]`
+2. If any found, include them in the boot log so you know what was interrupted
+3. This is your "where was I?" on session start
+
 ### Phase 2 — Discover projects
 
 1. From the workspace root, scan for `.ai/` directories:
@@ -220,6 +226,7 @@ Use a single compact block — no walls of text.
 ├─ 🏠 Root context — loaded (AGENTS, SOUL, USER, IDENTITY, TOOLS)
 ├─ 📝 memory/YYYY-MM-DD.md — loaded (+yesterday)
 ├─ 🧠 MEMORY.md — loaded | skipped (not main session)
+├─ 📋 N in-progress tasks | no active tasks
 ├─ 📁 N projects scanned, M skills indexed
 ├─ 📋 projects-index.md — fresh (Xd) | regenerated (stale) | created
 ├─ 🔍 Audit — not due (last: Xd ago) | running | skipped
