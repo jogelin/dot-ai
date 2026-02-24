@@ -12,9 +12,14 @@ Automatic model selection rules. This skill MUST be consulted before each `sessi
 
 | Alias | Model ID | Relative Cost | Context | Reasoning |
 |-------|----------|--------------|---------|-----------|
-| **opus** | `anthropic/claude-opus-4-6` | $$$$$ | 1M | ✅ |
-| **sonnet** | `anthropic/claude-sonnet-4` | $$ | 200K | ✅ |
-| **haiku** | `anthropic/claude-haiku` | $ | 200K | ❌ |
+| **opus** | `anthropic/claude-opus-4-6` | $$$$$ | 1M | ✅ adaptive (4 levels) |
+| **sonnet** | `anthropic/claude-sonnet-4-20250514` | $$ | 1M | ✅ adaptive (4 levels) |
+| **haiku** | `anthropic/claude-haiku-4-5-20251001` | $ | 200K | ❌ |
+
+> **Feb 2026 update**: Sonnet 4.6 beats Opus 4.5 on GDPval-AA (expert tasks: 1633 vs 1606 Elo).
+> SWE-bench: Sonnet 79.6% vs Opus 80.8% — near parity at 1/6th the cost.
+> Both support adaptive thinking with effort levels (low/medium/high/max).
+> Sonnet is now the smart default for almost everything except complex multi-agent orchestration.
 
 ## Selection Rules — Sub-agents (`sessions_spawn`)
 
