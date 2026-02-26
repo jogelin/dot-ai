@@ -26,50 +26,51 @@ Full documentation: read `.ai/skills/dot-ai/SKILL.md` when needed.
 
 ## Boot Sequence (REQUIRED on SessionStart)
 
-1. **Find root .ai/** - Look upward from workspace, stop at first .ai/ with AGENTS.md
-2. **Load core docs** - Read in order: AGENTS.md → SOUL.md → USER.md → IDENTITY.md → TOOLS.md
-3. **Load memory** - Read `memory/YYYY-MM-DD.md` for today + yesterday (if exists)
-4. **Scan projects** - Quick overview of `projects/` structure
-5. **Check routing** - Load `memory/projects-index.md` for project routing
+### Phase 1: Core Context (AUTO-LOADED)
+
+The following files are **automatically loaded into the system prompt** via `@` imports in CLAUDE.md — no action needed:
+- `AGENTS.md` — operational rules (security, git, memory)
+- `SOUL.md` — personality, tone, limits
+- `USER.md` — human context (Jo, family, projects)
+- `IDENTITY.md` — project identity ("Kiwi")
+
+### Phase 2: Session Context (MANDATORY — read BEFORE any response)
+
+You **MUST** read these files at the start of every session, before responding to the user:
+
+1. **Read TOOLS.md** — `Read .ai/TOOLS.md` (available tools and integrations)
+2. **Load memory** — Read `memory/YYYY-MM-DD.md` for today + yesterday (if exists)
+3. **Scan projects** — Quick overview of `projects/` structure
+4. **Check routing** — Load `memory/projects-index.md` for project routing
 
 ## Task Management
 
 **ALWAYS use `dot-ai-tasks` sub-skill** (NOT built-in todos):
-- Global backlog: `.ai/memory/BACKLOG.md` (lightweight index)
-- Task details: `.ai/memory/tasks/{slug}.md` (on-demand)
+- Default provider: file-based BACKLOG.md (`.ai/memory/tasks/`)
+- Custom providers supported (e.g., Cockpit API in Kiwi workspace)
+- Provider configured in `.ai/config.yaml` → `tasks.provider`
+- Task details: `.ai/memory/tasks/{slug}.md` (on-demand, file provider)
 - Project tasks: `projects/{name}/.ai/memory/tasks/`
 - Use frontmatter: `status`, `priority`, `project`, `tags`
 
-## Model Selection (CRITICAL)
+## Intelligent Routing (CRITICAL)
 
-**NEVER spawn sub-agent without specifying model!**
+**EVERY request routes through analysis → optimal model dispatch**
 
-| Task Type | Model | When |
-|-----------|-------|------|
-| Extraction, OCR, formatting, bulk ops | **Haiku** (`anthropic/claude-haiku`) | Cheap execution |
-| Development, refactoring, research | **Sonnet** (`anthropic/claude-sonnet-4`) | Standard work |
-| Architecture, complex reasoning | **Opus** (`anthropic/claude-opus-4-6`) | Strategic only |
+### Core Rules
+- **Opus = orchestrator only**, never execution
+- **Auto-route** simple tasks to Haiku/Sonnet  
+- **Auto-split** complex requests into optimal sub-tasks
+- **NEVER spawn sub-agent without specifying model!**
 
-### Anti-patterns
-- ❌ Default model without explicit choice
-- ❌ Opus for execution tasks
-- ❌ Multiple web_fetch in Opus (delegate to Sonnet)
-- ❌ 5+ concurrent sub-agents without rate check
+### Quick Reference  
+- Haiku (`claude-haiku`): file reads, data extraction, formatting
+- Sonnet (`claude-sonnet`): research, development, analysis  
+- Opus (`claude-opus`): planning, architecture, coordination only
 
-**Full details:** Read `skills/model-selection/SKILL.md`
+**Full routing logic:** Read `skills/intelligent-routing/SKILL.md`
 
-## Context Management
-
-Monitor context usage and delegate proactively:
-
-| Context Usage | Action |
-|---------------|--------|
-| <50% | Normal operation |
-| 50-70% | Delegate reads to sub-agents |
-| >70% | Switch to Sonnet if on Opus |
-| >85% | Stop reading, work from memory |
-
-**Full details:** Read `skills/context-strategy/SKILL.md`
+**Fallback manual rules:** Read `skills/model-selection/SKILL.md` + `skills/context-strategy/SKILL.md`
 
 ## Data Separation Rule
 
@@ -81,21 +82,23 @@ Monitor context usage and delegate proactively:
 ## Available Sub-Skills
 
 Invoke via skill matching (auto-detected) or explicit:
+- `intelligent-routing` - Auto-analyze and route ALL requests (CORE)
 - `dot-ai-tasks` - Task management (ALWAYS use this)
 - `dot-ai-workspace-scan` - Rebuild projects index
 - `dot-ai-project-init` - Initialize new project .ai/ structure
 - `dot-ai-audit` - Workspace coherence validation
 - `dot-ai-security` - Security rules and verification
-- `model-selection` - Which model for which task
-- `context-strategy` - Context budget management
+- `model-selection` - Manual model selection rules (fallback)
+- `context-strategy` - Context budget management (fallback)
 
 **For full details:** Read `.ai/skills/dot-ai/SKILL.md` (~570 lines, load on-demand)
 
 ## Quick Reference
 
-- **Projects routing**: Check `memory/projects-index.md` first
+- **Request routing**: `intelligent-routing` auto-analyzes ALL requests
+- **Projects routing**: Check `memory/projects-index.md` first  
 - **Task tracking**: Use `dot-ai-tasks`, NOT built-in todos
-- **Model choice**: Haiku execution, Sonnet dev, Opus strategy
+- **Model hierarchy**: Haiku execution, Sonnet dev, Opus orchestration
 - **Boot sequence**: AGENTS.md → SOUL → USER → IDENTITY → TOOLS
 - **Memory**: Today + yesterday session notes
 
