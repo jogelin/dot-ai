@@ -1,28 +1,8 @@
 {
-  "compilerOptions": {
-    "target": "ES2023",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ES2023"],
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "resolveJsonModule": true,
-    "outDir": "./dist",
-    "rootDir": "./",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
-  },
-  "include": [
-    "index.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    ".omc"
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/adapter-openclaw" },
+    { "path": "packages/cli" }
   ]
 }

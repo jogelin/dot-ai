@@ -1,0 +1,16 @@
+{
+  "name": "@dot-ai/claude",
+  "version": "0.3.0",
+  "type": "module",
+  "dependencies": {
+    "@dot-ai/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "plugin.json",
+    "hooks",
+    "src"
+  ]
+}
