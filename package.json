@@ -13,6 +13,9 @@
     "build": "pnpm -r build",
     "clean": "pnpm -r exec rm -rf dist"
   },
+  "openclaw": {
+    "extensions": ["./packages/adapter-openclaw/src/index.ts"]
+  },
   "devDependencies": {
     "typescript": "^5.9.3"
   }
