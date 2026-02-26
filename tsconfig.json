@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/adapter-openclaw" },
+    { "path": "packages/adapter-claude" },
     { "path": "packages/cli" }
   ]
 }
