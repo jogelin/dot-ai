@@ -2,23 +2,49 @@
 // Registers hooks for workspace convention enforcement and model routing
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { buildBootContext } from "./bridge.js";
+
+// Inline OpenClaw plugin API types — avoids importing the full openclaw SDK as a hard dep
+interface OpenClawLogger {
+  info(msg: string): void;
+  debug?(msg: string): void;
+}
+
+interface OpenClawPluginApi {
+  logger: OpenClawLogger;
+  on(
+    event: string,
+    handler: (
+      event: unknown,
+      ctx: { workspaceDir?: string; sessionKey?: string },
+    ) => Promise<{ prependContext?: string } | void> | void,
+    options?: { priority?: number },
+  ): void;
+  registerService(service: {
+    id: string;
+    start(ctx: { logger: OpenClawLogger }): void;
+    stop(ctx: { logger: OpenClawLogger }): void;
+  }): void;
+}
 
 // Plugin definition following official OpenClaw SDK pattern
 const plugin = {
   id: "dot-ai",
   name: "dot-ai — Universal AI Workspace Convention",
-  version: "0.2.0",
+  version: "0.3.0",
   description: "Workspace convention with model routing and context enforcement",
 
   register(api: OpenClawPluginApi) {
     api.logger.info("[dot-ai] Plugin loaded");
 
     // --- Hook: before_agent_start ---
-    // Injects lightweight BOOTSTRAP.md + projects-index summary for minimal tokens
+    // Injects BOOTSTRAP.md (convention rules) + workspace overview via core
     api.on(
       "before_agent_start",
-      async (_event: unknown, ctx: { workspaceDir?: string; sessionKey?: string }) => {
+      async (
+        _event: unknown,
+        ctx: { workspaceDir?: string; sessionKey?: string },
+      ) => {
         const workspaceDir = ctx.workspaceDir;
         if (!workspaceDir) {
           api.logger.info("[dot-ai] No workspaceDir in context, skipping");
@@ -26,57 +52,59 @@ const plugin = {
         }
 
         // Detect sub-agent sessions — inject minimal context only
-        const isSubagent = ctx.sessionKey?.includes(":subagent:") || ctx.sessionKey?.includes(":cron:");
+        const isSubagent =
+          ctx.sessionKey?.includes(":subagent:") ||
+          ctx.sessionKey?.includes(":cron:");
         if (isSubagent) {
-          api.logger.info("[dot-ai] Sub-agent/cron session detected, skipping full bootstrap injection");
+          api.logger.info(
+            "[dot-ai] Sub-agent/cron session detected, skipping full bootstrap injection",
+          );
           return;
         }
 
         // Resolve .ai/ directory
-        const aiDir = path.basename(workspaceDir) === ".ai"
-          ? workspaceDir
-          : path.join(workspaceDir, ".ai");
+        const aiDir =
+          path.basename(workspaceDir) === ".ai"
+            ? workspaceDir
+            : path.join(workspaceDir, ".ai");
 
         try {
           await fs.access(aiDir);
         } catch {
-          api.logger.info(`[dot-ai] No .ai/ directory at ${workspaceDir}, skipping`);
+          api.logger.info(
+            `[dot-ai] No .ai/ directory at ${workspaceDir}, skipping`,
+          );
           return;
         }
 
         const parts: string[] = [];
 
-        // 1. Inject BOOTSTRAP.md only (lightweight ~100 lines)
-        // All other skills are already registered in <available_skills> via openclaw.plugin.json
-        const bootstrapPath = path.join(aiDir, "skills", "dot-ai", "BOOTSTRAP.md");
+        // 1. Inject BOOTSTRAP.md (convention rules, always needed)
+        // Contains the full dot-ai convention spec for the agent to follow
+        const bootstrapPath = path.join(
+          aiDir,
+          "skills",
+          "dot-ai",
+          "BOOTSTRAP.md",
+        );
         try {
           const content = await fs.readFile(bootstrapPath, "utf-8");
           parts.push(content);
           api.logger.info("[dot-ai] Injected BOOTSTRAP.md");
         } catch {
-          api.logger.debug?.("[dot-ai] BOOTSTRAP.md not found, skipping");
+          api.logger.debug?.(
+            "[dot-ai] BOOTSTRAP.md not found, skipping",
+          );
         }
 
-        // 2. Inject projects-index.md summary (just the table, not full content)
-        const projectsIndexPath = path.join(aiDir, "memory", "projects-index.md");
-        try {
-          const content = await fs.readFile(projectsIndexPath, "utf-8");
-          // Extract just the project table (lines between first | and last |)
-          const lines = content.split("\n");
-          const tableStart = lines.findIndex(l => l.trim().startsWith("|"));
-          const tableEnd = lines.findLastIndex(l => l.trim().startsWith("|"));
-
-          if (tableStart !== -1 && tableEnd !== -1) {
-            const table = lines.slice(tableStart, tableEnd + 1).join("\n");
-            parts.push("## Active Projects (auto-injected)\n\n" + table);
-            api.logger.info("[dot-ai] Injected projects-index.md (table only)");
-          } else {
-            // No table found, inject full content as fallback
-            parts.push("## Workspace Projects Index (auto-injected)\n\n" + content);
-            api.logger.info("[dot-ai] Injected projects-index.md (full)");
-          }
-        } catch (err) {
-          api.logger.debug?.(`[dot-ai] projects-index.md not found: ${String(err)}`);
+        // 2. Use core's boot + discovery to build workspace overview (projects + skills)
+        // This ADDS structured workspace context on top of BOOTSTRAP.md
+        const overview = await buildBootContext(workspaceDir);
+        if (overview) {
+          parts.push(overview);
+          api.logger.info("[dot-ai] Injected workspace overview via @dot-ai/core");
+        } else {
+          api.logger.debug?.("[dot-ai] No workspace overview from core (no projects/skills found)");
         }
 
         // Only inject if we found workspace content
@@ -92,10 +120,10 @@ const plugin = {
     // --- Service registration ---
     api.registerService({
       id: "dot-ai",
-      start: (ctx: { logger: { info: (msg: string) => void } }) => {
+      start: (ctx: { logger: OpenClawLogger }) => {
         ctx.logger.info("[dot-ai] Workspace convention enforcement active");
       },
-      stop: (ctx: { logger: { info: (msg: string) => void } }) => {
+      stop: (ctx: { logger: OpenClawLogger }) => {
         ctx.logger.info("[dot-ai] Service stopped");
       },
     });
