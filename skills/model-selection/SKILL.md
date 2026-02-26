@@ -10,16 +10,16 @@ Automatic model selection rules. This skill MUST be consulted before each `sessi
 
 ## Available Models
 
-| Alias | Model ID | Relative Cost | Context | Reasoning |
-|-------|----------|--------------|---------|-----------|
-| **opus** | `anthropic/claude-opus-4-6` | $$$$$ | 1M | ✅ adaptive (4 levels) |
-| **sonnet** | `anthropic/claude-sonnet-4-20250514` | $$ | 1M | ✅ adaptive (4 levels) |
-| **haiku** | `anthropic/claude-haiku-4-5-20251001` | $ | 200K | ❌ |
+| Alias | API ID | Relative Cost | Context | Reasoning |
+|-------|--------|--------------|---------|-----------|
+| **opus** | `claude-opus-4-6` | $$$$$ | 1M | ✅ adaptive (4 levels) |
+| **sonnet** | `claude-sonnet-4-6` | $$ | 1M | ✅ adaptive (4 levels) |  
+| **haiku** | `claude-haiku-4-5` | $ | 200K | ❌ |
 
-> **Feb 2026 update**: Sonnet 4.6 beats Opus 4.5 on GDPval-AA (expert tasks: 1633 vs 1606 Elo).
-> SWE-bench: Sonnet 79.6% vs Opus 80.8% — near parity at 1/6th the cost.
-> Both support adaptive thinking with effort levels (low/medium/high/max).
-> Sonnet is now the smart default for almost everything except complex multi-agent orchestration.
+> **Feb 2026 update**: Claude 4.6 generation (Sonnet/Opus) available. Sonnet 4.6 beats older Opus versions on most tasks.
+> Both 4.6 models support adaptive thinking with effort levels (low/medium/high/max).
+> Sonnet 4.6 is the smart default for almost everything except complex multi-agent orchestration (use Opus 4.6).
+> Haiku 4.5 remains the best choice for pure execution tasks.
 
 ## Selection Rules — Sub-agents (`sessions_spawn`)
 

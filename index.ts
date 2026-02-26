@@ -46,44 +46,15 @@ const plugin = {
 
         const parts: string[] = [];
 
-        // Skills to inject (INDEX.md with fallback to SKILL.md)
-        const skillsToInject = [
-          'dot-ai',  // Uses BOOTSTRAP.md instead of INDEX.md
-          'dot-ai-export',
-          'dot-ai-audit',
-          'dot-ai-migrate',
-          'dot-ai-project-init',
-          'dot-ai-tasks',
-          'dot-ai-agent-sync',
-          'dot-ai-workspace-scan',
-          'dot-ai-backlog-sync',
-          'dot-ai-memory-sync',
-          'dot-ai-tools-sync',
-          'dot-ai-doctor',
-          'context-strategy',
-          'model-selection'
-        ];
-
-        // 1. Inject INDEX.md for all skills (BOOTSTRAP.md for main dot-ai skill)
-        for (const skillName of skillsToInject) {
-          const indexPath = path.join(aiDir, "skills", skillName,
-            skillName === 'dot-ai' ? 'BOOTSTRAP.md' : 'INDEX.md');
-          const skillPath = path.join(aiDir, "skills", skillName, 'SKILL.md');
-
-          try {
-            const content = await fs.readFile(indexPath, "utf-8");
-            parts.push(content);
-            api.logger.info(`[dot-ai] Injected ${skillName}/${skillName === 'dot-ai' ? 'BOOTSTRAP' : 'INDEX'}`);
-          } catch {
-            // Fallback to full SKILL.md (backward compat)
-            try {
-              const content = await fs.readFile(skillPath, "utf-8");
-              parts.push(`## ${skillName} (auto-injected)\n\n${content}`);
-              api.logger.info(`[dot-ai] Injected ${skillName}/SKILL (INDEX not found)`);
-            } catch {
-              api.logger.debug?.(`[dot-ai] ${skillName} not found`);
-            }
-          }
+        // 1. Inject BOOTSTRAP.md only (lightweight ~100 lines)
+        // All other skills are already registered in <available_skills> via openclaw.plugin.json
+        const bootstrapPath = path.join(aiDir, "skills", "dot-ai", "BOOTSTRAP.md");
+        try {
+          const content = await fs.readFile(bootstrapPath, "utf-8");
+          parts.push(content);
+          api.logger.info("[dot-ai] Injected BOOTSTRAP.md");
+        } catch {
+          api.logger.debug?.("[dot-ai] BOOTSTRAP.md not found, skipping");
         }
 
         // 2. Inject projects-index.md summary (just the table, not full content)
