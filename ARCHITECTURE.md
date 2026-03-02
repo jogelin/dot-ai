@@ -133,13 +133,15 @@ Skills can be:
 
 ### Boot Sequence
 
-Three phases, optimized for minimal token usage:
+Four phases, optimized for minimal token usage:
 
 1. **Core context** (~2000 tokens): load AGENTS.md + SOUL.md + USER.md + IDENTITY.md + TOOLS.md
 2. **Session context** (~300 tokens): load today + yesterday memory, projects-index.md
 3. **Discovery** (~50 tokens): scan for projects and skills, build routing table
+4. **Providers** (~0 tokens): read `.ai/config.yaml`, instantiate configured providers (task, memory)
 
 Total boot cost: ~2350 tokens. Compare to loading everything upfront: ~10,000+ tokens.
+Provider initialization adds no token cost — it's programmatic, not prompt-based.
 
 ### Prompt Routing
 
@@ -195,24 +197,70 @@ interface SkillRegistry {
 | Skills | `FileSkillRegistry` | Scan `skills/*/SKILL.md`, parse frontmatter |
 | Routing | `DefaultModelRouter` | Static alias map (haiku/sonnet/opus) |
 
-### Custom Providers (example)
+### Provider Configuration (`config.yaml`)
 
-A workspace can override any provider. For example, Kiwi (the reference implementation) overrides TaskProvider to use a Cockpit API instead of BACKLOG.md files:
+Workspaces declare which provider implementations to use via `.ai/config.yaml`:
 
-```typescript
-class CockpitTaskProvider implements TaskProvider {
-  async list() { return fetch("http://localhost:3010/api/tasks").then(r => r.json()); }
-  async create(task) { return fetch("http://localhost:3010/api/tasks", { method: "POST", body: JSON.stringify(task) }).then(r => r.json()); }
-  // ...
-}
+```yaml
+# .ai/config.yaml
+providers:
+  tasks:
+    type: cockpit          # "file" (default) or any registered custom type
+    url: http://localhost:3010
+    apiKey: ${COCKPIT_API_KEY}   # env var references resolved at load time
 ```
+
+If no `config.yaml` exists, all providers default to file-based implementations.
+
+**How it works:**
+
+1. `loadConfig(rootDir)` reads `.ai/config.yaml` and resolves `${ENV_VAR}` references
+2. `createProviders(rootDir)` instantiates the correct provider class based on config
+3. `boot(rootDir)` calls `createProviders()` and returns the providers in `BootResult`
+
+```
+config.yaml → loadConfig() → createProviders() → { tasks: <registered provider>, memory: FileMemoryProvider }
+```
+
+**Built-in task provider:**
+
+| Type | Class | Config | Storage |
+|------|-------|--------|---------|
+| `file` | `FileTaskProvider` | (default, no config needed) | `.ai/memory/tasks/BACKLOG.md` |
+
+Custom types are registered via `registerTaskProvider()` before boot. See "Custom Providers" below.
+
+### Custom Providers
+
+Workspaces can register custom provider implementations via `registerTaskProvider()`. Core only ships `file` as built-in — everything else is external.
+
+**How to add a custom task provider:**
+
+1. Implement the `TaskProvider` interface in your workspace (e.g., `CockpitTaskProvider`)
+2. Register it before boot: `registerTaskProvider("cockpit", (cfg) => new CockpitTaskProvider(cfg))`
+3. Declare it in `.ai/config.yaml`:
+
+```yaml
+# .ai/config.yaml
+providers:
+  tasks:
+    type: cockpit              # matches the registered name
+    url: http://localhost:3010
+    apiKey: ${COCKPIT_API_KEY}
+```
+
+**Example — Kiwi (the reference implementation):**
+
+Kiwi stores tasks in a Cockpit dashboard (D1/SQLite REST API) instead of BACKLOG.md files. The `CockpitTaskProvider` lives in `kiwi/.ai/providers/cockpit-tasks.ts` and is registered by the adapter at boot time. It handles status mapping (`pending`↔`todo`), tag serialization, and automatic `completed_date` on task completion.
 
 ### Utility Functions
 
 | Function | Purpose |
 |----------|---------|
-| `boot(rootDir)` | Execute 3-phase boot, return workspace info + loaded context |
-| `discoverWorkspace(rootDir)` | Scan for projects and skills |
+| `boot(rootDir)` | Execute 4-phase boot, return workspace info + providers + loaded context |
+| `loadConfig(rootDir)` | Load `.ai/config.yaml`, resolve env vars |
+| `createProviders(rootDir)` | Instantiate providers from config (or defaults) |
+| `discoverWorkspace(rootDir)` | Scan for projects and skills, build routing table |
 | `validateWorkspace(rootDir)` | Check convention compliance (required files, forbidden patterns) |
 
 ## Adapters — Tool Integration

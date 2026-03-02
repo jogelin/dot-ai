@@ -17,8 +17,8 @@ export interface WorkspaceConfig {
 }
 
 export interface TaskProviderConfig {
-  /** Provider type: "file" (default) or "cockpit" */
-  type: "file" | "cockpit";
+  /** Provider type: "file" (default) or any registered custom type */
+  type: string;
   /** Base URL for API-based providers */
   url?: string;
   /** API key (supports ${ENV_VAR} syntax) */
