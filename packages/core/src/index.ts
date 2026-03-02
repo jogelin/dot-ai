@@ -43,3 +43,16 @@ export { registerProvider, clearProviders, createProviders } from './loader.js';
 
 // ── Labels ──
 export { extractLabels, buildVocabulary } from './labels.js';
+
+// ── Default Providers ──
+export {
+  FileMemoryProvider,
+  FileSkillProvider,
+  FileIdentityProvider,
+  RulesRoutingProvider,
+  FileTaskProvider,
+  FileToolProvider,
+} from './providers/index.js';
+
+// ── registerDefaults ──
+export { registerDefaults } from './loader.js';

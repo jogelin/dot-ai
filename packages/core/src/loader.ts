@@ -9,6 +9,12 @@ import type {
 } from './contracts.js';
 import type { Providers } from './engine.js';
 import { resolveConfig } from './config.js';
+import { FileMemoryProvider } from './providers/file-memory.js';
+import { FileSkillProvider } from './providers/file-skills.js';
+import { FileIdentityProvider } from './providers/file-identity.js';
+import { RulesRoutingProvider } from './providers/rules-routing.js';
+import { FileTaskProvider } from './providers/file-tasks.js';
+import { FileToolProvider } from './providers/file-tools.js';
 
 /**
  * Registry of provider factories.
@@ -36,6 +42,19 @@ export function registerProvider(
  */
 export function clearProviders(): void {
   registry.clear();
+}
+
+/**
+ * Register all default file-based providers.
+ * Call this at startup if you want file-based defaults available.
+ */
+export function registerDefaults(): void {
+  registerProvider('@dot-ai/file-memory', (opts) => new FileMemoryProvider(opts));
+  registerProvider('@dot-ai/file-skills', (opts) => new FileSkillProvider(opts));
+  registerProvider('@dot-ai/file-identity', (opts) => new FileIdentityProvider(opts));
+  registerProvider('@dot-ai/rules-routing', (opts) => new RulesRoutingProvider(opts));
+  registerProvider('@dot-ai/file-tasks', (opts) => new FileTaskProvider(opts));
+  registerProvider('@dot-ai/file-tools', (opts) => new FileToolProvider(opts));
 }
 
 /**
