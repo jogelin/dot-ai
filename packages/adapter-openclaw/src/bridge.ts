@@ -3,6 +3,11 @@
  *
  * OpenClaw handles model routing natively via its gateway config,
  * so the bridge is thin — mainly workspace service mapping.
+ *
+ * Custom providers (e.g. CockpitTaskProvider) must be registered
+ * by the workspace BEFORE calling buildBootContext(). Use:
+ *   import { registerTaskProvider } from "@dot-ai/core";
+ *   registerTaskProvider("cockpit", (cfg) => new CockpitTaskProvider(cfg));
  */
 import { boot, type WorkspaceInfo } from "@dot-ai/core";
 

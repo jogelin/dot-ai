@@ -2,6 +2,7 @@
 // Registers hooks for workspace convention enforcement and model routing
 import fs from "node:fs/promises";
 import path from "node:path";
+import { registerTaskProvider } from "@dot-ai/core";
 import { buildBootContext } from "./bridge.js";
 
 // Inline OpenClaw plugin API types — avoids importing the full openclaw SDK as a hard dep
@@ -12,6 +13,7 @@ interface OpenClawLogger {
 
 interface OpenClawPluginApi {
   logger: OpenClawLogger;
+  pluginConfig?: Record<string, unknown>;
   on(
     event: string,
     handler: (
@@ -27,6 +29,60 @@ interface OpenClawPluginApi {
   }): void;
 }
 
+/**
+ * Load custom providers declared in pluginConfig.
+ *
+ * Workspaces declare custom providers via openclaw.json:
+ *   plugins.entries.dot-ai.config.customProviders: [
+ *     { type: "cockpit", module: "/abs/path/to/cockpit-tasks.ts" }
+ *   ]
+ *
+ * Each module must export a class ending in *TaskProvider.
+ * dot-ai knows nothing about the provider internals — it just
+ * imports the module and registers what it exports.
+ */
+async function loadCustomProviders(
+  config: Record<string, unknown>,
+  logger: OpenClawLogger,
+): Promise<void> {
+  const providers = config.customProviders;
+  if (!Array.isArray(providers)) return;
+
+  for (const entry of providers) {
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      !("type" in entry) ||
+      !("module" in entry)
+    )
+      continue;
+
+    const { type, module: modulePath } = entry as {
+      type: string;
+      module: string;
+    };
+
+    try {
+      const mod = await import(modulePath);
+
+      // Find the *TaskProvider export
+      for (const [name, exported] of Object.entries(mod)) {
+        if (name.endsWith("TaskProvider") && typeof exported === "function") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ProviderClass = exported as new (opts: any) => any;
+          registerTaskProvider(type, (cfg) => new ProviderClass(cfg));
+          logger.info(`[dot-ai] Registered custom task provider: ${type} (${name})`);
+          break;
+        }
+      }
+    } catch (err) {
+      logger.info(
+        `[dot-ai] Failed to load custom provider "${type}" from ${modulePath}: ${err}`,
+      );
+    }
+  }
+}
+
 // Plugin definition following official OpenClaw SDK pattern
 const plugin = {
   id: "dot-ai",
@@ -36,6 +92,11 @@ const plugin = {
 
   register(api: OpenClawPluginApi) {
     api.logger.info("[dot-ai] Plugin loaded");
+
+    // Load custom providers from pluginConfig (if any)
+    if (api.pluginConfig) {
+      void loadCustomProviders(api.pluginConfig, api.logger);
+    }
 
     // --- Hook: before_agent_start ---
     // Injects BOOTSTRAP.md (convention rules) + workspace overview via core
@@ -80,7 +141,6 @@ const plugin = {
         const parts: string[] = [];
 
         // 1. Inject BOOTSTRAP.md (convention rules, always needed)
-        // Contains the full dot-ai convention spec for the agent to follow
         const bootstrapPath = path.join(
           aiDir,
           "skills",
@@ -97,8 +157,7 @@ const plugin = {
           );
         }
 
-        // 2. Use core's boot + discovery to build workspace overview (projects + skills)
-        // This ADDS structured workspace context on top of BOOTSTRAP.md
+        // 2. Use core's boot + discovery to build workspace overview
         const overview = await buildBootContext(workspaceDir);
         if (overview) {
           parts.push(overview);
