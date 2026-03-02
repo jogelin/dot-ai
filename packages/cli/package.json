@@ -1,12 +1,13 @@
 {
   "name": "@dot-ai/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "bin": {
     "dot-ai": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dot-ai/core": "workspace:*"
