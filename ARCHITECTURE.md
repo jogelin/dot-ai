@@ -1,454 +1,746 @@
-# dot-ai — Architecture Reference
-
-> This document is designed to be given to an LLM for research purposes. It explains what dot-ai is, how it works, its goals, and its component structure — so you can research similar projects, common features, and best practices, then map your findings back to dot-ai's architecture.
+# dot-ai v4 Architecture
 
 ## What is dot-ai?
 
-dot-ai is a **framework-agnostic convention for AI-assisted workspaces**. It defines a standardized `.ai/` directory structure that any AI coding assistant (Claude Code, OpenClaw, Cursor, Codex, Windsurf, etc.) can use to understand a project's context, rules, memory, and capabilities.
+dot-ai is a **deterministic context enrichment convention** for AI workspaces. It's not an agent, not a runtime—it's a standardized set of contracts and a pipeline that transforms a raw prompt into enriched context by matching it against workspace knowledge (skills, memory, identities, tools, routing rules).
 
-Think of it like `.git/` for version control or `.vscode/` for editor settings — but for AI assistants.
+Key insight: **The agent is the consumer, dot-ai is the provider.** Adapters integrate dot-ai into specific agents (Claude Code, OpenClaw) via native hooks, making enrichment invisible to the agent while giving it complete workspace context.
 
-## The Problem dot-ai Solves
-
-Every AI coding tool has its own way of storing context:
-- Claude Code uses `CLAUDE.md`
-- Cursor uses `.cursor/rules/`
-- OpenAI Codex uses `AGENTS.md` (at repo root)
-- Windsurf uses `.windsurf/rules/`
-
-This means:
-1. **Vendor lock-in**: your AI context is tied to one tool
-2. **No shared convention**: each project reinvents context management
-3. **No composability**: skills, memory, and routing can't be shared across tools
-4. **No structure**: context files grow into unmaintainable blobs
-
-dot-ai solves this with a single convention (`.ai/`) plus **adapters** that translate it into each tool's native format.
-
-## Goals
-
-1. **Tool-agnostic**: work with any AI coding assistant, current or future
-2. **Convention over configuration**: standardized file names, locations, and formats
-3. **Minimal boot cost**: load only what's needed, when it's needed (token-efficient)
-4. **Composable**: skills are reusable modules, providers are swappable
-5. **Progressive**: start with just `AGENTS.md`, grow to full workspace as needed
-6. **Multi-project**: one workspace can contain many projects with isolated contexts
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    .ai/ Convention                       │
-│  (Markdown files: AGENTS.md, SOUL.md, SKILL.md, etc.)  │
-│  This is the STANDARD — tool-agnostic, human-readable   │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────┐
-│                     @dot-ai/core                        │
-│  TypeScript interfaces + file-based implementations     │
-│  Providers: Memory, Tasks, Skills, Routing, Tools       │
-│  Utilities: boot(), discoverWorkspace(), validate()     │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-   ┌─────────────┐ ┌─────────────┐  ┌─────────────┐
-   │  adapter-   │ │  adapter-   │  │    cli       │
-   │  openclaw   │ │  claude     │  │              │
-   │             │ │             │  │ dot-ai init  │
-   │ Native      │ │ Native      │  │ dot-ai scan  │
-   │ plugin API  │ │ hooks API   │  │ dot-ai doctor│
-   └─────────────┘ └─────────────┘  │ dot-ai audit │
-                                    └─────────────┘
-```
-
-## The .ai/ Convention (the standard)
-
-### Directory Structure
-
-```
-.ai/
-├── AGENTS.md          # Operating rules, conventions, behavioral constraints
-├── SOUL.md            # Persona, tone, voice, boundaries
-├── USER.md            # Who the human is (name, preferences, context)
-├── IDENTITY.md        # Agent name, emoji, avatar
-├── TOOLS.md           # Available tools, APIs, integrations
-├── MEMORY.md          # Curated long-term memory (optional)
-├── memory/            # Daily session notes
-│   ├── YYYY-MM-DD.md  # Daily logs
-│   ├── projects-index.md  # Routing table (project → keywords)
-│   └── _archive/      # Old logs
-├── skills/            # Reusable AI capabilities
-│   └── <name>/
-│       └── SKILL.md   # Skill definition with YAML frontmatter
-└── projects/          # (or at repo root level)
-    └── <name>/
-        └── .ai/       # Per-project context (mirrors root structure)
-            ├── AGENT.md   # Project description + rules (REQUIRED)
-            ├── TOOLS.md   # Project-specific tools (optional)
-            ├── memory/    # Project-scoped notes
-            └── skills/    # Project-specific skills
-```
-
-### File Responsibilities
-
-| File | Purpose | Loaded |
-|------|---------|--------|
-| `AGENTS.md` | Global rules, conventions, how to behave | Always at boot |
-| `SOUL.md` | Persona, tone, voice | Always at boot |
-| `USER.md` | Human identity and preferences | Always at boot |
-| `IDENTITY.md` | Agent name, emoji | Always at boot |
-| `TOOLS.md` | Cross-project tool config | Always at boot |
-| `MEMORY.md` | Long-term curated memory | Main session only |
-| `memory/*.md` | Daily session logs | Today + yesterday |
-| `skills/*/SKILL.md` | Skill definitions | On-demand (when triggered) |
-| `AGENT.md` | Project description (in project `.ai/`) | On-demand (when routed) |
-
-### Key Design Decisions
-
-1. **Markdown-first**: all files are Markdown with optional YAML frontmatter. Human-readable, diff-friendly, no build step needed.
-2. **Frontmatter for metadata**: skills and projects use YAML frontmatter (`---` delimited) for machine-parseable metadata (name, description, triggers, tags).
-3. **Context isolation**: project-specific data lives in the project's `.ai/`, never in root. Identity files (SOUL, USER, IDENTITY) are inherited from root, never duplicated.
-4. **On-demand loading**: only root context loads at boot. Project context loads when a prompt routes to that project. Skills load when triggered. This keeps token usage minimal.
-
-### Skills System
-
-A skill is a reusable AI capability defined as a Markdown file with YAML frontmatter:
-
-```yaml
----
-name: my-skill
-description: What this skill does. Use when X, Y, or Z happens.
-triggers: [manual, cron, boot, heartbeat, always]
 ---
 
-# my-skill
+## Architecture Diagram
 
-Instructions for the AI on how to execute this skill...
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Agent Environment (Claude Code / OpenClaw)                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │  Adapter (adapter-claude / adapter-openclaw)       │    │
+│  │  Hooks into native agent events:                   │    │
+│  │  - Claude Code: UserPromptSubmit hook             │    │
+│  │  - OpenClaw: before_agent_start hook              │    │
+│  └────────────────────────────────────────────────────┘    │
+│                       │                                      │
+│                       ▼                                      │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │  dot-ai Core Engine (core package)                │    │
+│  │                                                    │    │
+│  │  1. loadConfig(.ai/dot-ai.yml)                    │    │
+│  │  2. registerDefaults() [or custom providers]      │    │
+│  │  3. createProviders(config)                       │    │
+│  │  4. boot() → cache identities + vocabulary        │    │
+│  │  5. enrich(prompt) → EnrichedContext              │    │
+│  │  6. format() → markdown for agent injection       │    │
+│  └────────────────────────────────────────────────────┘    │
+│                       │                                      │
+│           ┌───────────┼───────────────┬──────────┐          │
+│           ▼           ▼               ▼          ▼          │
+│      Memory      Skills          Identity    Routing        │
+│      Provider    Provider         Provider    Provider       │
+│      (files,     (files,          (files,     (rules,       │
+│       sqlite,     .ai/skills/)      .ai/)      LLM)         │
+│       etc)                                                   │
+│           │           │               │          │          │
+│           └───────────┼───────────────┴──────────┘          │
+│                       ▼                                      │
+│           .ai/ directory structure                          │
+│           (file-based providers' domain)                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Skills can be:
-- **Global** (in root `.ai/skills/`) — available everywhere
-- **Project-scoped** (in `projects/<name>/.ai/skills/`) — only for that project
-- **Internal sub-skills** — used by other skills, not directly invocable
+---
 
-### Boot Sequence
+## The 6 Core Contracts
 
-Four phases, optimized for minimal token usage:
+These TypeScript interfaces define what a provider must implement. Implementation is left entirely to the provider.
 
-1. **Core context** (~2000 tokens): load AGENTS.md + SOUL.md + USER.md + IDENTITY.md + TOOLS.md
-2. **Session context** (~300 tokens): load today + yesterday memory, projects-index.md
-3. **Discovery** (~50 tokens): scan for projects and skills, build routing table
-4. **Providers** (~0 tokens): read `.ai/config.yaml`, instantiate configured providers (task, memory)
+| Contract | Methods | Purpose |
+|----------|---------|---------|
+| **MemoryProvider** | `search(query, labels?)`, `store(entry)` | Search and persist memory entries (facts, decisions, logs, patterns) |
+| **SkillProvider** | `list()`, `match(labels)`, `load(name)` | Discover skills, match to prompt labels, load skill content |
+| **IdentityProvider** | `load()` | Load identity documents (AGENTS.md, SOUL.md, USER.md, IDENTITY.md) with priority ordering |
+| **RoutingProvider** | `route(labels, context?)` | Decide which model to use (haiku/sonnet/opus) based on prompt characteristics |
+| **TaskProvider** | `list(filter)`, `get(id)`, `create(task)`, `update(id, patch)` | CRUD operations for tasks (e.g., Cockpit API, file-based, Jira) |
+| **ToolProvider** | `list()`, `match(labels)`, `load(name)` | Discover and match tools (MCP servers, external integrations) |
 
-Total boot cost: ~2350 tokens. Compare to loading everything upfront: ~10,000+ tokens.
-Provider initialization adds no token cost — it's programmatic, not prompt-based.
+All providers are **interchangeable**: file-based defaults, or custom implementations (SQLite, REST APIs, etc.).
 
-### Prompt Routing
+---
 
-Every prompt goes through routing:
-1. Consult `projects-index.md` (lightweight table: project → keywords/tags)
-2. Match prompt to project
-3. Load that project's `AGENT.md` + `TOOLS.md` (on-demand)
-4. Check if a skill matches
-5. Execute with loaded context
+## Engine Flow: boot() → enrich() → learn()
 
-This means the AI has full workspace awareness (via the index) but only loads detailed context for the relevant project.
-
-## @dot-ai/core — The Framework
-
-Zero-dependency TypeScript package providing:
-
-### Provider Interfaces
-
-Providers are swappable backends for each concern:
+### 1. Boot Phase (once per session)
 
 ```typescript
-interface MemoryProvider {
-  readDaily(date: string): Promise<string | null>;
-  writeDaily(date: string, content: string): Promise<void>;
-  search(query: string): Promise<string[]>;
-}
-
-interface TaskProvider {
-  list(filter?: { status?: string; project?: string }): Promise<Task[]>;
-  get(id: string): Promise<Task | null>;
-  create(task: Omit<Task, 'id'>): Promise<Task>;
-  update(id: string, patch: Partial<Task>): Promise<Task>;
-}
-
-interface ModelRouter {
-  resolveAlias(alias: string): string;        // "haiku" → "claude-haiku-4-5"
-  selectForTask(taskType: string): string;     // "debugging" → opus
-}
-
-interface SkillRegistry {
-  discover(rootDir: string): Promise<SkillMeta[]>;
-  get(name: string): Promise<string | null>;
-  validate(skillPath: string): Promise<ValidationResult>;
-}
+async function boot(providers: Providers): Promise<BootCache>
 ```
 
-### Default Implementations
+Runs **once** at session start. Caches static data across multiple prompts:
 
-| Provider | Implementation | Storage |
-|----------|---------------|---------|
-| Memory | `FileMemoryProvider` | `.ai/memory/YYYY-MM-DD.md` |
-| Tasks | `FileTaskProvider` | `.ai/memory/tasks/BACKLOG.md` (checkbox format) |
-| Skills | `FileSkillRegistry` | Scan `skills/*/SKILL.md`, parse frontmatter |
-| Routing | `DefaultModelRouter` | Static alias map (haiku/sonnet/opus) |
+- **Load identities** from IdentityProvider (AGENTS.md, SOUL.md, etc.)
+- **List all skills** from SkillProvider
+- **List all tools** from ToolProvider
+- **Build vocabulary** — index all skill + tool labels into a searchable dictionary
 
-### Provider Configuration (`config.yaml`)
+Returns **BootCache**: `{ identities, vocabulary, skills }`
 
-Workspaces declare which provider implementations to use via `.ai/config.yaml`:
+Why caching? Identity docs don't change mid-session. Building vocabulary once is much cheaper than rebuilding for every prompt.
 
-```yaml
-# .ai/config.yaml
-providers:
-  tasks:
-    type: cockpit          # "file" (default) or any registered custom type
-    url: http://localhost:3010
-    apiKey: ${COCKPIT_API_KEY}   # env var references resolved at load time
-```
-
-If no `config.yaml` exists, all providers default to file-based implementations.
-
-**How it works:**
-
-1. `loadConfig(rootDir)` reads `.ai/config.yaml` and resolves `${ENV_VAR}` references
-2. `createProviders(rootDir)` instantiates the correct provider class based on config
-3. `boot(rootDir)` calls `createProviders()` and returns the providers in `BootResult`
-
-```
-config.yaml → loadConfig() → createProviders() → { tasks: <registered provider>, memory: FileMemoryProvider }
-```
-
-**Built-in task provider:**
-
-| Type | Class | Config | Storage |
-|------|-------|--------|---------|
-| `file` | `FileTaskProvider` | (default, no config needed) | `.ai/memory/tasks/BACKLOG.md` |
-
-Custom types are registered via `registerTaskProvider()` before boot. See "Custom Providers" below.
-
-### Custom Providers
-
-Core only ships `file` as a built-in task provider. Everything else is **workspace-owned** — dot-ai never knows about specific provider implementations.
-
-**Registration flow:**
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Workspace (e.g. Kiwi)                                               │
-│                                                                      │
-│  .ai/providers/cockpit-tasks.ts   ← workspace owns the provider     │
-│  .ai/config.yaml                  ← declares type: cockpit           │
-│                                                                      │
-│  openclaw.json (plugins.entries.dot-ai.config):                      │
-│    customProviders:                                                  │
-│      - type: cockpit                                                 │
-│        module: /abs/path/.ai/providers/cockpit-tasks.ts              │
-└──────────────────────┬───────────────────────────────────────────────┘
-                       │ pluginConfig passed at boot
-                       ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│ adapter-openclaw (dot-ai plugin)                                     │
-│                                                                      │
-│  register(api) →                                                     │
-│    1. Read api.pluginConfig.customProviders[]                        │
-│    2. Dynamic import(module) for each entry                          │
-│    3. Find exported *TaskProvider class                              │
-│    4. registerTaskProvider(type, factory)                             │
-└──────────────────────┬───────────────────────────────────────────────┘
-                       │ provider registered in core registry
-                       ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│ @dot-ai/core                                                         │
-│                                                                      │
-│  boot(rootDir) →                                                     │
-│    1. loadConfig(".ai/config.yaml") → type: "cockpit"                │
-│    2. createProviders() → registry.get("cockpit") → factory(cfg)     │
-│    3. Returns BootResult { providers: { tasks: CockpitTaskProvider }} │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-**Key design principle:** dot-ai's plugin code does a generic dynamic import and looks for a class matching `*TaskProvider`. It knows nothing about Cockpit, databases, or any specific implementation. The workspace provides the module, the adapter loads it, core uses it.
-
-**How to add a custom task provider:**
-
-1. **Implement** the `TaskProvider` interface in your workspace:
+### 2. Enrich Phase (per prompt)
 
 ```typescript
-// .ai/providers/my-tasks.ts
-export class MyTaskProvider implements TaskProvider {
-  constructor(options: { url?: string; apiKey?: string }) { /* ... */ }
-  async list(filter?) { /* ... */ }
-  async get(id) { /* ... */ }
-  async create(task) { /* ... */ }
-  async update(id, patch) { /* ... */ }
-}
+async function enrich(
+  prompt: string,
+  providers: Providers,
+  cache: BootCache,
+): Promise<EnrichedContext>
 ```
 
-2. **Declare** the provider type in `.ai/config.yaml`:
+Runs **for each prompt**. Transforms a raw prompt into enriched context:
+
+1. **Extract labels** — Simple regex match prompt against vocabulary (no LLM)
+   - Deterministic: same prompt = same labels every time
+   - Examples: `["code-fix", "implementation"]`
+
+2. **Query all providers in parallel**:
+   - `memory.search(prompt, labels)` — Find relevant memories
+   - `skills.match(labels)` — Find matching skills
+   - `tools.match(labels)` — Find matching tools
+   - `routing.route(labels)` — Decide which model
+
+3. **Return EnrichedContext**:
+   ```typescript
+   {
+     prompt: string;
+     labels: Label[];           // What we detected
+     identities: Identity[];    // From boot cache
+     memories: MemoryEntry[];   // From memory search
+     skills: Skill[];           // Matched + lazy-loaded
+     tools: Tool[];             // Matched
+     routing: RoutingResult;    // Model suggestion
+   }
+   ```
+
+### 3. Learn Phase (after agent response)
+
+```typescript
+async function learn(
+  response: string,
+  providers: Providers,
+): Promise<void>
+```
+
+Called after agent produces a response. Stores learnings in memory:
+
+- Entry type: `'log'` (could also be `'fact'`, `'decision'`, `'pattern'`)
+- Date: auto-set to today
+- Source: `'learn'`
+
+Adapters decide when to call this (typically not on every response, but on significant outcomes).
+
+---
+
+## Provider System
+
+### Registration & Factory Pattern
+
+Providers are registered in a global registry before creating the engine:
+
+```typescript
+// Register a provider factory
+registerProvider(
+  '@dot-ai/cockpit-tasks',
+  (options) => new CockpitTaskProvider(options)
+);
+
+// Later, create all providers from config
+const providers = await createProviders(config);
+```
+
+**Why this design?**
+- Adapters can register custom providers **before boot**
+- Core package knows nothing about specific implementations
+- Workspaces own their providers (no hard coupling)
+
+### Default Providers (File-Based)
+
+When `registerDefaults()` is called, these are registered:
+
+| Name | Class | What It Does |
+|------|-------|--------------|
+| `@dot-ai/file-memory` | FileMemoryProvider | Searches `.ai/memory/*.md` files for memories |
+| `@dot-ai/file-skills` | FileSkillProvider | Lists skills from `.ai/skills/*/SKILL.md` |
+| `@dot-ai/file-identity` | FileIdentityProvider | Loads identity files from `.ai/` root (AGENTS.md, etc.) |
+| `@dot-ai/rules-routing` | RulesRoutingProvider | Routes based on built-in rules or custom rules config |
+| `@dot-ai/file-tasks` | FileTaskProvider | Reads tasks from `.ai/memory/tasks/*.md` files |
+| `@dot-ai/file-tools` | FileToolProvider | Reads tools from `.ai/TOOLS.md` |
+
+All defaults implement file-based I/O. Overrides are easy: just register a different provider with the same name.
+
+### Alternative Providers
+
+Other packages provide different backends:
+
+| Package | Provider | Backed By |
+|---------|----------|-----------|
+| `@dot-ai/sqlite-memory` | SqliteMemoryProvider | SQLite with FTS5 (full-text search) |
+| `@dot-ai/cockpit-tasks` | CockpitTaskProvider | Cockpit REST API at `http://localhost:3010` |
+
+**Example:** Kiwi workspace uses Cockpit for tasks:
 
 ```yaml
-providers:
-  tasks:
-    type: my-backend          # matches the registered name
-    url: http://localhost:3010
-    apiKey: ${MY_API_KEY}
+# .ai/dot-ai.yml
+tasks:
+  use: '@dot-ai/cockpit-tasks'
+  with:
+    url: 'http://localhost:3010'
+    apiKey: '${COCKPIT_API_KEY}'
 ```
 
-3. **Register** the module in your AI tool's config:
+The resolver loads `CockpitTaskProvider` instead of the default file provider.
 
-For OpenClaw (`openclaw.json`):
+---
+
+## Adapters
+
+Adapters are the bridge between agents and dot-ai. Each adapter integrates the core engine into a specific agent platform via native hooks.
+
+### adapter-claude
+
+**Package:** `packages/adapter-claude`
+
+**Hook:** `UserPromptSubmit` (native Claude Code hook)
+
+**Flow:**
+1. Receives hook event (JSON on stdin)
+2. Calls core engine: `loadConfig → registerDefaults → createProviders → boot → enrich`
+3. Formats output as markdown
+4. Injects result into Claude's context (via stdout)
+
+**File:** `hook.ts` (executable)
+**Config:** `hooks/hooks.json` (declares the hook)
+
+**Special handling:**
+- If no prompt text (e.g., SessionStart), injects identities only
+- Loads skill content for matched skills (lazy loading)
+- Silent failure: errors logged but don't block the agent
+
+### adapter-openclaw
+
+**Package:** `packages/adapter-openclaw`
+
+**Hook:** `before_agent_start` (native OpenClaw hook)
+
+**Flow:**
+1. Registers default providers
+2. Loads custom providers from `pluginConfig.customProviders[]` (if declared in openclaw.json)
+3. Caches boot output per workspace (reused across prompts in same session)
+4. On each prompt: `enrich → load skill content → format → inject as prependContext`
+
+**Special handling:**
+- Skips sub-agent and cron sessions (only main agent gets injected context)
+- Session-level caching: one boot per workspace, reused
+- Logs enrichment stats (identities, memories, skills injected)
+
+**Custom provider loading:**
+Workspaces declare custom providers in `openclaw.json`:
+
 ```json
 {
   "plugins": {
-    "entries": {
-      "dot-ai": {
-        "config": {
-          "customProviders": [
-            { "type": "my-backend", "module": "/abs/path/.ai/providers/my-tasks.ts" }
-          ]
+    "dot-ai": {
+      "customProviders": [
+        {
+          "type": "cockpit",
+          "module": "/absolute/path/to/cockpit-tasks.ts"
         }
-      }
+      ]
     }
   }
 }
 ```
 
-For programmatic usage:
+OpenClaw plugin dynamically imports and registers them.
+
+---
+
+## Config: dot-ai.yml
+
+Located at `.ai/dot-ai.yml`, this YAML file declares which provider to use for each domain.
+
+**Format:**
+
+```yaml
+memory:
+  use: '@dot-ai/file-memory'
+  with:
+    root: '/path/to/workspace'
+
+skills:
+  use: '@dot-ai/file-skills'
+
+identity:
+  use: '@dot-ai/file-identity'
+
+routing:
+  use: '@dot-ai/rules-routing'
+  with:
+    defaultModel: 'sonnet'
+    rules:
+      - labels: ['question', 'lookup']
+        model: 'haiku'
+        reason: 'simple query'
+      - labels: ['architecture', 'planning']
+        model: 'opus'
+        reason: 'complex reasoning'
+
+tasks:
+  use: '@dot-ai/cockpit-tasks'
+  with:
+    url: '${COCKPIT_URL}'
+    apiKey: '${COCKPIT_API_KEY}'
+
+tools:
+  use: '@dot-ai/file-tools'
+```
+
+**Key features:**
+- **Environment variable resolution:** `${VAR_NAME}` is replaced at load time
+- **Defaults:** Any missing section defaults to the file-based provider
+- **Minimal YAML parser:** No yaml dependency, hand-written parser (lightweight)
+
+**Loading:**
+
 ```typescript
-import { registerTaskProvider } from "@dot-ai/core";
-registerTaskProvider("my-backend", (cfg) => new MyTaskProvider(cfg));
+const config = await loadConfig(workspaceRoot);
+const resolved = resolveConfig(config);  // fills in defaults
 ```
 
-**Example — Kiwi (the reference implementation):**
+---
 
-Kiwi stores tasks in a Cockpit dashboard (D1/SQLite REST API) instead of BACKLOG.md files:
-- Provider: `kiwi/.ai/providers/cockpit-tasks.ts` — implements `TaskProvider` with status mapping (`pending`↔`todo`), comma-separated tag serialization, and automatic `completed_date`
-- Config: `kiwi/.ai/config.yaml` — `type: cockpit, url: http://localhost:3010`
-- Registration: `openclaw.json` → `plugins.entries.dot-ai.config.customProviders[]`
-- At boot, the adapter dynamically imports the module, registers `CockpitTaskProvider`, and core instantiates it from config
+## Convention: .ai/ Directory
 
-### Utility Functions
+The `.ai/` directory is the **workspace context root**. File-based providers read from here. Core doesn't care about structure—that's the provider's concern.
 
-| Function | Purpose |
-|----------|---------|
-| `boot(rootDir)` | Execute 4-phase boot, return workspace info + providers + loaded context |
-| `loadConfig(rootDir)` | Load `.ai/config.yaml`, resolve env vars |
-| `createProviders(rootDir)` | Instantiate providers from config (or defaults) |
-| `discoverWorkspace(rootDir)` | Scan for projects and skills, build routing table |
-| `validateWorkspace(rootDir)` | Check convention compliance (required files, forbidden patterns) |
+### Standard Structure (file provider assumptions)
 
-## Adapters — Tool Integration
-
-Each adapter translates the dot-ai convention into a tool's native plugin system.
-
-### adapter-openclaw
-
-OpenClaw is an AI gateway with a plugin SDK. The adapter:
-- Registers as an OpenClaw plugin (`openclaw.plugin.json`)
-- Reads `pluginConfig.customProviders[]` and dynamically imports workspace-owned provider modules
-- Hooks into `before_agent_start` to inject workspace context
-- Uses `boot()` from core to build context (with custom providers already registered)
-- Injects BOOTSTRAP.md (convention quick-reference) + workspace overview
-- Skips injection for sub-agents and cron sessions (they don't need full boot)
-
-### adapter-claude
-
-Claude Code has a hooks system (`hooks.json`). The adapter:
-- Provides a `plugin.json` manifest listing all skills
-- Provides `hooks.json` with SessionStart (boot) and SubagentStart (model routing) hooks
-- Hooks are prompt-based: they tell Claude Code to execute the boot sequence
-- Detects if oh-my-claudecode (OMC) is present and defers orchestration to it
-
-### sync.sh (for tools without plugins)
-
-For tools like Cursor or Codex that don't have plugin systems, `sync.sh` injects references into their native config files using comment markers:
-```markdown
-<!-- dot-ai start -->
-(managed content)
-<!-- dot-ai end -->
+```
+.ai/
+├── AGENTS.md          # Operating rules (IdentityProvider reads)
+├── SOUL.md            # Personality
+├── USER.md            # User context
+├── IDENTITY.md        # AI identity
+├── TOOLS.md           # Tool descriptions (ToolProvider reads)
+│
+├── memory/            # Session memory
+│   ├── YYYY-MM-DD.md  # Daily logs (MemoryProvider searches)
+│   ├── projects-index.md
+│   ├── tasks/         # Task details (TaskProvider reads)
+│   │   └── {slug}.md
+│   └── research/
+│
+├── data/              # Structured data only
+│   ├── exports/
+│   └── imports/
+│
+├── skills/            # Skill definitions
+│   └── {skill-name}/
+│       ├── SKILL.md   # Full content (SkillProvider loads)
+│       └── ...
+│
+└── dot-ai.yml         # Provider config
 ```
 
-## CLI — Universal Commands
+**Important:** Core doesn't enforce this structure. It's what **file-based providers** expect. A custom provider (e.g., REST API) might read from completely different locations.
 
-| Command | What it does |
-|---------|-------------|
-| `dot-ai init` | Scaffold a new `.ai/` workspace with template files |
-| `dot-ai scan` | Discover projects + skills, regenerate `projects-index.md` |
-| `dot-ai doctor` | Validate workspace health (required files, forbidden patterns) |
-| `dot-ai audit` | Full convention compliance check (structure, frontmatter, sizes, boot) |
+---
 
-The CLI uses only `@dot-ai/core` — it's tool-agnostic.
+## Label Extraction & Vocabulary
 
-## What to Research
+Labels are the **bridge between prompt and capabilities**. They enable deterministic matching without LLM calls.
 
-When researching similar projects and best practices, here are the components to map findings to:
+### extractLabels(prompt, vocabulary)
 
-### 1. Convention / Standard
-- Other `.ai/` or AI workspace conventions
-- How other tools structure AI context (rules, memory, persona)
-- Standards for AI-readable project documentation
-- Compare: `.cursorrules`, `CLAUDE.md`, `AGENTS.md`, `.windsurfrules`
+```typescript
+export function extractLabels(prompt: string, vocabulary: string[]): Label[]
+```
 
-### 2. Skills / Capabilities System
-- Reusable AI instruction modules (like dot-ai skills)
-- Prompt libraries, instruction sets, AI capability registries
-- How other systems define composable AI behaviors
-- Trigger-based skill activation patterns
+Simple substring matching (case-insensitive):
+- Splits prompt into words
+- For each word in vocabulary, checks if it appears in prompt
+- Returns all matches as `Label[]`
 
-### 3. Memory / Context Management
-- AI memory systems (short-term, long-term, session-based)
-- Token-efficient context loading strategies
-- Memory consolidation and archival patterns
-- Cross-session knowledge persistence
+**Example:**
+```
+Prompt: "I need to debug a complex race condition in our Rust code"
+Vocabulary: ["debug", "architecture", "code", "complex", "race-condition", ...]
+Labels: ["debug", "complex", "code", "race-condition"]
+```
 
-### 4. Provider / Plugin Architecture
-- Provider pattern in AI frameworks (swappable backends)
-- Plugin systems for AI tools
-- Adapter pattern for multi-tool support
-- How MCP (Model Context Protocol) compares
+### buildVocabulary(skillLabels, toolLabels)
 
-### 5. Multi-Project Routing
-- AI workspace routing (dispatching prompts to the right context)
-- Multi-project monorepo AI support
-- Context isolation patterns
-- On-demand context loading
+Called once at boot. Collects all labels from all skills and tools into a Set, then sorts for deterministic ordering.
 
-### 6. Boot / Initialization
-- AI session initialization patterns
-- Context budget management
-- Progressive context loading
-- Workspace discovery and indexing
+**Why deterministic matching?**
+- Reproducible: same prompt always produces same labels
+- No LLM cost: pure string operations
+- No hallucination: vocabulary is explicitly defined
+- Predictable routing: rules match against known labels
 
-### 7. Audit / Validation
-- Convention compliance checking
-- Workspace health checks
-- Automated consistency validation
-- Self-healing workspace patterns
+---
 
-### 8. Model Routing
-- Automatic model selection based on task complexity
-- Model alias systems
-- Cost-optimization routing (cheap model for simple tasks)
-- How other frameworks handle multi-model orchestration
+## EnrichedContext: The Output
 
-## Current Status
+After `enrich()` completes, adapters receive this structure:
 
-| Component | Status | Maturity |
-|-----------|--------|----------|
-| Convention (.ai/) | ✅ Stable | Production (used daily) |
-| @dot-ai/core interfaces | ✅ Done | v0.3 |
-| File-based providers | ✅ Done | v0.3 |
-| adapter-openclaw | ✅ Done | Production |
-| adapter-claude | ✅ Done | Production |
-| CLI | ✅ Done | v0.3 (basic) |
-| Custom providers | 🔧 Partial | Kiwi has CockpitTaskProvider |
-| Templates | 📋 Planned | Empty, needs scaffold content |
-| NPM publishing | 📋 Planned | Currently local/git install |
+```typescript
+interface EnrichedContext {
+  prompt: string;               // Original prompt
+  labels: Label[];              // Extracted labels
+  identities: Identity[];        // AGENTS.md, SOUL.md, etc.
+  memories: MemoryEntry[];       // Matched memories from search
+  skills: Skill[];               // Matched skills (content lazy-loaded)
+  tools: Tool[];                 // Matched tools
+  routing: RoutingResult;        // Model routing decision
+}
+```
 
-## Reference Implementation
+Adapters then call `formatContext(enriched)` to convert to markdown, which is injected into the agent's context.
 
-The reference implementation is **Kiwi** — a personal monorepo workspace with 6 projects, 28+ skills, automated pipelines, and both OpenClaw and Claude Code integration. It uses dot-ai daily for all AI-assisted work.
+---
+
+## Packages Overview
+
+| Package | Location | Purpose | Exports |
+|---------|----------|---------|---------|
+| **core** | `packages/core/` | Engine, contracts, types, loaders | `boot()`, `enrich()`, `learn()`, `registerProvider()`, interfaces |
+| **adapter-claude** | `packages/adapter-claude/` | Claude Code integration | Hook script, format function |
+| **adapter-openclaw** | `packages/adapter-openclaw/` | OpenClaw integration | Plugin object, custom provider loader |
+| **sqlite-memory** | `packages/sqlite-memory/` | SQLite memory backend | `SqliteMemoryProvider` class |
+| **cockpit-tasks** | `packages/cockpit-tasks/` | Cockpit API task backend | `CockpitTaskProvider` class |
+| **cli** | `packages/cli/` | CLI commands (init, scan, doctor, audit) | Executable `dot-ai` command |
+
+---
+
+## Key Design Decisions
+
+### 1. Why Contracts, Not Steps?
+
+A "step-based" pipeline would look like:
+
+```
+loadConfig → registerProviders → boot → enrich → format → inject
+```
+
+Instead, we use **contract-based providers**:
+
+```
+MemoryProvider | SkillProvider | IdentityProvider | ...
+```
+
+**Why?**
+- **Composability:** Swap providers without touching core logic
+- **Flexibility:** Mix file-based, REST, SQLite as needed
+- **Testing:** Mock providers easily, no dependency injection framework needed
+- **Ownership:** Workspaces own their implementation choices
+
+### 2. Why Deterministic?
+
+The agent reliability problem: if context is fuzzy, the agent becomes unreliable. With dot-ai:
+
+- Label extraction is **deterministic** (substring match)
+- Vocabulary is **static** (built at boot)
+- Routing rules are **explicit** (declared in config)
+- No randomness, no LLM calls in the pipeline
+
+Result: **Same prompt → Same context → Same behavior** (within agent's generation temperature).
+
+### 3. Why Cache Boot?
+
+Identities, vocabulary, and skill list don't change mid-session. Computing them once at boot:
+
+- **Speeds up enrichment** (no disk I/O on every prompt)
+- **Reduces memory churn** (reuse BootCache)
+- **Simplifies reasoning** (agent sees consistent skill set)
+
+### 4. Why Lazy-Load Skill Content?
+
+Skills are listed at boot, but content is loaded on-demand:
+
+- **Fast startup:** No parsing every skill file
+- **Focused context:** Only skill content actually matched appears in context
+- **Scalability:** Works with hundreds of skills
+
+### 5. Why Separate Label Extraction?
+
+Matching `labels` first, before calling providers:
+
+```typescript
+// This happens first (no I/O)
+const labels = extractLabels(prompt, vocabulary);
+
+// Then use labels as a filter hint for providers
+const memories = await memory.search(prompt, labels);
+const skills = await skills.match(labels);
+```
+
+**Benefits:**
+- Providers can optimize: "match these labels" is a hint
+- Reduces provider query cost
+- Centralized label concept (all providers see same labels)
+
+### 6. Why formatContext Produces Markdown?
+
+Adapters don't care what format context is in. Markdown:
+
+- Is human-readable (useful for debugging)
+- Agents naturally parse sections (`## Heading`)
+- Is hierarchical (`###` nesting)
+- Works everywhere (agents expect text)
+
+---
+
+## Workflow Summary
+
+1. **Startup (Adapter)**
+   - Hook fires (UserPromptSubmit or before_agent_start)
+   - Adapter calls `registerDefaults()` and `registerCustomProviders()`
+
+2. **Boot (Core)**
+   - Load config from `.ai/dot-ai.yml`
+   - Create provider instances from registry
+   - Load identities, skills, tools, build vocabulary
+   - Cache result in `BootCache`
+
+3. **Enrich (Core)**
+   - For each prompt:
+   - Extract labels deterministically
+   - Query all providers in parallel
+   - Return `EnrichedContext`
+
+4. **Format (Adapter)**
+   - Convert EnrichedContext to markdown
+   - Inject into agent's context
+
+5. **Learn (Core)**
+   - After significant agent responses
+   - Store learnings in memory
+
+---
+
+## Type Flow
+
+```
+Input: string (raw prompt)
+  ↓
+[boot(providers)] → BootCache { identities, vocabulary, skills }
+  ↓
+[enrich(prompt, providers, cache)] → EnrichedContext
+  {
+    prompt, labels, identities, memories,
+    skills, tools, routing
+  }
+  ↓
+[formatContext(enriched)] → string (markdown)
+  ↓
+[Agent injection] → Agent sees context
+```
+
+---
+
+## Configuration Resolution
+
+When creating providers:
+
+```typescript
+const config = loadConfig(workspaceRoot);        // May be empty or partial
+const resolved = resolveConfig(config);          // Fills in all defaults
+
+// Example:
+{
+  memory: { use: '@dot-ai/file-memory' }          // From file
+  skills: { use: '@dot-ai/file-skills' }          // From file
+  identity: { use: '@dot-ai/file-identity' }      // Default
+  routing: { use: '@dot-ai/rules-routing' }       // Default
+  tasks: { use: '@dot-ai/cockpit-tasks', ... }    // From file
+  tools: { use: '@dot-ai/file-tools' }            // Default
+}
+```
+
+All missing entries get file-based defaults. Custom providers override as needed.
+
+---
+
+## Adapter Lifecycle
+
+### Claude Code Adapter
+
+```
+1. Claude Code fires UserPromptSubmit hook
+2. hook.ts receives hook event JSON on stdin
+3. loadConfig, registerDefaults, createProviders, boot, enrich
+4. formatContext produces markdown
+5. Output JSON { result: markdown } to stdout
+6. Claude Code injects into context
+7. Agent sees enriched prompt
+```
+
+### OpenClaw Adapter
+
+```
+1. OpenClaw plugin.register() called at startup
+2. registerDefaults() + loadCustomProviders()
+3. Hook: before_agent_start registers with OpenClaw
+4. When agent starts:
+   - Load config, create providers, boot (cached per workspace)
+   - Extract workspace context
+   - Enrich prompt
+   - formatContext produces markdown
+   - Return { prependContext: markdown }
+5. OpenClaw prepends to agent context
+6. Agent sees enriched prompt
+```
+
+---
+
+## Error Handling
+
+- **Missing config file:** Returns empty `{}` (all defaults applied)
+- **Missing provider in registry:** Falls back to noop provider (returns empty data)
+- **Failed provider call:** Logged but doesn't block enrichment (partial context is better than no context)
+- **Adapter errors:** Logged to stderr, plugin continues (silent failure pattern)
+
+Philosophy: **Best-effort enrichment.** If memory is unavailable, enrich anyway with what's available. Graceful degradation.
+
+---
+
+## Extending dot-ai
+
+### Create a Custom Provider
+
+1. Implement the contract:
+
+```typescript
+export class MyMemoryProvider implements MemoryProvider {
+  async search(query: string, labels?: string[]): Promise<MemoryEntry[]> {
+    // Your implementation
+  }
+  async store(entry: Omit<MemoryEntry, 'source'>): Promise<void> {
+    // Your implementation
+  }
+}
+```
+
+2. Register in adapter (before `createProviders`):
+
+```typescript
+registerProvider('@custom/my-memory', (opts) =>
+  new MyMemoryProvider(opts)
+);
+```
+
+3. Declare in `.ai/dot-ai.yml`:
+
+```yaml
+memory:
+  use: '@custom/my-memory'
+  with:
+    url: 'https://api.example.com'
+```
+
+### Create a Custom Adapter
+
+Integrate dot-ai into a new agent platform:
+
+1. Import core functions:
+
+```typescript
+import {
+  loadConfig,
+  registerDefaults,
+  createProviders,
+  boot,
+  enrich,
+} from '@dot-ai/core';
+```
+
+2. Hook into agent's native event system
+3. Call the pipeline
+4. Format and inject context
+5. Done!
+
+---
+
+## Performance & Optimization
+
+### Boot Caching
+
+- **One-time:** Vocabulary, identities, skill list built once per session
+- **Reused:** Every prompt reuses the cache
+- **Impact:** Fast enrichment even with hundreds of skills
+
+### Label-Based Filtering
+
+- **Labels as hints:** Providers can filter queries (e.g., `memory.search(query, labels)`)
+- **Reduced I/O:** Don't search all memory, search relevant categories
+- **Provider-agnostic:** SQLite FTS, file grep, REST filter all benefit
+
+### Lazy-Loaded Skills
+
+- **Boot:** List skills (metadata only)
+- **Enrich:** Match labels to skills
+- **Format:** Load content for matched skills only
+- **Result:** Only necessary skill docs are loaded
+
+### Parallel Provider Calls
+
+```typescript
+const [memories, skills, tools, routing] = await Promise.all([
+  memory.search(prompt, labels),
+  skills.match(labels),
+  tools.match(labels),
+  routing.route(labels),
+]);
+```
+
+All providers run concurrently, not sequentially.
+
+---
+
+## Testing & Validation
+
+### Contract Compliance
+
+All provider implementations must satisfy their interface contract:
+
+```typescript
+// Test: MemoryProvider.search returns MemoryEntry[]
+const results = await memory.search('test', ['label']);
+assert(Array.isArray(results));
+```
+
+### Config Validation
+
+`config.ts` includes minimal YAML parsing with environment variable resolution.
+
+### Boot Validation
+
+CLI includes `validate()` and `audit()` commands for workspace health.
+
+---
+
+## Summary
+
+dot-ai v4 is a **provider-based context enrichment engine**:
+
+1. **Contracts** define what providers must implement
+2. **Config** declares which providers to use
+3. **Loader** instantiates providers from registry
+4. **Engine** coordinates the enrichment pipeline
+5. **Adapters** integrate into specific agents
+6. **Determinism** ensures reproducible context
+7. **Caching** optimizes performance
+8. **Extensibility** lets workspaces customize everything
+
+Result: **Agents get complete, consistent workspace context without hard-coding any knowledge.**
