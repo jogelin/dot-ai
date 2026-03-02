@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hook.js",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/packages/adapter-claude/dist/hook.js",
             "timeout": 5000
           }
         ]

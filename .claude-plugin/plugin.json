@@ -1,7 +1,17 @@
 {
   "name": "dot-ai",
-  "description": "Universal AI workspace convention with model routing and context enforcement",
-  "version": "0.3.0",
+  "description": "dot-ai — deterministic context enrichment for Claude Code",
+  "version": "0.4.0",
+  "author": {
+    "name": "Jonathan Gelin",
+    "url": "https://smartsdlc.dev"
+  },
+  "homepage": "https://github.com/smartsdlc/dot-ai-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smartsdlc/dot-ai-plugin"
+  },
+  "license": "MIT",
   "skills": "./skills/",
   "hooks": "./packages/adapter-claude/hooks/hooks.json"
 }
