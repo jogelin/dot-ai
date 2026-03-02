@@ -75,9 +75,54 @@ export async function createProviders(config: DotAiConfig): Promise<Providers> {
 }
 
 async function resolve<T>(name: string, options: Record<string, unknown>, fallback: T): Promise<T> {
-  const factory = registry.get(name);
+  let factory = registry.get(name);
+
+  if (!factory) {
+    // Auto-discovery: try dynamic import
+    factory = await tryImportProvider(name);
+    if (factory) {
+      registry.set(name, factory); // Cache for next time
+    }
+  }
+
   if (!factory) return fallback;
   return factory(options) as T;
+}
+
+/**
+ * Try to import a provider package dynamically.
+ * Looks for: default export factory, createXxxProvider function, or XxxProvider class.
+ */
+async function tryImportProvider(
+  name: string,
+): Promise<((options: Record<string, unknown>) => unknown) | undefined> {
+  try {
+    const mod = await import(name);
+
+    // 1. Check for default export (function)
+    if (typeof mod.default === 'function') {
+      return mod.default as (options: Record<string, unknown>) => unknown;
+    }
+
+    // 2. Check for createXxxProvider factory function
+    for (const [key, value] of Object.entries(mod)) {
+      if (key.startsWith('create') && key.endsWith('Provider') && typeof value === 'function') {
+        return value as (options: Record<string, unknown>) => unknown;
+      }
+    }
+
+    // 3. Check for XxxProvider class (constructor)
+    for (const [key, value] of Object.entries(mod)) {
+      if (key.endsWith('Provider') && typeof value === 'function') {
+        return (opts: Record<string, unknown>) => new (value as new (opts: Record<string, unknown>) => unknown)(opts);
+      }
+    }
+
+    return undefined;
+  } catch {
+    // Package not found or import error — not a problem, fall back to noop
+    return undefined;
+  }
 }
 
 // ── No-op providers (safe fallbacks) ────────────────────────────────────────

@@ -214,6 +214,22 @@ describe('E2E: full pipeline', () => {
     expect(ctx.skills).toEqual([]);
   });
 
+  it('unregistered provider falls back to noop gracefully', async () => {
+    // Auto-discovery: when a provider name is not in the registry and cannot be
+    // dynamically imported (e.g. package doesn't exist), createProviders must
+    // return a working noop instead of throwing.
+    clearProviders(); // no defaults registered
+    const providers = await createProviders({
+      memory: { use: '@dot-ai/nonexistent-memory-provider' },
+    });
+    // Should not throw — noop memory is returned
+    const memories = await providers.memory.search('anything');
+    expect(memories).toEqual([]);
+    await expect(
+      providers.memory.store({ content: 'x', type: 'log' }),
+    ).resolves.toBeUndefined();
+  });
+
   it('boot caches skills and vocabulary for reuse across prompts', async () => {
     const config = await loadConfig(root);
     const providers = await createProviders(config);

@@ -82,6 +82,20 @@ describe('registerProvider + createProviders', () => {
   });
 });
 
+describe('auto-discovery via dynamic import', () => {
+  // NOTE: Dynamic import behavior is hard to mock reliably in vitest (import() is
+  // module-level). Auto-discovery with real packages is tested via E2E.
+  // The unit guarantee here is that an unknown provider name gracefully falls
+  // back to the noop implementation (i.e. tryImportProvider returns null for
+  // non-existent packages without throwing).
+  it('falls back to noop when provider package does not exist', async () => {
+    // '@dot-ai/nonexistent-provider' is not registered and cannot be imported
+    const providers = await createProviders({ memory: { use: '@dot-ai/nonexistent-provider' } });
+    const memories = await providers.memory.search('query');
+    expect(memories).toEqual([]);
+  });
+});
+
 describe('createProviders — noop fallbacks', () => {
   it('returns noop memory provider when nothing registered', async () => {
     const providers = await createProviders({});
