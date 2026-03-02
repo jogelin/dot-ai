@@ -44,6 +44,13 @@ interface YamlNode {
   [key: string]: string | YamlNode;
 }
 
+function stripQuotes(s: string): string {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
 function parseYaml(raw: string): DotAiConfig {
   const lines = raw.split('\n');
   const result: YamlNode = {};
@@ -65,7 +72,7 @@ function parseYaml(raw: string): DotAiConfig {
     const nestedMatch = line.match(/^  (\w+):\s*(.+)$/);
     if (nestedMatch && currentSection) {
       const section = result[currentSection] as YamlNode;
-      let value = nestedMatch[2].trim();
+      let value = stripQuotes(nestedMatch[2].trim());
 
       // Resolve ${ENV_VAR} references
       value = value.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? '');
@@ -81,7 +88,7 @@ function parseYaml(raw: string): DotAiConfig {
       if (!section['with'] || typeof section['with'] === 'string') {
         section['with'] = {};
       }
-      let value = deepMatch[2].trim();
+      let value = stripQuotes(deepMatch[2].trim());
       value = value.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? '');
       (section['with'] as YamlNode)[deepMatch[1]] = value;
     }
