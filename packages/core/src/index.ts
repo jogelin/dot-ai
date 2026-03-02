@@ -30,3 +30,16 @@ export type {
   ToolProvider,
   ProviderFactory,
 } from './contracts.js';
+
+// ── Engine ──
+export { boot, enrich, learn } from './engine.js';
+export type { Providers, BootCache } from './engine.js';
+
+// ── Config ──
+export { loadConfig, resolveConfig } from './config.js';
+
+// ── Loader ──
+export { registerProvider, clearProviders, createProviders } from './loader.js';
+
+// ── Labels ──
+export { extractLabels, buildVocabulary } from './labels.js';
