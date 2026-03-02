@@ -232,26 +232,104 @@ Custom types are registered via `registerTaskProvider()` before boot. See "Custo
 
 ### Custom Providers
 
-Workspaces can register custom provider implementations via `registerTaskProvider()`. Core only ships `file` as built-in — everything else is external.
+Core only ships `file` as a built-in task provider. Everything else is **workspace-owned** — dot-ai never knows about specific provider implementations.
+
+**Registration flow:**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Workspace (e.g. Kiwi)                                               │
+│                                                                      │
+│  .ai/providers/cockpit-tasks.ts   ← workspace owns the provider     │
+│  .ai/config.yaml                  ← declares type: cockpit           │
+│                                                                      │
+│  openclaw.json (plugins.entries.dot-ai.config):                      │
+│    customProviders:                                                  │
+│      - type: cockpit                                                 │
+│        module: /abs/path/.ai/providers/cockpit-tasks.ts              │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       │ pluginConfig passed at boot
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ adapter-openclaw (dot-ai plugin)                                     │
+│                                                                      │
+│  register(api) →                                                     │
+│    1. Read api.pluginConfig.customProviders[]                        │
+│    2. Dynamic import(module) for each entry                          │
+│    3. Find exported *TaskProvider class                              │
+│    4. registerTaskProvider(type, factory)                             │
+└──────────────────────┬───────────────────────────────────────────────┘
+                       │ provider registered in core registry
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ @dot-ai/core                                                         │
+│                                                                      │
+│  boot(rootDir) →                                                     │
+│    1. loadConfig(".ai/config.yaml") → type: "cockpit"                │
+│    2. createProviders() → registry.get("cockpit") → factory(cfg)     │
+│    3. Returns BootResult { providers: { tasks: CockpitTaskProvider }} │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Key design principle:** dot-ai's plugin code does a generic dynamic import and looks for a class matching `*TaskProvider`. It knows nothing about Cockpit, databases, or any specific implementation. The workspace provides the module, the adapter loads it, core uses it.
 
 **How to add a custom task provider:**
 
-1. Implement the `TaskProvider` interface in your workspace (e.g., `CockpitTaskProvider`)
-2. Register it before boot: `registerTaskProvider("cockpit", (cfg) => new CockpitTaskProvider(cfg))`
-3. Declare it in `.ai/config.yaml`:
+1. **Implement** the `TaskProvider` interface in your workspace:
+
+```typescript
+// .ai/providers/my-tasks.ts
+export class MyTaskProvider implements TaskProvider {
+  constructor(options: { url?: string; apiKey?: string }) { /* ... */ }
+  async list(filter?) { /* ... */ }
+  async get(id) { /* ... */ }
+  async create(task) { /* ... */ }
+  async update(id, patch) { /* ... */ }
+}
+```
+
+2. **Declare** the provider type in `.ai/config.yaml`:
 
 ```yaml
-# .ai/config.yaml
 providers:
   tasks:
-    type: cockpit              # matches the registered name
+    type: my-backend          # matches the registered name
     url: http://localhost:3010
-    apiKey: ${COCKPIT_API_KEY}
+    apiKey: ${MY_API_KEY}
+```
+
+3. **Register** the module in your AI tool's config:
+
+For OpenClaw (`openclaw.json`):
+```json
+{
+  "plugins": {
+    "entries": {
+      "dot-ai": {
+        "config": {
+          "customProviders": [
+            { "type": "my-backend", "module": "/abs/path/.ai/providers/my-tasks.ts" }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+For programmatic usage:
+```typescript
+import { registerTaskProvider } from "@dot-ai/core";
+registerTaskProvider("my-backend", (cfg) => new MyTaskProvider(cfg));
 ```
 
 **Example — Kiwi (the reference implementation):**
 
-Kiwi stores tasks in a Cockpit dashboard (D1/SQLite REST API) instead of BACKLOG.md files. The `CockpitTaskProvider` lives in `kiwi/.ai/providers/cockpit-tasks.ts` and is registered by the adapter at boot time. It handles status mapping (`pending`↔`todo`), tag serialization, and automatic `completed_date` on task completion.
+Kiwi stores tasks in a Cockpit dashboard (D1/SQLite REST API) instead of BACKLOG.md files:
+- Provider: `kiwi/.ai/providers/cockpit-tasks.ts` — implements `TaskProvider` with status mapping (`pending`↔`todo`), comma-separated tag serialization, and automatic `completed_date`
+- Config: `kiwi/.ai/config.yaml` — `type: cockpit, url: http://localhost:3010`
+- Registration: `openclaw.json` → `plugins.entries.dot-ai.config.customProviders[]`
+- At boot, the adapter dynamically imports the module, registers `CockpitTaskProvider`, and core instantiates it from config
 
 ### Utility Functions
 
@@ -271,8 +349,9 @@ Each adapter translates the dot-ai convention into a tool's native plugin system
 
 OpenClaw is an AI gateway with a plugin SDK. The adapter:
 - Registers as an OpenClaw plugin (`openclaw.plugin.json`)
+- Reads `pluginConfig.customProviders[]` and dynamically imports workspace-owned provider modules
 - Hooks into `before_agent_start` to inject workspace context
-- Uses `boot()` from core to build context
+- Uses `boot()` from core to build context (with custom providers already registered)
 - Injects BOOTSTRAP.md (convention quick-reference) + workspace overview
 - Skips injection for sub-agents and cron sessions (they don't need full boot)
 
