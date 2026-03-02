@@ -15,7 +15,23 @@ import {
   enrich,
   type Providers,
   type BootCache,
+  type DotAiConfig,
 } from '@dot-ai/core';
+
+function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
+  const result: DotAiConfig = {};
+  const keys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
+  for (const key of keys) {
+    const section = config[key];
+    if (section) {
+      result[key] = {
+        ...section,
+        with: { root, ...(section.with ?? {}) },
+      };
+    }
+  }
+  return result;
+}
 import { formatContext } from './format.js';
 
 // Inline OpenClaw plugin API types
@@ -124,7 +140,10 @@ const plugin = {
         try {
           // Boot once per workspace (cache across prompts in same session)
           if (!cachedProviders || cachedWorkspace !== workspaceDir) {
-            const config = await loadConfig(workspaceDir);
+            const rawConfig = await loadConfig(workspaceDir);
+
+            // Inject workspaceDir into all provider options
+            const config = injectRoot(rawConfig, workspaceDir);
             cachedProviders = await createProviders(config);
             cachedBoot = await boot(cachedProviders);
             cachedWorkspace = workspaceDir;

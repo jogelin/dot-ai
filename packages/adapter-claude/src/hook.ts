@@ -8,7 +8,23 @@
  *   { "type": "command", "command": "node /path/to/hook.js" }
  */
 import { loadConfig, registerDefaults, createProviders, boot, enrich } from '@dot-ai/core';
+import type { DotAiConfig } from '@dot-ai/core';
 import { formatContext } from './format.js';
+
+function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
+  const result: DotAiConfig = {};
+  const keys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
+  for (const key of keys) {
+    const section = config[key];
+    if (section) {
+      result[key] = {
+        ...section,
+        with: { root, ...(section.with ?? {}) },
+      };
+    }
+  }
+  return result;
+}
 
 async function main(): Promise<void> {
   // Read event from stdin
@@ -24,7 +40,10 @@ async function main(): Promise<void> {
   try {
     // Run the pipeline
     registerDefaults();
-    const config = await loadConfig(workspaceRoot);
+    const rawConfig = await loadConfig(workspaceRoot);
+
+    // Inject workspaceRoot into all provider options
+    const config = injectRoot(rawConfig, workspaceRoot);
     const providers = await createProviders(config);
     const cache = await boot(providers);
 
