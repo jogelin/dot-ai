@@ -5,6 +5,7 @@
     { "path": "packages/adapter-openclaw" },
     { "path": "packages/adapter-claude" },
     { "path": "packages/cli" },
-    { "path": "packages/sqlite-memory" }
+    { "path": "packages/sqlite-memory" },
+    { "path": "packages/cockpit-tasks" }
   ]
 }
