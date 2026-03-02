@@ -1,25 +1,14 @@
 {
   "$schema": "https://claude.ai/schemas/hooks.json",
-  "_comment": "Empty matcher means 'match all sessions/subagents'",
   "hooks": {
-    "SessionStart": [
+    "UserPromptSubmit": [
       {
         "matcher": "",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Check if this workspace has a .ai/ directory. If it does, execute the dot-ai boot sequence: (1) find root .ai/, (2) load AGENTS.md → SOUL.md → USER.md → IDENTITY.md → TOOLS.md, (3) load memory/YYYY-MM-DD.md for today and yesterday, (4) scan for projects and build workspace overview. Follow model-routing rules for all sub-agent spawns. If no .ai/ directory exists, skip the boot sequence entirely."
-          }
-        ]
-      }
-    ],
-    "SubagentStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Before starting: check model-routing rules. Use haiku for execution/extraction tasks, sonnet for development/research, opus ONLY for complex reasoning. Never use the default model without checking."
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hook.js",
+            "timeout": 5000
           }
         ]
       }
