@@ -13,26 +13,11 @@ import {
   createProviders,
   boot,
   enrich,
+  injectRoot,
+  formatContext,
   type Providers,
   type BootCache,
-  type DotAiConfig,
 } from '@dot-ai/core';
-
-function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
-  const result: DotAiConfig = {};
-  const keys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
-  for (const key of keys) {
-    const section = config[key];
-    if (section) {
-      result[key] = {
-        ...section,
-        with: { root, ...(section.with ?? {}) },
-      };
-    }
-  }
-  return result;
-}
-import { formatContext } from './format.js';
 
 // Inline OpenClaw plugin API types
 interface OpenClawLogger {
@@ -109,9 +94,10 @@ const plugin = {
   register(api: OpenClawPluginApi) {
     api.logger.info('[dot-ai] Plugin loaded (v4)');
 
-    // Load custom providers if configured
+    // Load custom providers if configured — capture the promise so before_agent_start can await it
+    let providerPromise: Promise<void> = Promise.resolve();
     if (api.pluginConfig) {
-      void loadCustomProviders(api.pluginConfig, api.logger);
+      providerPromise = loadCustomProviders(api.pluginConfig, api.logger);
     }
 
     // Register default file-based providers
@@ -124,6 +110,9 @@ const plugin = {
         _event: unknown,
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
+        // Ensure custom providers are registered before proceeding
+        await providerPromise;
+
         const workspaceDir = ctx.workspaceDir;
         if (!workspaceDir) {
           api.logger.info('[dot-ai] No workspaceDir, skipping');

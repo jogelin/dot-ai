@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatContext } from '../format.js';
+import { formatContext } from '@dot-ai/core';
 import type { EnrichedContext } from '@dot-ai/core';
 
 function makeCtx(overrides: Partial<EnrichedContext> = {}): EnrichedContext {

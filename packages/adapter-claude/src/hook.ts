@@ -7,24 +7,7 @@
  * Usage in hooks.json:
  *   { "type": "command", "command": "node /path/to/hook.js" }
  */
-import { loadConfig, registerDefaults, createProviders, boot, enrich } from '@dot-ai/core';
-import type { DotAiConfig } from '@dot-ai/core';
-import { formatContext } from './format.js';
-
-function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
-  const result: DotAiConfig = {};
-  const keys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
-  for (const key of keys) {
-    const section = config[key];
-    if (section) {
-      result[key] = {
-        ...section,
-        with: { root, ...(section.with ?? {}) },
-      };
-    }
-  }
-  return result;
-}
+import { loadConfig, registerDefaults, createProviders, boot, enrich, injectRoot, formatContext } from '@dot-ai/core';
 
 async function main(): Promise<void> {
   // Read event from stdin
@@ -32,10 +15,17 @@ async function main(): Promise<void> {
   for await (const chunk of process.stdin) {
     chunks.push(chunk as Buffer);
   }
-  const event = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+  } catch {
+    process.stderr.write('[dot-ai] Failed to parse stdin JSON\n');
+    return;
+  }
 
   // Find workspace root (try event data, then cwd)
-  const workspaceRoot = event.cwd ?? process.cwd();
+  const workspaceRoot = (event.cwd as string) ?? process.cwd();
 
   try {
     // Run the pipeline
@@ -48,7 +38,7 @@ async function main(): Promise<void> {
     const cache = await boot(providers);
 
     // Extract prompt from the event
-    const prompt = event.prompt ?? event.content ?? '';
+    const prompt = (event.prompt ?? event.content ?? '') as string;
 
     if (!prompt) {
       // No prompt to enrich (e.g., SessionStart) — just inject identities

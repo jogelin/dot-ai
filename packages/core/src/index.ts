@@ -36,7 +36,10 @@ export { boot, enrich, learn } from './engine.js';
 export type { Providers, BootCache } from './engine.js';
 
 // ── Config ──
-export { loadConfig, resolveConfig } from './config.js';
+export { loadConfig, resolveConfig, injectRoot } from './config.js';
+
+// ── Format ──
+export { formatContext } from './format.js';
 
 // ── Loader ──
 export { registerProvider, clearProviders, createProviders } from './loader.js';

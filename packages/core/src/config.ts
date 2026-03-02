@@ -3,6 +3,23 @@ import { join } from 'node:path';
 import type { DotAiConfig, ProviderConfig } from './types.js';
 
 /**
+ * Inject the workspace root into all provider sections of a DotAiConfig.
+ * This ensures file-based providers resolve paths relative to the workspace.
+ */
+export function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
+  const result: DotAiConfig = {};
+  for (const [key, section] of Object.entries(config)) {
+    if (section && typeof section === 'object') {
+      result[key as keyof DotAiConfig] = {
+        ...section,
+        with: { root, ...(section.with ?? {}) },
+      };
+    }
+  }
+  return result;
+}
+
+/**
  * Load and parse dot-ai.yml from a workspace root.
  * Returns the config with defaults applied.
  *

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { EnrichedContext } from '@dot-ai/core';
-import { formatContext } from './format.js';
+import { formatContext } from '@dot-ai/core';
 
 const START_MARKER = '<!-- dot-ai:start -->';
 const END_MARKER = '<!-- dot-ai:end -->';

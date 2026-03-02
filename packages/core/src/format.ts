@@ -1,7 +1,7 @@
-import type { EnrichedContext, Identity, MemoryEntry, Skill, Tool, RoutingResult } from '@dot-ai/core';
+import type { EnrichedContext, MemoryEntry, Skill, Tool, RoutingResult } from './types.js';
 
 /**
- * Format an EnrichedContext into markdown sections for injection into agent config files.
+ * Format an EnrichedContext into markdown sections for injection into agent context.
  * Sections are ordered by priority: identity > memory > skills > tools > routing.
  */
 export function formatContext(ctx: EnrichedContext): string {
