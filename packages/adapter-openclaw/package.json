@@ -1,11 +1,17 @@
 {
   "name": "@dot-ai/openclaw",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "openclaw": {
     "extensions": [
       "./src/index.ts"
     ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "openclaw": "^2026.2.0"
@@ -14,11 +20,8 @@
     "@dot-ai/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.19.12",
-    "typescript": "^5.9.3"
-  },
-  "files": [
-    "src",
-    "openclaw.plugin.json"
-  ]
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  }
 }
