@@ -83,9 +83,14 @@ export interface ProjectMeta {
 
 export { FileMemoryProvider } from "./providers/memory.js";
 export { FileTaskProvider } from "./providers/tasks.js";
+export { CockpitTaskProvider } from "./providers/cockpit-tasks.js";
 export { FileSkillRegistry } from "./providers/skills.js";
 export { DefaultModelRouter } from "./providers/router.js";
 export { discoverWorkspace } from "./discovery.js";
 export { boot } from "./boot.js";
 export type { BootResult } from "./boot.js";
 export { validateWorkspace } from "./workspace.js";
+export { loadConfig } from "./config.js";
+export type { WorkspaceConfig, TaskProviderConfig } from "./config.js";
+export { createProviders } from "./factory.js";
+export type { Providers } from "./factory.js";

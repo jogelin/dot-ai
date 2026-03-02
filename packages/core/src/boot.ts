@@ -1,12 +1,19 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { WorkspaceInfo } from "./index.js";
+import type { WorkspaceInfo, TaskProvider, MemoryProvider } from "./index.js";
 import { discoverWorkspace } from "./discovery.js";
+import { createProviders } from "./factory.js";
+import type { WorkspaceConfig } from "./config.js";
 
 export interface BootResult {
   workspace: WorkspaceInfo;
   coreContext: string[];
   sessionContext: string[];
+  providers: {
+    tasks: TaskProvider;
+    memory: MemoryProvider;
+  };
+  config: WorkspaceConfig;
   errors: string[];
 }
 
@@ -24,6 +31,7 @@ const CORE_FILES = [
  * Phase 1: Load root context (AGENTS, SOUL, USER, IDENTITY, TOOLS)
  * Phase 2: Load session context (today + yesterday memory, projects-index)
  * Phase 3: Discover workspace (projects, skills)
+ * Phase 4: Create providers from config.yaml
  */
 export async function boot(rootDir: string): Promise<BootResult> {
   const aiDir = path.join(rootDir, ".ai");
@@ -72,5 +80,23 @@ export async function boot(rootDir: string): Promise<BootResult> {
   // Phase 3: Discover workspace
   const workspace = await discoverWorkspace(rootDir);
 
-  return { workspace, coreContext, sessionContext, errors };
+  // Phase 4: Create providers from config
+  let providers: { tasks: TaskProvider; memory: MemoryProvider };
+  let config: WorkspaceConfig = {};
+  try {
+    const p = await createProviders(rootDir);
+    providers = { tasks: p.tasks, memory: p.memory };
+    config = p.config;
+  } catch (err) {
+    errors.push(`Provider init failed: ${err instanceof Error ? err.message : String(err)}`);
+    // Fallback to file-based
+    const { FileTaskProvider } = await import("./providers/tasks.js");
+    const { FileMemoryProvider } = await import("./providers/memory.js");
+    providers = {
+      tasks: new FileTaskProvider(aiDir),
+      memory: new FileMemoryProvider(aiDir),
+    };
+  }
+
+  return { workspace, coreContext, sessionContext, providers, config, errors };
 }
