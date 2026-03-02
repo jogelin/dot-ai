@@ -1,155 +1,158 @@
 #!/usr/bin/env node
-/**
- * @dot-ai/cli — Universal workspace management
- */
-import { discoverWorkspace, validateWorkspace, boot, FileSkillRegistry } from "@dot-ai/core";
-import path from "node:path";
-import fs from "node:fs/promises";
+import { argv, cwd, exit } from 'node:process';
+import { mkdir, writeFile, access } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  loadConfig,
+  registerDefaults,
+  clearProviders,
+  createProviders,
+  boot,
+  enrich,
+} from '@dot-ai/core';
 
-const command = process.argv[2];
-const cwd = process.cwd();
+const args = argv.slice(2);
+const command = args[0];
 
-async function findAiRoot(dir: string): Promise<string | null> {
-  let current = dir;
-  while (current !== path.dirname(current)) {
-    try {
-      await fs.access(path.join(current, ".ai"));
-      return current;
-    } catch {
-      current = path.dirname(current);
-    }
+async function main(): Promise<void> {
+  switch (command) {
+    case 'init':
+      await cmdInit();
+      break;
+    case 'boot':
+      await cmdBoot();
+      break;
+    case 'trace':
+      await cmdTrace(args.slice(1).join(' '));
+      break;
+    default:
+      console.log('dot-ai v0.4.0\n');
+      console.log('Commands:');
+      console.log('  init              Create .ai/ directory with defaults');
+      console.log('  boot              Run boot and show workspace info');
+      console.log('  trace "<prompt>"  Dry-run enrich pipeline');
+      exit(command ? 1 : 0);
   }
-  return null;
 }
 
-async function cmdInit() {
-  const aiDir = path.join(cwd, ".ai");
+async function cmdInit(): Promise<void> {
+  const root = cwd();
+  const aiDir = join(root, '.ai');
+
   try {
-    await fs.access(aiDir);
-    console.log("⚠️  .ai/ already exists");
+    await access(join(aiDir, 'dot-ai.yml'));
+    console.log('.ai/dot-ai.yml already exists. Nothing to do.');
     return;
-  } catch { /* doesn't exist, good */ }
+  } catch {
+    // Doesn't exist, create it
+  }
 
-  // Create minimal structure
-  await fs.mkdir(path.join(aiDir, "memory"), { recursive: true });
-  await fs.mkdir(path.join(aiDir, "skills"), { recursive: true });
+  await mkdir(aiDir, { recursive: true });
 
-  await fs.writeFile(path.join(aiDir, "AGENTS.md"), `# AGENTS.md\n\nOperating rules for this workspace.\n`);
-  await fs.writeFile(path.join(aiDir, "SOUL.md"), `# SOUL.md\n\nPersonality and tone.\n`);
-  await fs.writeFile(path.join(aiDir, "USER.md"), `# USER.md\n\nAbout the human.\n`);
-  await fs.writeFile(path.join(aiDir, "IDENTITY.md"), `# IDENTITY.md\n\n- **Name:** (your AI's name)\n- **Emoji:** 🤖\n`);
-  await fs.writeFile(path.join(aiDir, "TOOLS.md"), `# TOOLS.md\n\nTools and integrations.\n`);
+  await writeFile(join(aiDir, 'dot-ai.yml'), [
+    '# dot-ai configuration',
+    '# Uncomment and customize providers as needed.',
+    '# Default: file-based providers reading from .ai/ directory.',
+    '#',
+    '# memory:',
+    '#   use: "@dot-ai/file-memory"',
+    '#',
+    '# skills:',
+    '#   use: "@dot-ai/file-skills"',
+    '#',
+    '# routing:',
+    '#   use: "@dot-ai/rules-routing"',
+    '',
+  ].join('\n'));
 
-  console.log("✅ Created .ai/ workspace");
-  console.log("   Edit the files to customize your workspace.");
+  await writeFile(join(aiDir, 'AGENTS.md'), [
+    '# AGENTS.md',
+    '',
+    '> Your workspace rules and conventions go here.',
+    '',
+    '## Rules',
+    '',
+    '- ...',
+    '',
+  ].join('\n'));
+
+  console.log('Created:');
+  console.log('  .ai/dot-ai.yml    (config)');
+  console.log('  .ai/AGENTS.md     (template)');
+  console.log('\nNext: add SOUL.md, USER.md, skills/, memory/ as needed.');
 }
 
-async function cmdScan() {
-  const root = await findAiRoot(cwd);
-  if (!root) { console.error("❌ No .ai/ directory found"); process.exit(1); }
+async function cmdBoot(): Promise<void> {
+  const root = cwd();
+  const start = performance.now();
 
-  const ws = await discoverWorkspace(root);
+  clearProviders();
+  registerDefaults();
 
-  // Generate projects-index.md
-  const lines = ["# Projects Index\n", "| Project | Description | Tags |", "|---------|-------------|------|"];
-  for (const p of ws.projects) {
-    lines.push(`| ${p.name} | ${p.description} | ${p.tags.join(", ")} |`);
-  }
+  const config = await loadConfig(root);
+  const providers = await createProviders(config);
+  const cache = await boot(providers);
 
-  const indexPath = path.join(root, ".ai", "memory", "projects-index.md");
-  await fs.mkdir(path.dirname(indexPath), { recursive: true });
-  await fs.writeFile(indexPath, lines.join("\n") + "\n");
+  const duration = Math.round(performance.now() - start);
 
-  console.log(`✅ Scanned workspace: ${ws.projects.length} projects, ${ws.skills.length} skills`);
-  console.log(`   Updated: .ai/memory/projects-index.md`);
+  console.log(`dot-ai boot — ${root}\n`);
+  console.log(`Identities: ${cache.identities.length}${cache.identities.length > 0 ? ` (${cache.identities.map(i => i.type).join(', ')})` : ''}`);
+  console.log(`Skills: ${cache.skills.length}${cache.skills.length > 0 ? ` (${cache.skills.map(s => s.name).join(', ')})` : ''}`);
+  console.log(`Vocabulary: ${cache.vocabulary.length} labels`);
+  console.log(`\nBoot complete in ${duration}ms`);
 }
 
-async function cmdDoctor() {
-  const root = await findAiRoot(cwd);
-  if (!root) { console.error("❌ No .ai/ directory found"); process.exit(1); }
-
-  const result = await validateWorkspace(root);
-
-  if (result.errors.length === 0 && result.warnings.length === 0) {
-    console.log("✅ Workspace is healthy");
-    return;
+async function cmdTrace(prompt: string): Promise<void> {
+  if (!prompt) {
+    console.error('Usage: dot-ai trace "<prompt>"');
+    exit(1);
   }
 
-  for (const err of result.errors) {
-    console.log(`❌ ${err}`);
+  const root = cwd();
+  const start = performance.now();
+
+  clearProviders();
+  registerDefaults();
+
+  const config = await loadConfig(root);
+  const providers = await createProviders(config);
+  const cache = await boot(providers);
+  const ctx = await enrich(prompt, providers, cache);
+
+  const duration = Math.round(performance.now() - start);
+
+  console.log(`dot-ai trace — "${prompt}"\n`);
+
+  // Labels
+  console.log(`Labels: [${ctx.labels.map(l => l.name).join(', ')}]`);
+
+  // Memories
+  console.log(`Memories: ${ctx.memories.length} found`);
+  for (const m of ctx.memories.slice(0, 5)) {
+    const date = m.date ? ` (${m.date})` : '';
+    console.log(`  - ${m.content}${date}`);
   }
-  for (const warn of result.warnings) {
-    console.log(`⚠️  ${warn}`);
+  if (ctx.memories.length > 5) console.log(`  ... and ${ctx.memories.length - 5} more`);
+
+  // Skills
+  console.log(`Skills: ${ctx.skills.length} matched`);
+  for (const s of ctx.skills) {
+    console.log(`  - ${s.name}`);
   }
 
-  console.log(`\n${result.valid ? "⚠️  Warnings found" : "❌ Issues found"} (${result.errors.length} errors, ${result.warnings.length} warnings)`);
-  process.exit(result.valid ? 0 : 1);
+  // Tools
+  console.log(`Tools: ${ctx.tools.length} matched`);
+  for (const t of ctx.tools) {
+    console.log(`  - ${t.name}: ${t.description}`);
+  }
+
+  // Routing
+  console.log(`Routing: ${ctx.routing.model} (${ctx.routing.reason})`);
+
+  console.log(`\nTrace complete in ${duration}ms`);
 }
 
-async function cmdAudit() {
-  const root = await findAiRoot(cwd);
-  if (!root) { console.error("❌ No .ai/ directory found"); process.exit(1); }
-
-  console.log("🔍 Running workspace audit...\n");
-
-  // Validate workspace structure
-  const validation = await validateWorkspace(root);
-
-  // Validate all skills
-  const skillsDir = path.join(root, ".ai", "skills");
-  const registry = new FileSkillRegistry([skillsDir]);
-  const skills = await registry.discover(root);
-
-  let skillWarnings = 0;
-  let skillErrors = 0;
-  for (const skill of skills) {
-    const result = await registry.validate(skill.path);
-    if (!result.valid) {
-      skillErrors++;
-      for (const err of result.errors) console.log(`❌ ${skill.name}: ${err}`);
-    }
-    for (const warn of result.warnings) {
-      skillWarnings++;
-      console.log(`⚠️  ${skill.name}: ${warn}`);
-    }
-  }
-
-  // Boot sequence test
-  const bootResult = await boot(root);
-
-  // Summary
-  console.log(`\n📊 Audit Summary`);
-  console.log(`   Structure: ${validation.errors.length} errors, ${validation.warnings.length} warnings`);
-  console.log(`   Skills: ${skills.length} found, ${skillErrors} invalid, ${skillWarnings} warnings`);
-  console.log(`   Boot: ${bootResult.errors.length} issues`);
-  console.log(`   Projects: ${bootResult.workspace.projects.length} discovered`);
-
-  const totalErrors = validation.errors.length + skillErrors + bootResult.errors.length;
-  if (totalErrors === 0) {
-    console.log("\n✅ Workspace is clean");
-  } else {
-    console.log(`\n❌ ${totalErrors} issues need attention`);
-    process.exit(1);
-  }
-}
-
-switch (command) {
-  case "init": cmdInit(); break;
-  case "scan": cmdScan(); break;
-  case "doctor": cmdDoctor(); break;
-  case "audit": cmdAudit(); break;
-  case "--version": console.log("0.3.0"); break;
-  case "--help":
-  default:
-    console.log("dot-ai — Universal AI workspace management\n");
-    console.log("Commands:");
-    console.log("  init     Scaffold .ai/ workspace from templates");
-    console.log("  scan     Regenerate workspace indexes");
-    console.log("  doctor   Validate workspace health");
-    console.log("  audit    Run full convention audit");
-    console.log("\nOptions:");
-    console.log("  --version  Show version");
-    console.log("  --help     Show this help");
-    if (!command || command === "--help") process.exit(0);
-    else process.exit(1);
-}
+main().catch((err) => {
+  console.error(err);
+  exit(1);
+});

@@ -1,9 +1,8 @@
 /**
- * @dot-ai/claude — Claude Code adapter
+ * @dot-ai/claude v4 — Claude Code adapter
  *
- * Provides dot-ai workspace integration via Claude Code hooks.
- * The actual boot logic runs through prompt-based hooks.
- * This module provides programmatic utilities.
+ * Integrates dot-ai pipeline with Claude Code via hooks.
+ * The hook.ts script runs as a command hook on UserPromptSubmit.
  */
-export { generateBootPrompt, generateRoutingPrompt, detectOMC } from "./bridge.js";
-export const version = "0.3.0";
+export { formatContext } from '@dot-ai/core';
+export const version = '0.4.0';

@@ -1,6 +1,6 @@
 {
   "name": "dot-ai",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Universal AI workspace convention — modular framework",
   "license": "MIT",
@@ -11,12 +11,19 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "clean": "pnpm -r exec rm -rf dist"
+    "clean": "pnpm -r exec rm -rf dist",
+    "test": "pnpm -r test"
   },
   "openclaw": {
-    "extensions": ["./packages/adapter-openclaw/src/index.ts"]
+    "extensions": [
+      "./packages/adapter-openclaw/src/index.ts"
+    ]
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
   }
 }

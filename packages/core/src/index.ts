@@ -1,95 +1,61 @@
 /**
- * @dot-ai/core — Provider interfaces and workspace utilities
+ * @dot-ai/core v4 — Contracts and types for the dot-ai convention.
  *
- * This is the framework-agnostic core of dot-ai.
- * Adapters (OpenClaw, Claude Code) build on these interfaces.
+ * dot-ai = contracts (interfaces) + providers (pluggable implementations) + adapters (agent integration).
+ * Core defines WHAT, providers define HOW, adapters define WHERE.
  */
 
-// ── Provider interfaces ──────────────────────────────────────────────────────
+// ── Types ──
+export type {
+  Label,
+  MemoryEntry,
+  Skill,
+  Identity,
+  Task,
+  Tool,
+  RoutingResult,
+  EnrichedContext,
+  TaskFilter,
+  DotAiConfig,
+  ProviderConfig,
+} from './types.js';
 
-export interface MemoryProvider {
-  readDaily(date: string): Promise<string | null>;
-  writeDaily(date: string, content: string): Promise<void>;
-  search(query: string): Promise<string[]>;
-}
+// ── Contracts ──
+export type {
+  MemoryProvider,
+  SkillProvider,
+  IdentityProvider,
+  RoutingProvider,
+  TaskProvider,
+  ToolProvider,
+  ProviderFactory,
+} from './contracts.js';
 
-export interface TaskProvider {
-  list(filter?: { status?: string; project?: string }): Promise<Task[]>;
-  get(id: string): Promise<Task | null>;
-  create(task: Omit<Task, 'id'>): Promise<Task>;
-  update(id: string, patch: Partial<Task>): Promise<Task>;
-}
+// ── Engine ──
+export { boot, enrich, learn } from './engine.js';
+export type { Providers, BootCache } from './engine.js';
 
-export interface Task {
-  id: string;
-  text: string;
-  status: string;
-  priority?: string;
-  project?: string;
-  tags?: string[];
-}
+// ── Config ──
+export { loadConfig, resolveConfig, injectRoot } from './config.js';
 
-export interface ModelRouter {
-  resolveAlias(alias: string): string;
-  selectForTask(taskType: string): string;
-}
+// ── Format ──
+export { formatContext } from './format.js';
 
-export interface SkillRegistry {
-  discover(rootDir: string): Promise<SkillMeta[]>;
-  get(name: string): Promise<string | null>;
-  validate(skillPath: string): Promise<ValidationResult>;
-}
+// ── Loader ──
+export { registerProvider, clearProviders, createProviders } from './loader.js';
 
-export interface ToolRegistry {
-  discover(rootDir: string): Promise<ToolMeta[]>;
-  get(name: string): Promise<string | null>;
-}
+// ── Labels ──
+export { extractLabels, buildVocabulary } from './labels.js';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Default Providers ──
+export {
+  FileMemoryProvider,
+  FileSkillProvider,
+  FileIdentityProvider,
+  RulesRoutingProvider,
+  FileTaskProvider,
+  FileToolProvider,
+} from './providers/index.js';
 
-export interface SkillMeta {
-  name: string;
-  description: string;
-  triggers: string[];
-  path: string;
-}
-
-export interface ToolMeta {
-  name: string;
-  description: string;
-  path: string;
-}
-
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
-}
-
-export interface WorkspaceInfo {
-  rootDir: string;
-  projects: ProjectMeta[];
-  skills: SkillMeta[];
-}
-
-export interface ProjectMeta {
-  name: string;
-  description: string;
-  tags: string[];
-  path: string;
-}
-
-// ── Re-exports ───────────────────────────────────────────────────────────────
-
-export { FileMemoryProvider } from "./providers/memory.js";
-export { FileTaskProvider } from "./providers/tasks.js";
-export { FileSkillRegistry } from "./providers/skills.js";
-export { DefaultModelRouter } from "./providers/router.js";
-export { discoverWorkspace } from "./discovery.js";
-export { boot } from "./boot.js";
-export type { BootResult } from "./boot.js";
-export { validateWorkspace } from "./workspace.js";
-export { loadConfig } from "./config.js";
-export type { WorkspaceConfig, TaskProviderConfig } from "./config.js";
-export { createProviders, registerTaskProvider } from "./factory.js";
-export type { Providers, TaskProviderFactory } from "./factory.js";
+// ── registerDefaults ──
+export { registerDefaults } from './loader.js';

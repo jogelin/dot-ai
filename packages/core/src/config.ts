@@ -1,122 +1,133 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { DotAiConfig, ProviderConfig } from './types.js';
 
 /**
- * Workspace configuration loaded from .ai/config.yaml
- *
- * Allows workspaces to override default providers (file-based)
- * with custom implementations (Cockpit API, remote DB, etc.).
- *
- * Environment variable references (${VAR_NAME}) are resolved at load time.
+ * Inject the workspace root into all provider sections of a DotAiConfig.
+ * This ensures file-based providers resolve paths relative to the workspace.
  */
-export interface WorkspaceConfig {
-  providers?: {
-    tasks?: TaskProviderConfig;
-    memory?: MemoryProviderConfig;
-  };
-}
-
-export interface TaskProviderConfig {
-  /** Provider type: "file" (default) or any registered custom type */
-  type: string;
-  /** Base URL for API-based providers */
-  url?: string;
-  /** API key (supports ${ENV_VAR} syntax) */
-  apiKey?: string;
-}
-
-export interface MemoryProviderConfig {
-  /** Provider type: "file" (default) */
-  type: "file";
-}
-
-/**
- * Load workspace config from .ai/config.yaml
- *
- * Returns default config if file doesn't exist.
- * Resolves ${ENV_VAR} references in string values.
- */
-export async function loadConfig(rootDir: string): Promise<WorkspaceConfig> {
-  const configPath = path.join(rootDir, ".ai", "config.yaml");
-
-  let raw: string;
-  try {
-    raw = await fs.readFile(configPath, "utf-8");
-  } catch {
-    return {}; // No config = all defaults
-  }
-
-  // Simple YAML parser for our flat config structure
-  // Avoids adding a yaml dependency to core
-  const config = parseSimpleYaml(raw);
-  return resolveEnvVars(config) as WorkspaceConfig;
-}
-
-/**
- * Minimal YAML parser for dot-ai config.
- *
- * Supports:
- * - Nested keys via indentation (2 spaces)
- * - String values (quoted or unquoted)
- * - Comments (#)
- *
- * Does NOT support: arrays, multi-line strings, anchors, etc.
- * For those, use the `yaml` package at the workspace level.
- */
-function parseSimpleYaml(raw: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const stack: { indent: number; obj: Record<string, unknown> }[] = [
-    { indent: -1, obj: result },
-  ];
-
-  for (const line of raw.split("\n")) {
-    // Skip empty lines and comments
-    const trimmed = line.trimStart();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const indent = line.length - trimmed.length;
-    const colonIdx = trimmed.indexOf(":");
-    if (colonIdx === -1) continue;
-
-    const key = trimmed.slice(0, colonIdx).trim();
-    const rawValue = trimmed.slice(colonIdx + 1).trim();
-
-    // Pop stack to find parent at correct indentation
-    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-      stack.pop();
-    }
-    const parent = stack[stack.length - 1].obj;
-
-    if (rawValue === "" || rawValue === "|" || rawValue === ">") {
-      // Nested object
-      const child: Record<string, unknown> = {};
-      parent[key] = child;
-      stack.push({ indent, obj: child });
-    } else {
-      // Scalar value — strip quotes
-      const value = rawValue.replace(/^["']|["']$/g, "");
-      parent[key] = value;
+export function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
+  const result: DotAiConfig = {};
+  for (const [key, section] of Object.entries(config)) {
+    if (section && typeof section === 'object') {
+      result[key as keyof DotAiConfig] = {
+        ...section,
+        with: { root, ...(section.with ?? {}) },
+      };
     }
   }
-
   return result;
 }
 
 /**
- * Resolve ${ENV_VAR} references in all string values.
+ * Load and parse dot-ai.yml from a workspace root.
+ * Returns the config with defaults applied.
+ *
+ * Uses a minimal YAML parser (key: value pairs + nested objects).
+ * No dependency on yaml package.
  */
-function resolveEnvVars(obj: unknown): unknown {
-  if (typeof obj === "string") {
-    return obj.replace(/\$\{(\w+)\}/g, (_match, varName) => {
-      return process.env[varName] ?? "";
-    });
+export async function loadConfig(workspaceRoot: string): Promise<DotAiConfig> {
+  const configPath = join(workspaceRoot, '.ai', 'dot-ai.yml');
+
+  let raw: string;
+  try {
+    raw = await readFile(configPath, 'utf-8');
+  } catch {
+    // No config file — return empty config (all defaults)
+    return {};
   }
-  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    const resolved: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      resolved[key] = resolveEnvVars(value);
+
+  return parseYaml(raw);
+}
+
+/**
+ * Resolve a config with defaults.
+ * Any missing provider gets the built-in file-based default.
+ */
+export function resolveConfig(config: DotAiConfig): Required<DotAiConfig> {
+  return {
+    memory: config.memory ?? { use: '@dot-ai/file-memory' },
+    skills: config.skills ?? { use: '@dot-ai/file-skills' },
+    identity: config.identity ?? { use: '@dot-ai/file-identity' },
+    routing: config.routing ?? { use: '@dot-ai/rules-routing' },
+    tasks: config.tasks ?? { use: '@dot-ai/file-tasks' },
+    tools: config.tools ?? { use: '@dot-ai/file-tools' },
+  };
+}
+
+// ── Minimal YAML parser ─────────────────────────────────────────────────────
+
+interface YamlNode {
+  [key: string]: string | YamlNode;
+}
+
+function stripQuotes(s: string): string {
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function parseYaml(raw: string): DotAiConfig {
+  const lines = raw.split('\n');
+  const result: YamlNode = {};
+  let currentSection: string | null = null;
+
+  for (const line of lines) {
+    // Skip comments and empty lines
+    if (line.trim().startsWith('#') || line.trim() === '') continue;
+
+    // Top-level key (no indent)
+    const topMatch = line.match(/^(\w+):$/);
+    if (topMatch) {
+      currentSection = topMatch[1];
+      result[currentSection] = {};
+      continue;
     }
-    return resolved;
+
+    // Nested key: value (2-space indent)
+    const nestedMatch = line.match(/^  (\w+):\s*(.+)$/);
+    if (nestedMatch && currentSection) {
+      const section = result[currentSection] as YamlNode;
+      let value = stripQuotes(nestedMatch[2].trim());
+
+      // Resolve ${ENV_VAR} references
+      value = value.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? '');
+
+      section[nestedMatch[1]] = value;
+      continue;
+    }
+
+    // Deeper nested key: value (4-space indent) for 'with' block
+    const deepMatch = line.match(/^    (\w+):\s*(.+)$/);
+    if (deepMatch && currentSection) {
+      const section = result[currentSection] as YamlNode;
+      if (!section['with'] || typeof section['with'] === 'string') {
+        section['with'] = {};
+      }
+      let value = stripQuotes(deepMatch[2].trim());
+      value = value.replace(/\$\{(\w+)\}/g, (_, name: string) => process.env[name] ?? '');
+      (section['with'] as YamlNode)[deepMatch[1]] = value;
+    }
   }
-  return obj;
+
+  // Convert YamlNode to DotAiConfig
+  const config: DotAiConfig = {};
+  const providerKeys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
+
+  for (const key of providerKeys) {
+    const section = result[key];
+    if (section && typeof section === 'object') {
+      const node = section as YamlNode;
+      const providerConfig: ProviderConfig = {
+        use: typeof node['use'] === 'string' ? node['use'] : '',
+      };
+      if (node['with'] && typeof node['with'] === 'object') {
+        providerConfig.with = node['with'] as Record<string, unknown>;
+      }
+      config[key] = providerConfig;
+    }
+  }
+
+  return config;
 }
