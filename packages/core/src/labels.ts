@@ -1,16 +1,23 @@
 import type { Label } from './types.js';
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * Extract labels from a prompt using simple keyword matching.
+ * Extract labels from a prompt using word-boundary keyword matching.
  * No LLM — pure deterministic pattern matching.
  * Returns matched Label[] from a known vocabulary.
  */
 export function extractLabels(prompt: string, vocabulary: string[]): Label[] {
-  const lower = prompt.toLowerCase();
   const labels: Label[] = [];
+  const seen = new Set<string>();
 
   for (const word of vocabulary) {
-    if (lower.includes(word.toLowerCase())) {
+    if (seen.has(word)) continue;
+    const regex = new RegExp(`\\b${escapeRegex(word)}\\b`, 'i');
+    if (regex.test(prompt)) {
+      seen.add(word);
       labels.push({ name: word, source: 'extract' });
     }
   }

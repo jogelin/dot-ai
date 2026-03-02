@@ -45,8 +45,13 @@ describe('extractLabels', () => {
     expect(labels).toHaveLength(0);
   });
 
-  it('matches partial words within a prompt', () => {
+  it('does not match partial words within a prompt', () => {
     const labels = extractLabels('my skillset is broad', ['skill']);
+    expect(labels).toHaveLength(0);
+  });
+
+  it('matches whole words at word boundaries', () => {
+    const labels = extractLabels('my skill is broad', ['skill']);
     expect(labels).toHaveLength(1);
     expect(labels[0].name).toBe('skill');
   });

@@ -100,7 +100,10 @@ export class CockpitTaskProvider implements TaskProvider {
     const qs = params.toString();
     const url = `${this.baseUrl}/api/tasks${qs ? `?${qs}` : ''}`;
 
-    const res = await fetch(url, { headers: this.headers() });
+    const res = await fetch(url, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(5000),
+    });
     if (!res.ok) {
       throw new Error(`Cockpit tasks list failed: ${res.status} ${res.statusText}`);
     }
@@ -112,7 +115,10 @@ export class CockpitTaskProvider implements TaskProvider {
   async get(id: string): Promise<Task | null> {
     const res = await fetch(
       `${this.baseUrl}/api/tasks/${encodeURIComponent(id)}`,
-      { headers: this.headers() },
+      {
+        headers: this.headers(),
+        signal: AbortSignal.timeout(5000),
+      },
     );
     if (res.status === 404) return null;
     if (!res.ok) {
@@ -135,6 +141,7 @@ export class CockpitTaskProvider implements TaskProvider {
       method: 'POST',
       headers: this.headers(true),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
       throw new Error(`Cockpit task create failed: ${res.status} ${res.statusText}`);
@@ -160,6 +167,7 @@ export class CockpitTaskProvider implements TaskProvider {
         method: 'PATCH',
         headers: this.headers(true),
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(5000),
       },
     );
     if (!res.ok) {

@@ -148,7 +148,7 @@ describe('FileTaskProvider', () => {
     it('adds task with auto-generated id', async () => {
       const provider = new FileTaskProvider({ root: testDir });
       const created = await provider.create({ text: 'New task', status: 'todo' });
-      expect(created.id).toBe('1');
+      expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(created.text).toBe('New task');
       expect(created.status).toBe('todo');
     });
@@ -164,15 +164,18 @@ describe('FileTaskProvider', () => {
       expect(tasks[0].text).toBe('New task');
     });
 
-    it('increments id for each new task', async () => {
+    it('generates unique ids for each new task', async () => {
       const provider = new FileTaskProvider({ root: testDir });
       const first = await provider.create({ text: 'First', status: 'todo' });
       const second = await provider.create({ text: 'Second', status: 'todo' });
       const third = await provider.create({ text: 'Third', status: 'todo' });
 
-      expect(first.id).toBe('1');
-      expect(second.id).toBe('2');
-      expect(third.id).toBe('3');
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      expect(first.id).toMatch(uuidRegex);
+      expect(second.id).toMatch(uuidRegex);
+      expect(third.id).toMatch(uuidRegex);
+      expect(first.id).not.toBe(second.id);
+      expect(second.id).not.toBe(third.id);
     });
 
     it('creates .ai directory if it does not exist', async () => {

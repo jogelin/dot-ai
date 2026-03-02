@@ -88,8 +88,13 @@ export async function learn(
   response: string,
   providers: Providers,
 ): Promise<void> {
+  const MAX_LEARN_LENGTH = 500;
+  const truncated = response.length > MAX_LEARN_LENGTH
+    ? response.slice(0, MAX_LEARN_LENGTH) + '…'
+    : response;
+
   await providers.memory.store({
-    content: response,
+    content: truncated,
     type: 'log',
     date: new Date().toISOString().slice(0, 10),
   });

@@ -1,7 +1,18 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { TaskProvider } from '../contracts.js';
 import type { Task, TaskFilter } from '../types.js';
+
+// Simple file-level mutex to prevent concurrent read-modify-write races
+let writeLock: Promise<void> = Promise.resolve();
+
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = writeLock;
+  let resolve!: () => void;
+  writeLock = new Promise<void>(r => { resolve = r; });
+  return prev.then(fn).finally(() => resolve());
+}
 
 export class FileTaskProvider implements TaskProvider {
   private filePath: string;
@@ -42,22 +53,26 @@ export class FileTaskProvider implements TaskProvider {
   }
 
   async create(task: Omit<Task, 'id'>): Promise<Task> {
-    const tasks = await this.readTasks();
-    const newTask: Task = {
-      id: String(tasks.length + 1),
-      ...task,
-    };
-    tasks.push(newTask);
-    await this.writeTasks(tasks);
-    return newTask;
+    return withLock(async () => {
+      const tasks = await this.readTasks();
+      const newTask: Task = {
+        id: randomUUID(),
+        ...task,
+      };
+      tasks.push(newTask);
+      await this.writeTasks(tasks);
+      return newTask;
+    });
   }
 
   async update(id: string, patch: Partial<Task>): Promise<Task> {
-    const tasks = await this.readTasks();
-    const index = tasks.findIndex(t => t.id === id);
-    if (index === -1) throw new Error(`Task ${id} not found`);
-    tasks[index] = { ...tasks[index], ...patch, id };
-    await this.writeTasks(tasks);
-    return tasks[index];
+    return withLock(async () => {
+      const tasks = await this.readTasks();
+      const index = tasks.findIndex(t => t.id === id);
+      if (index === -1) throw new Error(`Task ${id} not found`);
+      tasks[index] = { ...tasks[index], ...patch, id };
+      await this.writeTasks(tasks);
+      return tasks[index];
+    });
   }
 }
