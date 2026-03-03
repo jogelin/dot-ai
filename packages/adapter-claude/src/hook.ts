@@ -63,8 +63,12 @@ async function main(): Promise<void> {
       }
     }
 
-    // Format and output
-    const formatted = formatContext(enriched);
+    // Format and output (skip identities — already injected at SessionStart)
+    const formatted = formatContext(enriched, {
+      skipIdentities: true,
+      maxSkillLength: 3000,
+      maxSkills: 5,
+    });
     if (formatted) {
       process.stdout.write(JSON.stringify({ result: formatted }));
     }

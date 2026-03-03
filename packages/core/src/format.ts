@@ -1,17 +1,28 @@
 import type { EnrichedContext, MemoryEntry, Skill, Tool, RoutingResult } from './types.js';
 
+export interface FormatOptions {
+  /** Skip identity sections (useful when already injected at session start) */
+  skipIdentities?: boolean;
+  /** Max chars per skill content. Truncated skills get a [...truncated] marker. Default: unlimited */
+  maxSkillLength?: number;
+  /** Max number of skills to include (already sorted by match relevance). Default: unlimited */
+  maxSkills?: number;
+}
+
 /**
  * Format an EnrichedContext into markdown sections for injection into agent context.
  * Sections are ordered by priority: identity > memory > skills > tools > routing.
  */
-export function formatContext(ctx: EnrichedContext): string {
+export function formatContext(ctx: EnrichedContext, options?: FormatOptions): string {
   const sections: string[] = [];
 
   // Identity sections (sorted by priority, highest first)
-  const sortedIdentities = [...ctx.identities].sort((a, b) => b.priority - a.priority);
-  for (const identity of sortedIdentities) {
-    if (identity.content) {
-      sections.push(identity.content);
+  if (!options?.skipIdentities) {
+    const sortedIdentities = [...ctx.identities].sort((a, b) => b.priority - a.priority);
+    for (const identity of sortedIdentities) {
+      if (identity.content) {
+        sections.push(identity.content);
+      }
     }
   }
 
@@ -21,9 +32,12 @@ export function formatContext(ctx: EnrichedContext): string {
   }
 
   // Skills section
-  const loadedSkills = ctx.skills.filter(s => s.content);
+  let loadedSkills = ctx.skills.filter(s => s.content);
+  if (options?.maxSkills != null) {
+    loadedSkills = loadedSkills.slice(0, options.maxSkills);
+  }
   if (loadedSkills.length > 0) {
-    sections.push(formatSkills(loadedSkills));
+    sections.push(formatSkills(loadedSkills, options?.maxSkillLength));
   }
 
   // Tools section
@@ -48,12 +62,16 @@ function formatMemory(memories: MemoryEntry[]): string {
   return lines.join('\n');
 }
 
-function formatSkills(skills: Skill[]): string {
+function formatSkills(skills: Skill[], maxLength?: number): string {
   const lines = ['## Active Skills\n'];
   for (const s of skills) {
     lines.push(`### ${s.name}`);
     if (s.content) {
-      lines.push(s.content);
+      if (maxLength != null && s.content.length > maxLength) {
+        lines.push(s.content.slice(0, maxLength) + '\n\n[...truncated]');
+      } else {
+        lines.push(s.content);
+      }
     }
     lines.push('');
   }

@@ -40,6 +40,7 @@ export { loadConfig, resolveConfig, injectRoot } from './config.js';
 
 // ── Format ──
 export { formatContext } from './format.js';
+export type { FormatOptions } from './format.js';
 
 // ── Loader ──
 export { registerProvider, clearProviders, createProviders } from './loader.js';
