@@ -41,8 +41,14 @@ export async function boot(providers: Providers): Promise<BootCache> {
     providers.tools.list(),
   ]);
 
+  // Build vocabulary from skill labels, skill triggers (excluding meta-triggers), and tool labels
+  const META_TRIGGERS = new Set(['always', 'auto', 'manual', 'boot', 'heartbeat', 'pipeline', 'audit']);
+  const skillTriggers = skills.map((s) =>
+    (s.triggers ?? []).filter((t) => !META_TRIGGERS.has(t)),
+  );
+
   const vocabulary = buildVocabulary(
-    skills.map((s) => s.labels),
+    [...skills.map((s) => s.labels), ...skillTriggers],
     tools.map((t) => t.labels),
   );
 

@@ -1,36 +1,53 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SkillProvider } from '../contracts.js';
 import type { Skill, Label } from '../types.js';
 
 export class FileSkillProvider implements SkillProvider {
-  private skillsDir: string;
+  private skillsDirs: string[];
   private cache: Skill[] | null = null;
 
   constructor(options: Record<string, unknown> = {}) {
     const root = (options.root as string) ?? process.cwd();
-    this.skillsDir = join(root, '.ai', 'skills');
+    this.skillsDirs = [join(root, '.ai', 'skills')];
+
+    // Also scan project-level skills (projects/*/.ai/skills/)
+    const projectsDir = join(root, 'projects');
+    try {
+      const projects = readdirSync(projectsDir, { withFileTypes: true });
+      for (const p of projects) {
+        if (p.isDirectory()) {
+          this.skillsDirs.push(join(projectsDir, p.name, '.ai', 'skills'));
+        }
+      }
+    } catch {
+      // No projects directory
+    }
   }
 
   async list(): Promise<Skill[]> {
     if (this.cache) return this.cache;
 
     const skills: Skill[] = [];
-    let dirs: string[];
-    try {
-      dirs = await readdir(this.skillsDir);
-    } catch {
-      return [];
-    }
 
-    for (const dir of dirs) {
-      const skillPath = join(this.skillsDir, dir, 'SKILL.md');
+    for (const skillsDir of this.skillsDirs) {
+      let dirs: string[];
       try {
-        const content = await readFile(skillPath, 'utf-8');
-        const skill = parseSkillFrontmatter(content, dir, skillPath);
-        if (skill) skills.push(skill);
+        dirs = await readdir(skillsDir);
       } catch {
-        // Skip invalid skills
+        continue;
+      }
+
+      for (const dir of dirs) {
+        const skillPath = join(skillsDir, dir, 'SKILL.md');
+        try {
+          const content = await readFile(skillPath, 'utf-8');
+          const skill = parseSkillFrontmatter(content, dir, skillPath);
+          if (skill) skills.push(skill);
+        } catch {
+          // Skip invalid skills
+        }
       }
     }
 
@@ -46,20 +63,29 @@ export class FileSkillProvider implements SkillProvider {
       // Match if any skill label matches any prompt label
       const labelMatch = skill.labels.some(sl => labelNames.has(sl.toLowerCase()));
 
-      // Match if any trigger pattern matches
-      const triggerMatch = skill.triggers?.includes('always') ?? false;
+      // Match if any trigger keyword matches (excluding meta-triggers)
+      const META = new Set(['always', 'auto', 'manual', 'boot', 'heartbeat', 'pipeline', 'audit']);
+      const triggerKeywordMatch = skill.triggers?.some(
+        t => !META.has(t) && labelNames.has(t.toLowerCase()),
+      ) ?? false;
 
-      return labelMatch || triggerMatch;
+      // Match if trigger is "always"
+      const alwaysMatch = skill.triggers?.includes('always') ?? false;
+
+      return labelMatch || triggerKeywordMatch || alwaysMatch;
     });
   }
 
   async load(name: string): Promise<string | null> {
-    const skillPath = join(this.skillsDir, name, 'SKILL.md');
-    try {
-      return await readFile(skillPath, 'utf-8');
-    } catch {
-      return null;
+    for (const dir of this.skillsDirs) {
+      const skillPath = join(dir, name, 'SKILL.md');
+      try {
+        return await readFile(skillPath, 'utf-8');
+      } catch {
+        continue;
+      }
     }
+    return null;
   }
 }
 
