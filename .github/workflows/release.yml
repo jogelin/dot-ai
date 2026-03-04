@@ -31,12 +31,8 @@ jobs:
         run: pnpm nx run-many -t build
       - name: Test
         run: pnpm nx run-many -t test
-      - name: Version and changelog
-        run: pnpm nx release ${{ inputs.dry-run && '--dry-run' || '' }}
+      - name: Release
+        run: pnpm tsx scripts/release.ts ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish to npm
-        if: ${{ !inputs.dry-run }}
-        run: pnpm nx release publish
-        env:
           NPM_CONFIG_PROVENANCE: true

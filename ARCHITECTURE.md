@@ -27,7 +27,7 @@ Key insight: **The agent is the consumer, dot-ai is the provider.** Adapters int
 │  │  dot-ai Core Engine (core package)                │    │
 │  │                                                    │    │
 │  │  1. loadConfig(.ai/dot-ai.yml)                    │    │
-│  │  2. registerDefaults() [or custom providers]      │    │
+│  │  2. resolve providers via dynamic import()         │    │
 │  │  3. createProviders(config)                       │    │
 │  │  4. boot() → cache identities + vocabulary        │    │
 │  │  5. enrich(prompt) → EnrichedContext              │    │
@@ -165,7 +165,7 @@ const providers = await createProviders(config);
 
 ### Default Providers (File-Based)
 
-When `registerDefaults()` is called, these are registered:
+`registerDefaults()` is now a **no-op** — providers are resolved via dynamic `import()` in `loader.ts`. The following default providers are resolved automatically when referenced in config:
 
 | Name | Class | What It Does |
 |------|-------|--------------|
@@ -335,7 +335,6 @@ The `.ai/` directory is the **workspace context root**. File-based providers rea
 │
 ├── memory/            # Session memory
 │   ├── YYYY-MM-DD.md  # Daily logs (MemoryProvider searches)
-│   ├── projects-index.md
 │   ├── tasks/         # Task details (TaskProvider reads)
 │   │   └── {slug}.md
 │   └── research/
@@ -417,8 +416,8 @@ Adapters then call `formatContext(enriched)` to convert to markdown, which is in
 | **core** | `packages/core/` | Engine, contracts, types, loaders | `boot()`, `enrich()`, `learn()`, `registerProvider()`, interfaces |
 | **adapter-claude** | `packages/adapter-claude/` | Claude Code integration | Hook script, format function |
 | **adapter-openclaw** | `packages/adapter-openclaw/` | OpenClaw integration | Plugin object, custom provider loader |
-| **sqlite-memory** | `packages/sqlite-memory/` | SQLite memory backend | `SqliteMemoryProvider` class |
-| **cockpit-tasks** | `packages/cockpit-tasks/` | Cockpit API task backend | `CockpitTaskProvider` class |
+| **sqlite-memory** | `packages/provider-sqlite-memory/` | SQLite memory backend | `SqliteMemoryProvider` class |
+| **cockpit-tasks** | *(external — kiwi repo)* | Cockpit API task backend | `CockpitTaskProvider` class |
 | **cli** | `packages/cli/` | CLI commands (init, scan, doctor, audit) | Executable `dot-ai` command |
 
 ---
@@ -505,7 +504,7 @@ Adapters don't care what format context is in. Markdown:
 
 1. **Startup (Adapter)**
    - Hook fires (UserPromptSubmit or before_agent_start)
-   - Adapter calls `registerDefaults()` and `registerCustomProviders()`
+   - Adapter resolves providers (dynamic import) and registers custom providers
 
 2. **Boot (Core)**
    - Load config from `.ai/dot-ai.yml`

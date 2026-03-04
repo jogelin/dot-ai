@@ -10,14 +10,14 @@
     {
       "name": "dot-ai",
       "description": "Universal AI workspace convention — .ai/ directory structure, model routing, context enforcement, and workspace management skills.",
-      "version": "0.4.0",
+      "version": "0.5.2",
       "author": {
         "name": "Jonathan Gelin",
         "email": "smartsdlc.dev@gmail.com"
       },
       "source": "./",
       "category": "productivity",
-      "homepage": "https://github.com/smartsdlc/dot-ai-plugin",
+      "homepage": "https://github.com/jogelin/dot-ai",
       "tags": ["workspace", "convention", "model-routing", "context", "ai-workspace"]
     }
   ]

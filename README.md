@@ -1,7 +1,7 @@
 # dot-ai — Universal AI Workspace Convention
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.5.2-green.svg)](package.json)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-compatible-purple.svg)](https://github.com/openclaw/openclaw)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-blue.svg)](https://claude.ai/claude-code)
 
@@ -14,17 +14,34 @@ The dot-ai convention provides a universal workspace structure that helps AI ass
 ## ✨ Features
 
 - 🏗️ **Workspace Structure** — Standardized `.ai/` directory with boot sequence and project routing
-- ✅ **Task Management** — BACKLOG.md + tasks/ pattern that replaces built-in todos
+- ✅ **Task Management** — TaskProvider pattern (Cockpit API, file-based, or custom) that replaces built-in todos
 - 🎯 **Model Selection** — Smart routing between Haiku/Sonnet/Opus to optimize costs
 - 📊 **Context Management** — Proactive delegation strategies based on context budget
 - 🔍 **Health Monitoring** — Built-in diagnostics and troubleshooting (doctor skill)
-- 📝 **Auto-Generation** — Maintains AGENT.md, SKILL.md, BACKLOG.md with markers
+- 📝 **Auto-Generation** — Maintains AGENT.md, SKILL.md with markers
 - 🚀 **Fast Startup** — Lightweight INDEX files (61% token reduction vs full docs)
 - 🔄 **Progressive Loading** — Overview at startup, details loaded on-demand
 
 ---
 
 ## 📦 Installation
+
+### Claude Code
+
+```bash
+# Install the plugin
+claude plugin add dot-ai
+```
+
+### npm Packages
+
+For programmatic use or custom adapters:
+
+```bash
+npm install @dot-ai/core @dot-ai/adapter-claude
+```
+
+Available packages: `@dot-ai/core`, `@dot-ai/adapter-claude`, `@dot-ai/file-memory`, `@dot-ai/file-skills`, `@dot-ai/file-identity`, `@dot-ai/file-tools`, `@dot-ai/file-tasks`, `@dot-ai/rules-routing`, `@dot-ai/sqlite-memory`, `@dot-ai/cli`
 
 ### OpenClaw
 
@@ -33,26 +50,15 @@ openclaw plugins install dot-ai
 openclaw gateway restart
 ```
 
-### Claude Code
-
-```bash
-# From npm (recommended)
-claude plugin install dot-ai
-
-# Or from local directory
-claude plugin install /path/to/dot-ai-plugin
-```
-
 ### Other AI Tools (Windsurf, Cursor, Continue.dev, Codex)
 
-These tools don't have native plugin systems — use the sync script:
+Use the adapter-sync package to generate agent-specific configuration:
 
 ```bash
-cd /path/to/dot-ai-plugin
-./scripts/sync.sh
+npx @dot-ai/adapter-sync
 ```
 
-This generates agent-specific configuration:
+This generates:
 - **Windsurf:** `.windsurf/rules/dot-ai.md`
 - **Cursor:** `.cursor/rules/dot-ai.md`
 - **Codex:** Injects into root `AGENTS.md`
@@ -95,7 +101,7 @@ The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 - ✅ Loads workspace context at session start
 - ✅ Enforces task management conventions
 - ✅ Optimizes model selection for sub-agents
-- ✅ Provides access to all 17 skills
+- ✅ Provides access to all skills
 
 **No local installation needed** — the plugin provides skills globally!
 
@@ -107,7 +113,7 @@ The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 
 | Skill | Purpose | Triggers |
 |-------|---------|----------|
-| **dot-ai** | Main workspace convention | `always` |
+| **dot-ai** | Main workspace convention | `manual` |
 | **dot-ai-tasks** | Task management (use instead of todos) | `always` |
 | **model-selection** | Smart model routing (Haiku/Sonnet/Opus) | `always` |
 | **context-strategy** | Context budget management (<50%, >70%, >85%) | `always` |
@@ -127,7 +133,7 @@ The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 | **dot-ai-audit** | Weekly workspace coherence validation | `heartbeat`, manual |
 | **dot-ai-agent-sync** | Generate/maintain AGENT.md sections | manual, audit |
 | **dot-ai-skill-sync** | Validate SKILL.md frontmatter | audit |
-| **dot-ai-backlog-sync** | Validate BACKLOG.md structure | audit |
+| **dot-ai-backlog-sync** | Validate task structure | audit |
 | **dot-ai-memory-sync** | Validate memory/ directory structure | audit |
 | **dot-ai-tools-sync** | Validate TOOLS.md structure | audit |
 
@@ -140,7 +146,7 @@ The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 | **dot-ai-security** | Security rules and verification | `always` |
 | **dot-ai-self-improve** | Learning loop and pattern extraction | manual |
 
-**Total: 17 Active Skills**
+**See `openclaw.plugin.json` for the full skill list.**
 
 ---
 
@@ -157,8 +163,6 @@ my-project/
 │   │
 │   ├── memory/                 # Session memory and tasks
 │   │   ├── YYYY-MM-DD.md       # Daily session notes
-│   │   ├── projects-index.md   # Project routing map (auto-generated)
-│   │   ├── BACKLOG.md          # Global task index
 │   │   ├── tasks/              # Task details (on-demand)
 │   │   │   └── {slug}.md
 │   │   └── research/           # Research notes
@@ -179,7 +183,6 @@ my-project/
         └── .ai/                # Per-project AI context
             ├── AGENT.md        # Project-specific docs
             └── memory/
-                ├── BACKLOG.md
                 └── tasks/
 ```
 
@@ -197,50 +200,24 @@ my-project/
 
 ### Task Management
 
-**Always use `dot-ai-tasks` instead of built-in todos:**
+**Always use `dot-ai-tasks` instead of built-in todos.**
 
-```markdown
-# .ai/memory/BACKLOG.md
+Tasks are managed through the **TaskProvider** contract. The provider can be backed by:
+- **Cockpit API** (`@dot-ai/cockpit-tasks`) — REST API at `http://localhost:3010`
+- **File-based** (`@dot-ai/file-tasks`) — JSON files in `.ai/memory/tasks/`
+- **Custom** — Any implementation of the `TaskProvider` interface
 
-## 🔴 Urgent
-- [ ] Fix login bug `fix-login-bug`
+Configure in `.ai/dot-ai.yml`:
 
-## 🟡 Next
-- [ ] Add user profile page `user-profile`
-
-## 🟢 Later
-- [ ] Refactor auth module `refactor-auth`
-
-## ✅ Done (recent)
-- [x] Setup project structure `setup-project` — 2026-02-07
+```yaml
+tasks:
+  use: '@dot-ai/cockpit-tasks'
+  with:
+    url: 'http://localhost:3010'
+    apiKey: '${COCKPIT_API_KEY}'
 ```
 
-**Detailed task context** in `tasks/{slug}.md`:
-
-```markdown
----
-status: in_progress
-priority: high
-project: backend
-created: 2026-02-07
-tags: [bug, security]
----
-
-# Task: Fix Login Bug
-
-## Context
-Users report 500 error when logging in with special characters in password.
-
-## Acceptance Criteria
-- [ ] Password validation handles special chars
-- [ ] Tests cover edge cases
-- [ ] No 500 errors in production logs
-
-## Progress Log
-
-### 2026-02-07
-Identified issue in password escaping logic. Working on fix.
-```
+Tasks support standard fields: `id`, `text`, `status`, `priority`, `project`, `tags`.
 
 ### Model Selection
 
@@ -331,9 +308,8 @@ dot-ai plugin
 ├── OpenClaw Integration
 │   ├── before_agent_start hook
 │   │   ├── Injects BOOTSTRAP.md (95 lines)
-│   │   ├── Injects 14 INDEX.md files (520 lines)
-│   │   ├── Injects projects-index table (20 lines)
-│   │   └── Total: ~620 lines (was 1582, 61% reduction)
+│   │   ├── Injects INDEX.md files
+│   │   └── Enriches prompt via label-based routing
 │   │
 │   └── registerService
 │       └── Workspace convention enforcement
@@ -447,7 +423,6 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
 ### Template Usage
 
 Use existing templates for consistency:
-- Task management → BACKLOG.template.md
 - Project docs → AGENT.template.md
 - New skills → SKILL.template.md
 
@@ -530,8 +505,8 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 ## 🔗 Links
 
-- **Repository:** https://github.com/smartsdlc/dot-ai-plugin
-- **Issues:** https://github.com/smartsdlc/dot-ai-plugin/issues
+- **Repository:** https://github.com/jogelin/dot-ai
+- **Issues:** https://github.com/jogelin/dot-ai/issues
 - **OpenClaw:** https://github.com/openclaw/openclaw
 - **Claude Code:** https://claude.ai/claude-code
 
@@ -542,7 +517,7 @@ MIT License — See [LICENSE](LICENSE) for details.
 **dot-ai** provides a universal workspace convention for AI assistants:
 
 - ✅ Standardized `.ai/` structure
-- ✅ 17 comprehensive skills
+- ✅ Comprehensive skill set
 - ✅ Task management that works
 - ✅ Smart model routing
 - ✅ Context budget management
@@ -556,4 +531,4 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **Made with ❤️ by the dot-ai community**
 
-*Version 0.2.0 — Last updated: 2026-02-07*
+*Version 0.5.2 — Last updated: 2026-03-04*
