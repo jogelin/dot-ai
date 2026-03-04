@@ -21,7 +21,7 @@
   ],
   "targetDefaults": {
     "build": { "dependsOn": ["^build"], "inputs": ["production"], "cache": true },
-    "test": { "cache": true }
+    "test": { "dependsOn": ["build"], "cache": true }
   },
   "release": {
     "projects": ["packages/*"],
