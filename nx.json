@@ -28,7 +28,6 @@
     "projectsRelationship": "fixed",
     "releaseTagPattern": "v{version}",
     "version": {
-      "preVersionCommand": "pnpm nx run-many -t build test",
       "conventionalCommits": true,
       "fallbackCurrentVersionResolver": "disk"
     },
