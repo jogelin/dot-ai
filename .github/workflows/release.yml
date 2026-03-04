@@ -32,7 +32,7 @@ jobs:
       - name: Test
         run: pnpm nx run-many -t test
       - name: Version and changelog
-        run: pnpm nx release --first-release ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: pnpm nx release ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to npm
