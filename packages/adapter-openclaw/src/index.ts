@@ -187,10 +187,112 @@ const plugin = {
               };
             },
           },
+          {
+            name: 'task_list',
+            label: 'Task List',
+            description: 'List tasks from the dot-ai task provider. Filter by status, project, or tags.',
+            parameters: {
+              type: 'object',
+              properties: {
+                status: { type: 'string', description: 'Filter by status: pending, in_progress, done' },
+                project: { type: 'string', description: 'Filter by project name' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
+              },
+              required: [],
+            },
+            async execute(_toolCallId: string, params: Record<string, unknown>) {
+              if (!cachedProviders?.tasks) {
+                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
+              }
+              const filter: Record<string, unknown> = {};
+              if (params.status !== undefined) filter.status = params.status;
+              if (params.project !== undefined) filter.project = params.project;
+              if (params.tags !== undefined) filter.tags = params.tags;
+              const tasks = await cachedProviders.tasks.list(filter);
+
+              if (tasks.length === 0) {
+                return { content: [{ type: 'text', text: 'No tasks found.' }], details: { count: 0 } };
+              }
+
+              const text = tasks
+                .map((t, i) => `${i + 1}. [${t.status ?? 'pending'}] ${t.text}${t.project ? ` (${t.project})` : ''}${t.tags?.length ? ` #${t.tags.join(' #')}` : ''} (id: ${t.id})`)
+                .join('\n');
+              return {
+                content: [{ type: 'text', text: `Found ${tasks.length} tasks:\n\n${text}` }],
+                details: { count: tasks.length },
+              };
+            },
+          },
+          {
+            name: 'task_create',
+            label: 'Task Create',
+            description: 'Create a new task in the dot-ai task provider.',
+            parameters: {
+              type: 'object',
+              properties: {
+                text: { type: 'string', description: 'Task description' },
+                status: { type: 'string', description: 'Task status (default: pending)' },
+                priority: { type: 'string', description: 'Task priority' },
+                project: { type: 'string', description: 'Project name' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'Tags' },
+              },
+              required: ['text'],
+            },
+            async execute(_toolCallId: string, params: Record<string, unknown>) {
+              if (!cachedProviders?.tasks) {
+                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
+              }
+              const task = await cachedProviders.tasks.create({
+                text: params.text as string,
+                status: (params.status as string) ?? 'pending',
+                ...(params.priority !== undefined && { priority: params.priority as string }),
+                ...(params.project !== undefined && { project: params.project as string }),
+                ...(params.tags !== undefined && { tags: params.tags as string[] }),
+              });
+              return {
+                content: [{ type: 'text', text: `Created task: "${(params.text as string).slice(0, 100)}" (id: ${task.id})` }],
+                details: { action: 'created', id: task.id },
+              };
+            },
+          },
+          {
+            name: 'task_update',
+            label: 'Task Update',
+            description: 'Update an existing task in the dot-ai task provider.',
+            parameters: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Task ID to update' },
+                status: { type: 'string', description: 'New status' },
+                text: { type: 'string', description: 'New task description' },
+                priority: { type: 'string', description: 'New priority' },
+                project: { type: 'string', description: 'New project name' },
+                tags: { type: 'array', items: { type: 'string' }, description: 'New tags' },
+              },
+              required: ['id'],
+            },
+            async execute(_toolCallId: string, params: Record<string, unknown>) {
+              if (!cachedProviders?.tasks) {
+                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
+              }
+              const id = params.id as string;
+              const patch: Record<string, unknown> = {};
+              if (params.status !== undefined) patch.status = params.status;
+              if (params.text !== undefined) patch.text = params.text;
+              if (params.priority !== undefined) patch.priority = params.priority;
+              if (params.project !== undefined) patch.project = params.project;
+              if (params.tags !== undefined) patch.tags = params.tags;
+              await cachedProviders.tasks.update(id, patch);
+              return {
+                content: [{ type: 'text', text: `Updated task ${id}.` }],
+                details: { action: 'updated', id },
+              };
+            },
+          },
         ];
         return tools;
       },
-      { names: ['memory_recall', 'memory_store'] },
+      { names: ['memory_recall', 'memory_store', 'task_list', 'task_create', 'task_update'] },
     );
 
     // Hook: before_agent_start — run the full pipeline
