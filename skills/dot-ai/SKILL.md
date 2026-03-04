@@ -1,7 +1,7 @@
 ---
 name: dot-ai
 description: Universal AI workspace convention. Discovery, structure, boot, routing. Use when bootstrapping a session, navigating workspace structure, managing projects, or understanding dot-ai conventions.
-triggers: [boot, always]
+triggers: [manual]
 version: 0.2.0
 ---
 
@@ -179,118 +179,26 @@ Skills check this file to avoid running too frequently.
 
 ## Boot Sequence
 
-Execute this sequence at every session start:
+dot-ai v4 handles boot programmatically via the adapter hook:
 
-### Phase 1 — Load root context
+1. **Load config**: Read `.ai/dot-ai.yml` for provider configuration
+2. **Discover nodes**: Scan `projects/*/` for `.ai/` directories (configurable via `workspace.scanDirs`)
+3. **Boot providers**: Load identities, skills, build vocabulary
+4. **Ready**: Vocabulary-based label matching routes prompts to relevant skills
 
-1. Find the root `.ai/` directory (current directory or nearest parent)
-2. Load in order: `AGENTS.md` → `SOUL.md` → `USER.md` → `IDENTITY.md` → `TOOLS.md`
-3. Load `memory/YYYY-MM-DD.md` for today and yesterday
-4. If main/private session: load `MEMORY.md`
-
-### Phase 1b — Check active tasks
-
-1. Read `memory/tasks/BACKLOG.md` — scan for in-progress tasks marked `[~]`
-2. If any found, include them in the boot log so you know what was interrupted
-3. This is your "where was I?" on session start
-
-### Phase 2 — Discover projects
-
-1. From the workspace root, scan for `.ai/` directories:
-   ```
-   find . -name ".ai" -type d -maxdepth 3
-   ```
-2. For each `.ai/` found (excluding root):
-   - Read ONLY the frontmatter of `AGENT.md` (between `---` markers)
-   - List skill directories: `ls skills/` (names only)
-   - For each skill, read ONLY its frontmatter
-3. Build the workspace overview (see format below)
-
-### Phase 3 — Ready
-
-The workspace overview is now in memory. You are ready to route prompts.
-Do NOT load full project context yet. Wait for a prompt that matches a project.
-
-### Boot Log
-
-**Output a compact boot log at the end of the boot sequence.**
-This gives the human visibility into what happened during boot.
-
-The log MUST be the **first message** of the session (before answering any prompt).
-Use a single compact block — no walls of text.
-
-**Format:**
-
-```
-🥝 dot-ai boot
-├─ 🏠 Root context — loaded (AGENTS, SOUL, USER, IDENTITY, TOOLS)
-├─ 📝 memory/YYYY-MM-DD.md — loaded (+yesterday)
-├─ 🧠 MEMORY.md — loaded | skipped (not main session)
-├─ 📋 N in-progress tasks | no active tasks
-├─ 📁 N projects scanned, M skills indexed
-├─ 📋 projects-index.md — fresh (Xd) | regenerated (stale) | created
-├─ 🔍 Audit — not due (last: Xd ago) | running | skipped
-└─ ✅ Ready
-```
-
-**Rules:**
-- Each line = one phase, one status
-- Use `—` separator between label and status
-- Keep it to ~7 lines max
-- If a phase had a warning/error, show it inline: `⚠️ van-management — missing AGENT.md`
-- If boot is triggered by heartbeat, skip the log (heartbeats are silent)
-
-**Examples:**
-
-Typical boot:
-```
-🥝 dot-ai boot
-├─ 🏠 Root context — loaded
-├─ 📝 memory/2026-02-07.md — created (+yesterday loaded)
-├─ 🧠 MEMORY.md — loaded
-├─ 📁 6 projects, 22 skills
-├─ 📋 projects-index.md — fresh (3d)
-└─ ✅ Ready
-```
-
-Boot with index refresh + warning:
-```
-🥝 dot-ai boot
-├─ 🏠 Root context — loaded
-├─ 📝 memory/2026-02-07.md — loaded (+yesterday)
-├─ 🧠 MEMORY.md — skipped (shared session)
-├─ 📁 6 projects, 22 skills
-├─ 📋 projects-index.md — regenerated (was 9d old)
-├─ ⚠️ todo — missing AGENT.md frontmatter
-└─ ✅ Ready
-```
-
-### Overview Format
-
-See `dot-ai-workspace-scan` sub-skill for the scan process and output format.
-The overview should be **compact** — typically under 300 tokens.
+The boot log and manual file scanning described below is for reference only — v4 automates this via `@dot-ai/core` engine.
 
 ## Runtime — Prompt Routing
 
-**This routing MUST be consulted for every prompt.** No exceptions.
+dot-ai v4 handles routing automatically:
 
-When a prompt arrives:
+1. **Label extraction** — Extract labels from user prompt using vocabulary built at boot
+2. **Skill matching** — Match labels to skill labels/triggers
+3. **Memory search** — Search relevant memories via provider
+4. **Context assembly** — Build enriched context (identities, skills, memories, tools, routing)
+5. **Format** — Format as markdown for injection into agent context
 
-1. **Route** — Consult `memory/projects-index.md` or the workspace overview. Which project does this relate to?
-2. **Load** — If matched, read the full `AGENT.md` AND `TOOLS.md` of that project.
-3. **Skill check** — Does a skill match the request? Read its full `SKILL.md`.
-4. **Execute** — Perform the task with the loaded context.
-5. **Save** — Write outputs to the project's `.ai/memory/` (notes) or `data/` (structured data), not to global memory.
-6. **Global** — If no project matches, use root context and global skills.
-
-### Routing Rules
-
-- **ALWAYS route through dot-ai** — even if you "know" which project it is.
-- NEVER load all projects at once. Load only what the prompt needs.
-- When uncertain which project, ASK rather than guess.
-- A single prompt can involve multiple projects (load both).
-- Skills from root `.ai/skills/` are available globally, regardless of project.
-- Skills from a project `.ai/skills/` are scoped to that project.
+Manual routing via `projects-index.md` is no longer needed.
 
 ## Retrieval-Led Reasoning
 
@@ -346,43 +254,11 @@ When routing to a project, load:
 - `projects/<name>/.ai/MEMORY.md` — project-scoped curated memory
 - `projects/<name>/.ai/memory/` — project-scoped notes, research, investigation
 
-### Tasks (managed by `dot-ai-tasks`)
-
-Task management uses the **same convention** at global and project level:
-- `BACKLOG.md` — prioritized task index/overview (lightweight, quick scan)
-- `tasks/<slug>.md` — detailed task notes, research, progress (loaded on-demand)
-
-**Structure:**
-```
-# Global (cross-project tasks)
-.ai/memory/tasks/
-├── BACKLOG.md              ← Global task index
-├── refactoring-dot-ai.md   ← Task details
-└── kanban-dashboard.md     ← Task details
-
-# Project tasks
-projects/<name>/.ai/memory/tasks/
-├── BACKLOG.md              ← Project task index
-├── autoterm-2d.md          ← Task details
-└── maxxfan-esp32.md        ← Task details
-```
-
-**Lifecycle:**
-- BACKLOG.md = overview for routing (which tasks exist, priorities)
-- tasks/<slug>.md = full context loaded when working on that task
-- When task completed → mark done in BACKLOG.md, keep task file as reference
-- Tasks can be short (quick fixes) or long (multi-session projects)
-- No distinction "temporary vs permanent" — a task is a task
-
-**Separation rationale:**
-BACKLOG.md provides quick overview without loading all task details.
-Similar to projects-index.md vs full AGENT.md — metadata first, details on-demand.
-
 ### Rules
 - Project-specific notes → project's `.ai/memory/`, NEVER in root `memory/`
-- Task tracking → `memory/tasks/` (both global and per-project)
 - Facts and lessons → `MEMORY.md` (root, curated, no project-specific data)
 - Daily session logs → `memory/YYYY-MM-DD.md` (root)
+- Tasks → Cockpit API via `dot-ai-tasks` skill (not file-based BACKLOG.md)
 
 ## Token Budget Guidelines
 
@@ -395,71 +271,6 @@ Similar to projects-index.md vs full AGENT.md — metadata first, details on-dem
 
 The goal: minimal upfront cost, load details only when needed.
 
-## Metadata Caching Strategy
-
-**Philosophy: Generate once, use many times.**
-
-Pre-generate lightweight metadata files for fast routing without full scans:
-
-| Cache File | Purpose | Generated By | Used By | Update Trigger |
-|------------|---------|--------------|---------|----------------|
-| `.ai/memory/projects-index.md` | Project overview, skills list | `workspace-scan` | Boot, routing | Boot (if >7d old), audit drift |
-| `.ai/memory/skills-index.json` [planned] | All skills with frontmatter | `workspace-scan` | Skill discovery | Boot, audit |
-| `projects/<name>/.ai/data-index.json` [planned] | Data files summary (type, size, mtime) | `agent-sync` | Project routing | Data file changes, audit |
-| `.ai/memory/activity-index.json` [planned] | Recent project modifications (last 30d) | `workspace-scan` | Smart routing | Daily, on-demand |
-| `.ai/memory/deps-graph.json` [planned] | Project dependency graph (if Nx/monorepo) | `workspace-scan` | Impact analysis | Config changes, audit |
-
-### Cache Benefits
-
-1. **Fast routing** — Read index files instead of scanning workspace
-2. **Reduced tokens** — Compact metadata vs full file contents
-3. **Smart defaults** — Route to recently-active projects first
-4. **Impact awareness** — Know which projects are affected by changes
-5. **Offline-first** — Indexes work without file system access
-
-### Cache Invalidation
-
-- **Time-based**: Regenerate if >7 days old
-- **Event-based**: File modifications in watched directories
-- **Audit-based**: Drift detection triggers regeneration
-- **Manual**: "rescan workspace", "rebuild indexes"
-
-### Example: Smart Routing with Activity Index
-
-```json
-// .ai/memory/activity-index.json
-{
-  "lastUpdated": "2026-02-06T14:30:00Z",
-  "projects": [
-    {
-      "name": "roule-caillou",
-      "lastModified": "2026-02-06T12:00:00Z",
-      "recentFiles": ["data/properties/_index.json", ".ai/skills/property-report/SKILL.md"],
-      "activityScore": 0.95
-    },
-    {
-      "name": "pro",
-      "lastModified": "2026-02-04T10:00:00Z",
-      "recentFiles": ["data/medium-digest/articles.json"],
-      "activityScore": 0.42
-    }
-  ]
-}
-```
-
-**Routing logic:**
-```
-User prompt: "montre-moi les derniers biens"
-
-1. Read activity-index.json (fast, ~50 tokens)
-2. Match keywords "biens" → roule-caillou (tags: immobilier, bien)
-3. Check activityScore: 0.95 (recent activity) → high confidence
-4. Load roule-caillou AGENT.md + relevant skill
-5. Execute with loaded context
-```
-
-Without cache: would need to scan all 6 projects, read 40 skills → ~2000 tokens.
-With cache: read 1 index file → ~50 tokens. **40x reduction.**
 
 ## Requirements
 
@@ -473,56 +284,12 @@ With cache: read 1 index file → ~50 tokens. **40x reduction.**
 
 All tools should be available on macOS, Linux, and WSL.
 
-## Sub-skills
+## Related Skills
 
-⚠️ **Important: Sub-skills are internal components of dot-ai.**
-
-They are marked with `internal: true` and should **NOT** be invoked directly by external orchestrators or user prompts. Always use the main `dot-ai` skill as the entry point — it will delegate to the appropriate sub-skill automatically.
-
-**Correct usage:**
-- ✅ `dot-ai` orchestrates and delegates to sub-skills
-- ✅ Use `dot-ai` skill as main entry point
-
-**Incorrect usage:**
-- ❌ Directly invoking `dot-ai-audit` from user prompt
-- ❌ Manually calling sub-skills outside dot-ai context
-
-This skill uses sub-skills for specific operations.
-Load the appropriate sub-skill when needed.
-
-### Core Sub-skills
-
-| Sub-skill | Description | Triggers |
-|-----------|-------------|----------|
-| `dot-ai-workspace-scan` | Scan `.ai/` directories, generate projects-index.md and in-memory overview | boot |
-| `dot-ai-project-init` | Create new project with proper `.ai/` structure | manual |
-| `dot-ai-tasks` | Task management, backlogs, task lifecycle, notes linking | always |
-| `dot-ai-audit` | Weekly audit of workspace coherence, indexes, and paths | heartbeat |
-| `dot-ai-security` | Security conventions, file permissions, prompt injection defense | boot, audit |
-| `dot-ai-self-improve` | Auto-correction and knowledge documentation process | manual |
-| `dot-ai-migrate` | Migrate workspace from old convention version to current | manual |
-| `dot-ai-doctor` | Health check and troubleshooting for workspace issues | manual |
-| `dot-ai-export` | Export workspace structure as JSON/YAML for external tools | manual |
-
-### Sync Sub-skills (Validation & Generation)
-
-Each file type has a dedicated sync sub-skill for validation and generation.
-`dot-ai-audit` delegates to these sync skills for validation.
-
-| Sub-skill | File Type | Responsibility |
-|-----------|-----------|----------------|
-| `dot-ai-agent-sync` | `AGENT.md` | Validate frontmatter, generate structure/data/skills sections |
-| `dot-ai-skill-sync` | `SKILL.md` | Validate frontmatter (name, description, triggers) |
-| `dot-ai-backlog-sync` | `BACKLOG.md` | Validate task list format, check orphan slugs |
-| `dot-ai-memory-sync` | `MEMORY.md` | Validate structure (optional, light validation) |
-| `dot-ai-tools-sync` | `TOOLS.md` | Validate tool definitions (optional) |
-
-**Pattern:** Audit calls sync skills to validate, sync skills have authority on structure.
-
-Sub-skills are located in `skills/<name>/SKILL.md` (sibling directories to `skills/dot-ai/`).
-They **complement** this skill — they don't replace it. This file remains
-the framework (conventions, structure, boot, routing). Sub-skills handle
-the operational details.
+| Skill | Purpose |
+|-------|---------|
+| `dot-ai-audit` | Workspace convention audit (cron, manual) |
+| `dot-ai-tasks` | Task lifecycle via Cockpit API |
 
 ## Sync — Native Tool Configuration
 

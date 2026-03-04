@@ -49,13 +49,16 @@ describe('SqliteMemoryProvider', () => {
     expect(results.some(r => r.content.includes('React'))).toBe(false);
   });
 
-  it('filters by labels when provided', async () => {
-    await provider.store({ content: 'Auth fix deployed', type: 'log', labels: ['auth', 'backend'] });
-    await provider.store({ content: 'Auth tests updated', type: 'log', labels: ['auth', 'testing'] });
+  it('expands search with labels (OR semantics)', async () => {
+    await provider.store({ content: 'Auth fix for backend', type: 'log', labels: ['auth', 'backend'] });
+    await provider.store({ content: 'Testing framework setup', type: 'log', labels: ['testing'] });
+    await provider.store({ content: 'Unrelated React component', type: 'log', labels: ['frontend'] });
 
+    // Labels expand the search: 'auth' matches first, 'testing' matches second
     const results = await provider.search('auth', ['testing']);
-    expect(results).toHaveLength(1);
-    expect(results[0].labels).toContain('testing');
+    expect(results).toHaveLength(2);
+    expect(results.some(r => r.content.includes('Auth fix'))).toBe(true);
+    expect(results.some(r => r.content.includes('Testing framework'))).toBe(true);
   });
 
   it('handles multiple stores and searches', async () => {

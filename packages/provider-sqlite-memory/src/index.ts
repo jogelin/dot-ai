@@ -62,12 +62,18 @@ export class SqliteMemoryProvider implements MemoryProvider {
   }
 
   async search(query: string, labels?: string[]): Promise<MemoryEntry[]> {
-    // Clean query for FTS5: remove special chars, keep words
-    const cleanQuery = query
+    // Build FTS5 query: combine prompt words + labels (OR semantics, like file-memory)
+    const queryWords = query
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
-      .filter(w => w.length > 1)
-      .join(' OR ');
+      .filter(w => w.length > 1);
+
+    const labelWords = (labels ?? [])
+      .map(l => l.replace(/[^\w\s]/g, '').trim())
+      .filter(w => w.length > 1);
+
+    const allTerms = [...new Set([...queryWords, ...labelWords])];
+    const cleanQuery = allTerms.join(' OR ');
 
     if (!cleanQuery) return [];
 
@@ -88,7 +94,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
       rank: number;
     }>;
 
-    let results = rows.map(row => ({
+    return rows.map(row => ({
       content: row.content,
       type: row.type,
       source: 'sqlite-memory' as const,
@@ -96,16 +102,6 @@ export class SqliteMemoryProvider implements MemoryProvider {
       labels: JSON.parse(row.labels) as string[],
       node: row.node ?? undefined,
     }));
-
-    // Filter by labels if provided
-    if (labels?.length) {
-      const labelSet = new Set(labels.map(l => l.toLowerCase()));
-      results = results.filter(r =>
-        r.labels?.some(l => labelSet.has(l.toLowerCase()))
-      );
-    }
-
-    return results;
   }
 
   /**
