@@ -11,6 +11,7 @@ import { argv, cwd, exit } from 'node:process';
 import { join } from 'node:path';
 import {
   loadConfig,
+  injectRoot,
   registerDefaults,
   clearProviders,
   createProviders,
@@ -51,7 +52,8 @@ async function main(): Promise<void> {
   clearProviders();
   registerDefaults();
 
-  const config = await loadConfig(root);
+  const rawConfig = await loadConfig(root);
+  const config = injectRoot(rawConfig, root);
   const providers = await createProviders(config);
   const cache = await boot(providers);
 

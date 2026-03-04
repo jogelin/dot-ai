@@ -47,15 +47,6 @@ async function main(): Promise<void> {
     const prompt = (event.prompt ?? event.content ?? '') as string;
 
     if (!prompt) {
-      // No prompt to enrich (e.g., SessionStart) — just inject identities
-      const identityContext = cache.identities
-        .sort((a, b) => b.priority - a.priority)
-        .map(i => i.content)
-        .join('\n\n---\n\n');
-
-      if (identityContext) {
-        process.stdout.write(JSON.stringify({ result: identityContext }));
-      }
       await logger.flush();
       return;
     }

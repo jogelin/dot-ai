@@ -77,15 +77,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
 
     if (!cleanQuery) return [];
 
-    const rows = this.db.prepare(`
-      SELECT m.content, m.type, m.date, m.labels, m.node,
-             bm25(memories_fts) AS rank
-      FROM memories_fts
-      JOIN memories m ON m.id = memories_fts.rowid
-      WHERE memories_fts MATCH ?
-      ORDER BY rank
-      LIMIT 20
-    `).all(cleanQuery) as Array<{
+    let rows: Array<{
       content: string;
       type: string;
       date: string | null;
@@ -93,6 +85,20 @@ export class SqliteMemoryProvider implements MemoryProvider {
       node: string | null;
       rank: number;
     }>;
+
+    try {
+      rows = this.db.prepare(`
+        SELECT m.content, m.type, m.date, m.labels, m.node,
+               bm25(memories_fts) AS rank
+        FROM memories_fts
+        JOIN memories m ON m.id = memories_fts.rowid
+        WHERE memories_fts MATCH ?
+        ORDER BY rank
+        LIMIT 20
+      `).all(cleanQuery) as typeof rows;
+    } catch {
+      return [];
+    }
 
     return rows.map(row => ({
       content: row.content,
