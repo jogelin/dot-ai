@@ -19,4 +19,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: nrwl/nx-set-shas@v4
-      - run: pnpm nx affected -t build test
+      - run: pnpm nx affected -t build
+      - run: pnpm nx affected -t test

@@ -24,8 +24,10 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
-      - name: Build and test
-        run: pnpm nx run-many -t build test
+      - name: Build
+        run: pnpm nx run-many -t build
+      - name: Test
+        run: pnpm nx run-many -t test
       - name: Version and changelog
         run: pnpm nx release --first-release ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
