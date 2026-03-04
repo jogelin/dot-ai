@@ -243,7 +243,7 @@ const plugin = {
           // Format and inject
           const formatted = formatContext(enriched);
           if (formatted) {
-            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.skills.length} skills (${enriched.memoryDescription ?? 'unknown provider'})`);
+            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.recentTasks?.length ?? 0} tasks, ${enriched.skills.length} skills (${enriched.memoryDescription ?? 'unknown provider'})`);
             return { prependContext: formatted };
           }
         } catch (err) {

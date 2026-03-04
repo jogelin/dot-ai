@@ -111,3 +111,65 @@ describe('formatContext — memoryDescription', () => {
     expect(descLine!.trim()).toMatch(/^>/);
   });
 });
+
+describe('formatContext — recentTasks', () => {
+  it('renders tasks section when recentTasks is provided', () => {
+    const ctx = makeContext({
+      recentTasks: [
+        { id: '1', text: 'Fix login bug', status: 'in_progress', project: 'cockpit' },
+        { id: '2', text: 'Add dark mode', status: 'in_progress', priority: 'high' },
+      ],
+    });
+
+    const result = formatContext(ctx);
+
+    expect(result).toContain('## Current Tasks (In Progress)');
+    expect(result).toContain('Fix login bug [cockpit]');
+    expect(result).toContain('Add dark mode (high)');
+  });
+
+  it('does not render tasks section when recentTasks is undefined', () => {
+    const ctx = makeContext({});
+    const result = formatContext(ctx);
+    expect(result).not.toContain('Current Tasks');
+  });
+
+  it('does not render tasks section when recentTasks is empty', () => {
+    const ctx = makeContext({ recentTasks: [] });
+    const result = formatContext(ctx);
+    expect(result).not.toContain('Current Tasks');
+  });
+
+  it('limits tasks to 10 entries', () => {
+    const tasks = Array.from({ length: 15 }, (_, i) => ({
+      id: String(i),
+      text: `Task ${i}`,
+      status: 'in_progress',
+    }));
+
+    const ctx = makeContext({ recentTasks: tasks });
+    const result = formatContext(ctx);
+
+    expect(result).toContain('Task 0');
+    expect(result).toContain('Task 9');
+    expect(result).not.toContain('Task 10');
+  });
+
+  it('renders tasks between memory and skills sections', () => {
+    const ctx = makeContext({
+      memoryDescription: 'SQLite memory',
+      memories: [{ content: 'test memory', type: 'log', source: 'sqlite' }],
+      recentTasks: [{ id: '1', text: 'A task', status: 'in_progress' }],
+      skills: [{ name: 'test-skill', description: 'A skill', labels: [], content: '# Skill' }],
+    });
+
+    const result = formatContext(ctx);
+
+    const memoryIdx = result.indexOf('## Relevant Memory');
+    const tasksIdx = result.indexOf('## Current Tasks');
+    const skillsIdx = result.indexOf('## Active Skills');
+
+    expect(memoryIdx).toBeLessThan(tasksIdx);
+    expect(tasksIdx).toBeLessThan(skillsIdx);
+  });
+});

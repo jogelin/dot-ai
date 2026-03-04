@@ -1,4 +1,4 @@
-import type { EnrichedContext, MemoryEntry, Skill, Tool, RoutingResult } from './types.js';
+import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult } from './types.js';
 import type { Logger } from './logger.js';
 
 export interface FormatOptions {
@@ -33,6 +33,11 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   // Memory section
   if (ctx.memories.length > 0 || ctx.memoryDescription) {
     sections.push(formatMemory(ctx.memories, ctx.memoryDescription));
+  }
+
+  // Recent tasks section
+  if (ctx.recentTasks && ctx.recentTasks.length > 0) {
+    sections.push(formatTasks(ctx.recentTasks));
   }
 
   // Skills section
@@ -83,6 +88,16 @@ function formatMemory(memories: MemoryEntry[], description?: string): string {
   for (const m of memories.slice(0, 10)) { // Limit to 10 most relevant
     const date = m.date ? ` (${m.date})` : '';
     lines.push(`- ${m.content}${date}`);
+  }
+  return lines.join('\n');
+}
+
+function formatTasks(tasks: Task[]): string {
+  const lines = ['## Current Tasks (In Progress)\n'];
+  for (const t of tasks.slice(0, 10)) {
+    const project = t.project ? ` [${t.project}]` : '';
+    const priority = t.priority ? ` (${t.priority})` : '';
+    lines.push(`- ${t.text}${project}${priority}`);
   }
   return lines.join('\n');
 }

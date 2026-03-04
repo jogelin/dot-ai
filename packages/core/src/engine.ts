@@ -91,12 +91,13 @@ export async function enrich(
     durationMs: Math.round(performance.now() - start),
   });
 
-  // 2. Search memory + match skills + match tools + route — all in parallel
-  const [memories, matchedSkills, matchedTools, routing] = await Promise.all([
+  // 2. Search memory + match skills + match tools + route + recent tasks — all in parallel
+  const [memories, matchedSkills, matchedTools, routing, recentTasks] = await Promise.all([
     providers.memory.search(prompt, labels.map((l) => l.name)),
     providers.skills.match(labels),
     providers.tools.match(labels),
     providers.routing.route(labels),
+    providers.tasks.list({ status: 'in_progress' }).catch(() => []),
   ]);
 
   logger?.log({
@@ -108,6 +109,7 @@ export async function enrich(
       labelCount: labels.length,
       memoryCount: memories.length,
       skillCount: matchedSkills.length,
+      taskCount: recentTasks.length,
       routing: routing.model,
     },
     durationMs: Math.round(performance.now() - start),
@@ -121,6 +123,7 @@ export async function enrich(
     identities: cache.identities,
     memories,
     memoryDescription,
+    recentTasks: recentTasks.length > 0 ? recentTasks : undefined,
     skills: matchedSkills,
     tools: matchedTools,
     routing,
