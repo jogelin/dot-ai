@@ -11,10 +11,10 @@ describe('clearProviders', () => {
       search: vi.fn().mockResolvedValue([{ content: 'custom', type: 'fact', source: 'test' }]),
       store: vi.fn().mockResolvedValue(undefined),
     });
-    registerProvider('@dot-ai/file-memory', factory);
+    registerProvider('@dot-ai/provider-file-memory', factory);
     clearProviders();
 
-    const providers = await createProviders({ memory: { use: '@dot-ai/file-memory' } });
+    const providers = await createProviders({ memory: { use: '@dot-ai/provider-file-memory' } });
     // After clear, factory should not be called — noop provider is used
     expect(factory).not.toHaveBeenCalled();
     const memories = await providers.memory.search('query');
@@ -98,7 +98,7 @@ describe('auto-discovery via dynamic import', () => {
 
 describe('createProviders — noop fallbacks', () => {
   // Use non-existent provider names to ensure noop fallbacks are returned
-  // (auto-discovery would find real packages for default names like @dot-ai/file-memory)
+  // (auto-discovery would find real packages for default names like @dot-ai/provider-file-memory)
   const noopConfig = {
     memory: { use: '@dot-ai/nonexistent-memory' },
     skills: { use: '@dot-ai/nonexistent-skills' },

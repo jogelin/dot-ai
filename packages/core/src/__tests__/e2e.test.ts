@@ -88,21 +88,21 @@ describe('E2E: full pipeline', () => {
     await writeFile(join(ai, 'dot-ai.yml'), [
       '# dot-ai config',
       'memory:',
-      '  use: @dot-ai/file-memory',
+      '  use: @dot-ai/provider-file-memory',
       `    root: ${root}`,
       'skills:',
-      '  use: @dot-ai/file-skills',
+      '  use: @dot-ai/provider-file-skills',
       `    root: ${root}`,
       'identity:',
-      '  use: @dot-ai/file-identity',
+      '  use: @dot-ai/provider-file-identity',
       `    root: ${root}`,
       'routing:',
-      '  use: @dot-ai/rules-routing',
+      '  use: @dot-ai/provider-rules-routing',
       'tasks:',
-      '  use: @dot-ai/file-tasks',
+      '  use: @dot-ai/provider-file-tasks',
       `    root: ${root}`,
       'tools:',
-      '  use: @dot-ai/file-tools',
+      '  use: @dot-ai/provider-file-tools',
       `    root: ${root}`,
     ].join('\n'));
   });
@@ -193,12 +193,12 @@ describe('E2E: full pipeline', () => {
     const config = await loadConfig(emptyRoot);
     // Inject root so providers read from the empty dir (not process.cwd())
     const resolvedConfig = {
-      memory: { use: '@dot-ai/file-memory', with: { root: emptyRoot } },
-      skills: { use: '@dot-ai/file-skills', with: { root: emptyRoot } },
-      identity: { use: '@dot-ai/file-identity', with: { root: emptyRoot } },
-      routing: { use: '@dot-ai/rules-routing' },
-      tasks: { use: '@dot-ai/file-tasks', with: { root: emptyRoot } },
-      tools: { use: '@dot-ai/file-tools', with: { root: emptyRoot } },
+      memory: { use: '@dot-ai/provider-file-memory', with: { root: emptyRoot } },
+      skills: { use: '@dot-ai/provider-file-skills', with: { root: emptyRoot } },
+      identity: { use: '@dot-ai/provider-file-identity', with: { root: emptyRoot } },
+      routing: { use: '@dot-ai/provider-rules-routing' },
+      tasks: { use: '@dot-ai/provider-file-tasks', with: { root: emptyRoot } },
+      tools: { use: '@dot-ai/provider-file-tools', with: { root: emptyRoot } },
       ...config,
     };
     const providers = await createProviders(resolvedConfig);
@@ -247,11 +247,11 @@ describe('E2E: full pipeline', () => {
 
   it('resolveConfig fills defaults for missing providers', () => {
     const resolved = resolveConfig({});
-    expect(resolved.memory.use).toBe('@dot-ai/file-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/file-skills');
-    expect(resolved.identity.use).toBe('@dot-ai/file-identity');
-    expect(resolved.routing.use).toBe('@dot-ai/rules-routing');
-    expect(resolved.tasks.use).toBe('@dot-ai/file-tasks');
-    expect(resolved.tools.use).toBe('@dot-ai/file-tools');
+    expect(resolved.memory.use).toBe('@dot-ai/provider-file-memory');
+    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
+    expect(resolved.identity.use).toBe('@dot-ai/provider-file-identity');
+    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
+    expect(resolved.tasks.use).toBe('@dot-ai/provider-file-tasks');
+    expect(resolved.tools.use).toBe('@dot-ai/provider-file-tools');
   });
 });

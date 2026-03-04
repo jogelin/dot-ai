@@ -25,11 +25,11 @@ describe('loadConfig', () => {
   it('parses a simple memory section', async () => {
     await writeFile(
       join(testDir, '.ai', 'dot-ai.yml'),
-      `memory:\n  use: @dot-ai/file-memory\n`,
+      `memory:\n  use: @dot-ai/provider-file-memory\n`,
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory).toEqual({ use: '@dot-ai/file-memory' });
+    expect(config.memory).toEqual({ use: '@dot-ai/provider-file-memory' });
   });
 
   it('parses multiple provider sections', async () => {
@@ -37,18 +37,18 @@ describe('loadConfig', () => {
       join(testDir, '.ai', 'dot-ai.yml'),
       [
         'memory:',
-        '  use: @dot-ai/file-memory',
+        '  use: @dot-ai/provider-file-memory',
         'skills:',
-        '  use: @dot-ai/file-skills',
+        '  use: @dot-ai/provider-file-skills',
         'routing:',
-        '  use: @dot-ai/rules-routing',
+        '  use: @dot-ai/provider-rules-routing',
       ].join('\n'),
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory?.use).toBe('@dot-ai/file-memory');
-    expect(config.skills?.use).toBe('@dot-ai/file-skills');
-    expect(config.routing?.use).toBe('@dot-ai/rules-routing');
+    expect(config.memory?.use).toBe('@dot-ai/provider-file-memory');
+    expect(config.skills?.use).toBe('@dot-ai/provider-file-skills');
+    expect(config.routing?.use).toBe('@dot-ai/provider-rules-routing');
   });
 
   it('parses nested with block', async () => {
@@ -88,7 +88,7 @@ describe('loadConfig', () => {
       join(testDir, '.ai', 'dot-ai.yml'),
       [
         'memory:',
-        '  use: @dot-ai/file-memory',
+        '  use: @dot-ai/provider-file-memory',
         '    key: ${MISSING_ENV_VAR}',
       ].join('\n'),
       'utf-8',
@@ -104,24 +104,24 @@ describe('loadConfig', () => {
         '# This is a comment',
         'memory:',
         '  # nested comment',
-        '  use: @dot-ai/file-memory',
+        '  use: @dot-ai/provider-file-memory',
       ].join('\n'),
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory?.use).toBe('@dot-ai/file-memory');
+    expect(config.memory?.use).toBe('@dot-ai/provider-file-memory');
   });
 });
 
 describe('resolveConfig', () => {
   it('fills all defaults for empty config', () => {
     const resolved = resolveConfig({});
-    expect(resolved.memory.use).toBe('@dot-ai/file-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/file-skills');
-    expect(resolved.identity.use).toBe('@dot-ai/file-identity');
-    expect(resolved.routing.use).toBe('@dot-ai/rules-routing');
-    expect(resolved.tasks.use).toBe('@dot-ai/file-tasks');
-    expect(resolved.tools.use).toBe('@dot-ai/file-tools');
+    expect(resolved.memory.use).toBe('@dot-ai/provider-file-memory');
+    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
+    expect(resolved.identity.use).toBe('@dot-ai/provider-file-identity');
+    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
+    expect(resolved.tasks.use).toBe('@dot-ai/provider-file-tasks');
+    expect(resolved.tools.use).toBe('@dot-ai/provider-file-tools');
   });
 
   it('preserves existing memory config', () => {
@@ -133,8 +133,8 @@ describe('resolveConfig', () => {
   it('fills defaults only for missing providers', () => {
     const resolved = resolveConfig({ memory: { use: '@dot-ai/cockpit-memory' } });
     expect(resolved.memory.use).toBe('@dot-ai/cockpit-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/file-skills');
-    expect(resolved.routing.use).toBe('@dot-ai/rules-routing');
+    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
+    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
   });
 
   it('returns a Required<DotAiConfig> with all keys present', () => {

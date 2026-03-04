@@ -1,5 +1,5 @@
 {
-  "name": "@dot-ai/sqlite-memory",
+  "name": "@dot-ai/provider-sqlite-memory",
   "version": "0.4.0",
   "type": "module",
   "main": "dist/index.js",
@@ -20,5 +20,9 @@
   },
   "peerDependencies": {
     "@dot-ai/core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

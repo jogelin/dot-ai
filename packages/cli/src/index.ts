@@ -58,13 +58,13 @@ async function cmdInit(): Promise<void> {
     '# Default: file-based providers reading from .ai/ directory.',
     '#',
     '# memory:',
-    '#   use: "@dot-ai/file-memory"',
+    '#   use: "@dot-ai/provider-file-memory"',
     '#',
     '# skills:',
-    '#   use: "@dot-ai/file-skills"',
+    '#   use: "@dot-ai/provider-file-skills"',
     '#',
     '# routing:',
-    '#   use: "@dot-ai/rules-routing"',
+    '#   use: "@dot-ai/provider-rules-routing"',
     '',
   ].join('\n'));
 

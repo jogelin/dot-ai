@@ -118,6 +118,6 @@ export interface DotAiConfig {
 }
 
 export interface ProviderConfig {
-  use: string;   // "@dot-ai/file-memory", "@dot-ai/cockpit-memory", etc.
+  use: string;   // "@dot-ai/provider-file-memory", "@dot-ai/cockpit-memory", etc.
   with?: Record<string, unknown>; // provider-specific options
 }

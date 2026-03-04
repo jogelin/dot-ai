@@ -1,5 +1,5 @@
 {
-  "name": "@dot-ai/rules-routing",
+  "name": "@dot-ai/provider-rules-routing",
   "version": "0.4.0",
   "type": "module",
   "main": "dist/index.js",
@@ -15,5 +15,9 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

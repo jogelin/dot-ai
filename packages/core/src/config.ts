@@ -70,12 +70,12 @@ export interface ResolvedConfig {
 
 export function resolveConfig(config: DotAiConfig): ResolvedConfig {
   return {
-    memory: config.memory ?? { use: '@dot-ai/file-memory' },
-    skills: config.skills ?? { use: '@dot-ai/file-skills' },
-    identity: config.identity ?? { use: '@dot-ai/file-identity' },
-    routing: config.routing ?? { use: '@dot-ai/rules-routing' },
-    tasks: config.tasks ?? { use: '@dot-ai/file-tasks' },
-    tools: config.tools ?? { use: '@dot-ai/file-tools' },
+    memory: config.memory ?? { use: '@dot-ai/provider-file-memory' },
+    skills: config.skills ?? { use: '@dot-ai/provider-file-skills' },
+    identity: config.identity ?? { use: '@dot-ai/provider-file-identity' },
+    routing: config.routing ?? { use: '@dot-ai/provider-rules-routing' },
+    tasks: config.tasks ?? { use: '@dot-ai/provider-file-tasks' },
+    tools: config.tools ?? { use: '@dot-ai/provider-file-tools' },
     debug: config.debug,
   };
 }

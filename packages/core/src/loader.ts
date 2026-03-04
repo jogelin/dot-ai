@@ -42,7 +42,7 @@ export function clearProviders(): void {
  * Call this at startup if you want file-based defaults available.
  */
 export function registerDefaults(): void {
-  // Default providers are now separate packages (@dot-ai/file-memory, etc.)
+  // Default providers are now separate packages (@dot-ai/provider-file-memory, etc.)
   // They are resolved via auto-discovery in resolve() → tryImportProvider()
   // No explicit registration needed — the package names match the config defaults.
 }

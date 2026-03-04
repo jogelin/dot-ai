@@ -1,5 +1,5 @@
 /**
- * @dot-ai/claude v4 — Claude Code adapter
+ * @dot-ai/adapter-claude v4 — Claude Code adapter
  *
  * Integrates dot-ai pipeline with Claude Code via hooks.
  * The hook.ts script runs as a command hook on UserPromptSubmit.

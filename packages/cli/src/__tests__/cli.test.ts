@@ -33,13 +33,13 @@ async function runInit(root: string): Promise<string> {
     '# Default: file-based providers reading from .ai/ directory.',
     '#',
     '# memory:',
-    '#   use: "@dot-ai/file-memory"',
+    '#   use: "@dot-ai/provider-file-memory"',
     '#',
     '# skills:',
-    '#   use: "@dot-ai/file-skills"',
+    '#   use: "@dot-ai/provider-file-skills"',
     '#',
     '# routing:',
-    '#   use: "@dot-ai/rules-routing"',
+    '#   use: "@dot-ai/provider-rules-routing"',
     '',
   ].join('\n'));
 
@@ -112,21 +112,21 @@ async function setupAiDir(root: string): Promise<void> {
   await writeFile(join(ai, 'dot-ai.yml'), [
     '# dot-ai config',
     'memory:',
-    '  use: @dot-ai/file-memory',
+    '  use: @dot-ai/provider-file-memory',
     `    root: ${root}`,
     'skills:',
-    '  use: @dot-ai/file-skills',
+    '  use: @dot-ai/provider-file-skills',
     `    root: ${root}`,
     'identity:',
-    '  use: @dot-ai/file-identity',
+    '  use: @dot-ai/provider-file-identity',
     `    root: ${root}`,
     'routing:',
-    '  use: @dot-ai/rules-routing',
+    '  use: @dot-ai/provider-rules-routing',
     'tasks:',
-    '  use: @dot-ai/file-tasks',
+    '  use: @dot-ai/provider-file-tasks',
     `    root: ${root}`,
     'tools:',
-    '  use: @dot-ai/file-tools',
+    '  use: @dot-ai/provider-file-tools',
     `    root: ${root}`,
   ].join('\n'));
 }
@@ -155,9 +155,9 @@ describe('init command', () => {
   it('dot-ai.yml contains commented provider examples', async () => {
     await runInit(root);
     const content = await readFile(join(root, '.ai', 'dot-ai.yml'), 'utf8');
-    expect(content).toContain('@dot-ai/file-memory');
-    expect(content).toContain('@dot-ai/file-skills');
-    expect(content).toContain('@dot-ai/rules-routing');
+    expect(content).toContain('@dot-ai/provider-file-memory');
+    expect(content).toContain('@dot-ai/provider-file-skills');
+    expect(content).toContain('@dot-ai/provider-rules-routing');
   });
 
   it('AGENTS.md is a template with ## Rules section', async () => {

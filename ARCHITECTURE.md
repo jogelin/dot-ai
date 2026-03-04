@@ -169,12 +169,12 @@ When `registerDefaults()` is called, these are registered:
 
 | Name | Class | What It Does |
 |------|-------|--------------|
-| `@dot-ai/file-memory` | FileMemoryProvider | Searches `.ai/memory/*.md` files for memories |
-| `@dot-ai/file-skills` | FileSkillProvider | Lists skills from `.ai/skills/*/SKILL.md` |
-| `@dot-ai/file-identity` | FileIdentityProvider | Loads identity files from `.ai/` root (AGENTS.md, etc.) |
-| `@dot-ai/rules-routing` | RulesRoutingProvider | Routes based on built-in rules or custom rules config |
-| `@dot-ai/file-tasks` | FileTaskProvider | Reads tasks from `.ai/memory/tasks/*.md` files |
-| `@dot-ai/file-tools` | FileToolProvider | Reads tools from `.ai/TOOLS.md` |
+| `@dot-ai/provider-file-memory` | FileMemoryProvider | Searches `.ai/memory/*.md` files for memories |
+| `@dot-ai/provider-file-skills` | FileSkillProvider | Lists skills from `.ai/skills/*/SKILL.md` |
+| `@dot-ai/provider-file-identity` | FileIdentityProvider | Loads identity files from `.ai/` root (AGENTS.md, etc.) |
+| `@dot-ai/provider-rules-routing` | RulesRoutingProvider | Routes based on built-in rules or custom rules config |
+| `@dot-ai/provider-file-tasks` | FileTaskProvider | Reads tasks from `.ai/memory/tasks/*.md` files |
+| `@dot-ai/provider-file-tools` | FileToolProvider | Reads tools from `.ai/TOOLS.md` |
 
 All defaults implement file-based I/O. Overrides are easy: just register a different provider with the same name.
 
@@ -184,7 +184,7 @@ Other packages provide different backends:
 
 | Package | Provider | Backed By |
 |---------|----------|-----------|
-| `@dot-ai/sqlite-memory` | SqliteMemoryProvider | SQLite with FTS5 (full-text search) |
+| `@dot-ai/provider-sqlite-memory` | SqliteMemoryProvider | SQLite with FTS5 (full-text search) |
 | `@dot-ai/cockpit-tasks` | CockpitTaskProvider | Cockpit REST API at `http://localhost:3010` |
 
 **Example:** Kiwi workspace uses Cockpit for tasks:
@@ -273,18 +273,18 @@ Located at `.ai/dot-ai.yml`, this YAML file declares which provider to use for e
 
 ```yaml
 memory:
-  use: '@dot-ai/file-memory'
+  use: '@dot-ai/provider-file-memory'
   with:
     root: '/path/to/workspace'
 
 skills:
-  use: '@dot-ai/file-skills'
+  use: '@dot-ai/provider-file-skills'
 
 identity:
-  use: '@dot-ai/file-identity'
+  use: '@dot-ai/provider-file-identity'
 
 routing:
-  use: '@dot-ai/rules-routing'
+  use: '@dot-ai/provider-rules-routing'
   with:
     defaultModel: 'sonnet'
     rules:
@@ -302,7 +302,7 @@ tasks:
     apiKey: '${COCKPIT_API_KEY}'
 
 tools:
-  use: '@dot-ai/file-tools'
+  use: '@dot-ai/provider-file-tools'
 ```
 
 **Key features:**
@@ -559,12 +559,12 @@ const resolved = resolveConfig(config);          // Fills in all defaults
 
 // Example:
 {
-  memory: { use: '@dot-ai/file-memory' }          // From file
-  skills: { use: '@dot-ai/file-skills' }          // From file
-  identity: { use: '@dot-ai/file-identity' }      // Default
-  routing: { use: '@dot-ai/rules-routing' }       // Default
+  memory: { use: '@dot-ai/provider-file-memory' }          // From file
+  skills: { use: '@dot-ai/provider-file-skills' }          // From file
+  identity: { use: '@dot-ai/provider-file-identity' }      // Default
+  routing: { use: '@dot-ai/provider-rules-routing' }       // Default
   tasks: { use: '@dot-ai/cockpit-tasks', ... }    // From file
-  tools: { use: '@dot-ai/file-tools' }            // Default
+  tools: { use: '@dot-ai/provider-file-tools' }            // Default
 }
 ```
 
