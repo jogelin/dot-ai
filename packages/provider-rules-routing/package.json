@@ -1,6 +1,11 @@
 {
   "name": "@dot-ai/provider-rules-routing",
   "version": "0.5.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jogelin/dot-ai",
+    "directory": "packages/provider-rules-routing"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

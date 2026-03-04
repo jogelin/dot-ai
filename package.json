@@ -8,7 +8,7 @@
   "author": "Jonathan Gelin <smartsdlc.dev@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/smartsdlc/dot-ai-plugin"
+    "url": "https://github.com/jogelin/dot-ai"
   },
   "scripts": {
     "build": "pnpm -r build",
