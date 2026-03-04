@@ -1,7 +1,7 @@
 import { readdir, readFile, appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { MemoryProvider } from '../contracts.js';
-import type { MemoryEntry } from '../types.js';
+import type { MemoryProvider } from '@dot-ai/core';
+import type { MemoryEntry } from '@dot-ai/core';
 
 export class FileMemoryProvider implements MemoryProvider {
   private memoryDir: string;

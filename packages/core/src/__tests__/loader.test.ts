@@ -97,41 +97,52 @@ describe('auto-discovery via dynamic import', () => {
 });
 
 describe('createProviders — noop fallbacks', () => {
+  // Use non-existent provider names to ensure noop fallbacks are returned
+  // (auto-discovery would find real packages for default names like @dot-ai/file-memory)
+  const noopConfig = {
+    memory: { use: '@dot-ai/nonexistent-memory' },
+    skills: { use: '@dot-ai/nonexistent-skills' },
+    identity: { use: '@dot-ai/nonexistent-identity' },
+    routing: { use: '@dot-ai/nonexistent-routing' },
+    tasks: { use: '@dot-ai/nonexistent-tasks' },
+    tools: { use: '@dot-ai/nonexistent-tools' },
+  };
+
   it('returns noop memory provider when nothing registered', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     const memories = await providers.memory.search('any query');
     expect(memories).toEqual([]);
   });
 
   it('noop memory.store resolves without error', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     await expect(
       providers.memory.store({ content: 'x', type: 'log' }),
     ).resolves.toBeUndefined();
   });
 
   it('noop skills.list returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.skills.list()).toEqual([]);
   });
 
   it('noop skills.match returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.skills.match([])).toEqual([]);
   });
 
   it('noop skills.load returns null', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.skills.load('any-skill')).toBeNull();
   });
 
   it('noop identity.load returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.identity.load()).toEqual([]);
   });
 
   it('noop routing.route returns a RoutingResult', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     const result = await providers.routing.route([]);
     expect(result).toHaveProperty('model');
     expect(result).toHaveProperty('reason');
@@ -139,17 +150,17 @@ describe('createProviders — noop fallbacks', () => {
   });
 
   it('noop tasks.list returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.tasks.list()).toEqual([]);
   });
 
   it('noop tasks.get returns null', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.tasks.get('123')).toBeNull();
   });
 
   it('noop tasks.create returns a task with generated id', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     const task = await providers.tasks.create({ text: 'Do something', status: 'pending' });
     expect(task).toHaveProperty('id');
     expect(task.text).toBe('Do something');
@@ -157,24 +168,24 @@ describe('createProviders — noop fallbacks', () => {
   });
 
   it('noop tasks.update returns a task with the patched fields', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     const task = await providers.tasks.update('abc', { status: 'done' });
     expect(task.id).toBe('abc');
     expect(task.status).toBe('done');
   });
 
   it('noop tools.list returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.tools.list()).toEqual([]);
   });
 
   it('noop tools.match returns empty array', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.tools.match([])).toEqual([]);
   });
 
   it('noop tools.load returns null', async () => {
-    const providers = await createProviders({});
+    const providers = await createProviders(noopConfig);
     expect(await providers.tools.load('any-tool')).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FileSkillProvider } from '../../providers/file-skills.js';
+import { FileSkillProvider } from '../index.js';
 
 let testDir: string;
 

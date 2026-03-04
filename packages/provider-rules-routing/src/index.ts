@@ -1,5 +1,4 @@
-import type { RoutingProvider } from '../contracts.js';
-import type { Label, RoutingResult } from '../types.js';
+import type { RoutingProvider, Label, RoutingResult } from '@dot-ai/core';
 
 interface RoutingRule {
   labels: string[];

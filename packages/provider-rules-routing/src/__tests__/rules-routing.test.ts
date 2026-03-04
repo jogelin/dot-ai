@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { RulesRoutingProvider } from '../../providers/rules-routing.js';
-import type { Label } from '../../types.js';
+import { RulesRoutingProvider } from '../index.js';
+import type { Label } from '@dot-ai/core';
 
 function makeLabels(...names: string[]): Label[] {
   return names.map(name => ({ name, source: 'test' }));

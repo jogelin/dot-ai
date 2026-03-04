@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { IdentityProvider } from '../contracts.js';
-import type { Identity } from '../types.js';
+import type { IdentityProvider } from '@dot-ai/core';
+import type { Identity } from '@dot-ai/core';
 
 const IDENTITY_FILES: Array<{ type: string; file: string; priority: number }> = [
   { type: 'agents', file: 'AGENTS.md', priority: 100 },

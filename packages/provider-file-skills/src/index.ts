@@ -1,8 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SkillProvider } from '../contracts.js';
-import type { Skill, Label } from '../types.js';
+import type { SkillProvider, Skill, Label } from '@dot-ai/core';
 
 export class FileSkillProvider implements SkillProvider {
   private skillsDirs: string[];

@@ -2,6 +2,12 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/provider-file-memory" },
+    { "path": "packages/provider-file-skills" },
+    { "path": "packages/provider-file-identity" },
+    { "path": "packages/provider-file-tasks" },
+    { "path": "packages/provider-file-tools" },
+    { "path": "packages/provider-rules-routing" },
     { "path": "packages/adapter-openclaw" },
     { "path": "packages/adapter-claude" },
     { "path": "packages/cli" },

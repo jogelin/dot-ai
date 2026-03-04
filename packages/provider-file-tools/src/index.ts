@@ -1,7 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ToolProvider } from '../contracts.js';
-import type { Tool, Label } from '../types.js';
+import type { ToolProvider, Tool, Label } from '@dot-ai/core';
 
 export class FileToolProvider implements ToolProvider {
   private toolsDir: string;

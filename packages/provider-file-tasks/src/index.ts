@@ -1,8 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { TaskProvider } from '../contracts.js';
-import type { Task, TaskFilter } from '../types.js';
+import type { TaskProvider, Task, TaskFilter } from '@dot-ai/core';
 
 // Simple file-level mutex to prevent concurrent read-modify-write races
 let writeLock: Promise<void> = Promise.resolve();
