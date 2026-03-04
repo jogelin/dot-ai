@@ -56,6 +56,11 @@ export class FileMemoryProvider implements MemoryProvider {
     return results;
   }
 
+  describe(): string {
+    const dirs = this.nodes.map(n => `${n.name}:memory/`).join(', ');
+    return `File-based memory (markdown files). Directories: ${dirs}. Write memories to daily files (YYYY-MM-DD.md) or long-term MEMORY.md.`;
+  }
+
   async store(entry: Omit<MemoryEntry, 'source'>): Promise<void> {
     // Route write to the specified node, or root by default
     const targetNode = (entry.node

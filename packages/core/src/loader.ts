@@ -120,6 +120,7 @@ async function tryImportProvider(
 const noopMemory: MemoryProvider = {
   async search(_query: string, _labels?: string[]) { return []; },
   async store(_entry) {},
+  describe() { return 'No memory provider configured.'; },
 };
 
 const noopSkills: SkillProvider = {

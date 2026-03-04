@@ -113,11 +113,14 @@ export async function enrich(
     durationMs: Math.round(performance.now() - start),
   });
 
+  const memoryDescription = providers.memory.describe();
+
   return {
     prompt,
     labels,
     identities: cache.identities,
     memories,
+    memoryDescription,
     skills: matchedSkills,
     tools: matchedTools,
     routing,

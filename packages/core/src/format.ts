@@ -31,8 +31,8 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   }
 
   // Memory section
-  if (ctx.memories.length > 0) {
-    sections.push(formatMemory(ctx.memories));
+  if (ctx.memories.length > 0 || ctx.memoryDescription) {
+    sections.push(formatMemory(ctx.memories, ctx.memoryDescription));
   }
 
   // Skills section
@@ -75,8 +75,11 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   return result;
 }
 
-function formatMemory(memories: MemoryEntry[]): string {
+function formatMemory(memories: MemoryEntry[], description?: string): string {
   const lines = ['## Relevant Memory\n'];
+  if (description) {
+    lines.push(`> ${description}\n`);
+  }
   for (const m of memories.slice(0, 10)) { // Limit to 10 most relevant
     const date = m.date ? ` (${m.date})` : '';
     lines.push(`- ${m.content}${date}`);

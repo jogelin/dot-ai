@@ -7,6 +7,7 @@ function createMockProviders(overrides?: Partial<Providers>): Providers {
     memory: {
       search: vi.fn().mockResolvedValue([]),
       store: vi.fn().mockResolvedValue(undefined),
+      describe: vi.fn().mockReturnValue('Mock memory provider'),
     },
     skills: {
       list: vi.fn().mockResolvedValue([]),
@@ -212,6 +213,7 @@ describe('enrich', () => {
       memory: {
         search: vi.fn().mockResolvedValue(mockMemories),
         store: vi.fn().mockResolvedValue(undefined),
+        describe: vi.fn().mockReturnValue('Mock memory provider'),
       },
     });
     const result = await enrich('fix the memory issue', providers, baseCache);
@@ -248,6 +250,7 @@ describe('enrich', () => {
       memory: {
         search: vi.fn().mockImplementation(async () => { callOrder.push('memory'); return []; }),
         store: vi.fn().mockResolvedValue(undefined),
+        describe: vi.fn().mockReturnValue('Mock memory provider'),
       },
       skills: {
         list: vi.fn().mockResolvedValue([]),

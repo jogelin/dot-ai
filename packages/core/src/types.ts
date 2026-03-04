@@ -81,6 +81,7 @@ export interface EnrichedContext {
   labels: Label[];
   identities: Identity[];
   memories: MemoryEntry[];
+  memoryDescription?: string;
   skills: Skill[];
   tools: Tool[];
   routing: RoutingResult;
