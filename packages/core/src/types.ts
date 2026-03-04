@@ -85,6 +85,10 @@ export interface TaskFilter {
 /**
  * Configuration from dot-ai.yml
  */
+export interface DebugConfig {
+  logPath?: string;
+}
+
 export interface DotAiConfig {
   memory?: ProviderConfig;
   skills?: ProviderConfig;
@@ -92,6 +96,7 @@ export interface DotAiConfig {
   routing?: ProviderConfig;
   tasks?: ProviderConfig;
   tools?: ProviderConfig;
+  debug?: DebugConfig;
 }
 
 export interface ProviderConfig {

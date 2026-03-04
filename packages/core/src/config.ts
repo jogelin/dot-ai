@@ -8,13 +8,19 @@ import type { DotAiConfig, ProviderConfig } from './types.js';
  */
 export function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
   const result: DotAiConfig = {};
-  for (const [key, section] of Object.entries(config)) {
+  const providerKeys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
+  for (const key of providerKeys) {
+    const section = config[key];
     if (section && typeof section === 'object') {
-      result[key as keyof DotAiConfig] = {
+      result[key] = {
         ...section,
         with: { root, ...(section.with ?? {}) },
       };
     }
+  }
+  // Preserve non-provider sections
+  if (config.debug) {
+    result.debug = config.debug;
   }
   return result;
 }
@@ -44,7 +50,17 @@ export async function loadConfig(workspaceRoot: string): Promise<DotAiConfig> {
  * Resolve a config with defaults.
  * Any missing provider gets the built-in file-based default.
  */
-export function resolveConfig(config: DotAiConfig): Required<DotAiConfig> {
+export interface ResolvedConfig {
+  memory: ProviderConfig;
+  skills: ProviderConfig;
+  identity: ProviderConfig;
+  routing: ProviderConfig;
+  tasks: ProviderConfig;
+  tools: ProviderConfig;
+  debug?: import('./types.js').DebugConfig;
+}
+
+export function resolveConfig(config: DotAiConfig): ResolvedConfig {
   return {
     memory: config.memory ?? { use: '@dot-ai/file-memory' },
     skills: config.skills ?? { use: '@dot-ai/file-skills' },
@@ -52,6 +68,7 @@ export function resolveConfig(config: DotAiConfig): Required<DotAiConfig> {
     routing: config.routing ?? { use: '@dot-ai/rules-routing' },
     tasks: config.tasks ?? { use: '@dot-ai/file-tasks' },
     tools: config.tools ?? { use: '@dot-ai/file-tools' },
+    debug: config.debug,
   };
 }
 
@@ -126,6 +143,16 @@ function parseYaml(raw: string): DotAiConfig {
         providerConfig.with = node['with'] as Record<string, unknown>;
       }
       config[key] = providerConfig;
+    }
+  }
+
+  // Parse debug section
+  const debugSection = result['debug'];
+  if (debugSection && typeof debugSection === 'object') {
+    const node = debugSection as YamlNode;
+    config.debug = {};
+    if (typeof node['logPath'] === 'string') {
+      config.debug.logPath = node['logPath'];
     }
   }
 

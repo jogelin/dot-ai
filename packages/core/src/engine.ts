@@ -7,6 +7,7 @@ import type {
   ToolProvider,
 } from './contracts.js';
 import type { EnrichedContext, Identity, Skill } from './types.js';
+import type { Logger } from './logger.js';
 import { extractLabels, buildVocabulary } from './labels.js';
 
 /**
@@ -34,7 +35,9 @@ export interface BootCache {
  * Boot phase — run once per session.
  * Loads identities, indexes skills/tools, builds label vocabulary.
  */
-export async function boot(providers: Providers): Promise<BootCache> {
+export async function boot(providers: Providers, logger?: Logger): Promise<BootCache> {
+  const start = performance.now();
+
   const [identities, skills, tools] = await Promise.all([
     providers.identity.load(),
     providers.skills.list(),
@@ -52,6 +55,15 @@ export async function boot(providers: Providers): Promise<BootCache> {
     tools.map((t) => t.labels),
   );
 
+  logger?.log({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    phase: 'boot',
+    event: 'boot_complete',
+    data: { identityCount: identities.length, skillCount: skills.length, vocabularySize: vocabulary.length },
+    durationMs: Math.round(performance.now() - start),
+  });
+
   return { identities, vocabulary, skills };
 }
 
@@ -63,9 +75,21 @@ export async function enrich(
   prompt: string,
   providers: Providers,
   cache: BootCache,
+  logger?: Logger,
 ): Promise<EnrichedContext> {
+  const start = performance.now();
+
   // 1. Extract labels from prompt against known vocabulary
   const labels = extractLabels(prompt, cache.vocabulary);
+
+  logger?.log({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    phase: 'enrich',
+    event: 'labels_extracted',
+    data: { labels: labels.map(l => l.name), vocabularySize: cache.vocabulary.length },
+    durationMs: Math.round(performance.now() - start),
+  });
 
   // 2. Search memory + match skills + match tools + route — all in parallel
   const [memories, matchedSkills, matchedTools, routing] = await Promise.all([
@@ -74,6 +98,20 @@ export async function enrich(
     providers.tools.match(labels),
     providers.routing.route(labels),
   ]);
+
+  logger?.log({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    phase: 'enrich',
+    event: 'enrich_complete',
+    data: {
+      labelCount: labels.length,
+      memoryCount: memories.length,
+      skillCount: matchedSkills.length,
+      routing: routing.model,
+    },
+    durationMs: Math.round(performance.now() - start),
+  });
 
   return {
     prompt,

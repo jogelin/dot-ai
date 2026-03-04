@@ -1,4 +1,5 @@
 import type { EnrichedContext, MemoryEntry, Skill, Tool, RoutingResult } from './types.js';
+import type { Logger } from './logger.js';
 
 export interface FormatOptions {
   /** Skip identity sections (useful when already injected at session start) */
@@ -7,6 +8,8 @@ export interface FormatOptions {
   maxSkillLength?: number;
   /** Max number of skills to include (already sorted by match relevance). Default: unlimited */
   maxSkills?: number;
+  /** Optional logger for tracing */
+  logger?: Logger;
 }
 
 /**
@@ -14,6 +17,7 @@ export interface FormatOptions {
  * Sections are ordered by priority: identity > memory > skills > tools > routing.
  */
 export function formatContext(ctx: EnrichedContext, options?: FormatOptions): string {
+  const start = performance.now();
   const sections: string[] = [];
 
   // Identity sections (sorted by priority, highest first)
@@ -50,7 +54,25 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
     sections.push(formatRouting(ctx.routing));
   }
 
-  return sections.join('\n\n---\n\n');
+  const result = sections.join('\n\n---\n\n');
+
+  options?.logger?.log({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    phase: 'format',
+    event: 'format_complete',
+    data: {
+      outputChars: result.length,
+      estimatedTokens: Math.round(result.length / 4),
+      skillsIncluded: loadedSkills.map(s => s.name),
+      truncatedSkills: loadedSkills
+        .filter(s => options?.maxSkillLength != null && (s.content?.length ?? 0) > options.maxSkillLength)
+        .map(s => s.name),
+    },
+    durationMs: Math.round(performance.now() - start),
+  });
+
+  return result;
 }
 
 function formatMemory(memories: MemoryEntry[]): string {

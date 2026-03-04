@@ -17,6 +17,7 @@ export type {
   EnrichedContext,
   TaskFilter,
   DotAiConfig,
+  DebugConfig,
   ProviderConfig,
 } from './types.js';
 
@@ -37,10 +38,15 @@ export type { Providers, BootCache } from './engine.js';
 
 // ── Config ──
 export { loadConfig, resolveConfig, injectRoot } from './config.js';
+export type { ResolvedConfig } from './config.js';
 
 // ── Format ──
 export { formatContext } from './format.js';
 export type { FormatOptions } from './format.js';
+
+// ── Logger ──
+export type { LogLevel, LogEntry, Logger } from './logger.js';
+export { NoopLogger, JsonFileLogger, StderrLogger } from './logger.js';
 
 // ── Loader ──
 export { registerProvider, clearProviders, createProviders } from './loader.js';

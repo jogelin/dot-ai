@@ -7,7 +7,8 @@
  * Usage in hooks.json:
  *   { "type": "command", "command": "node /path/to/hook.js" }
  */
-import { loadConfig, registerDefaults, createProviders, boot, enrich, injectRoot, formatContext } from '@dot-ai/core';
+import { loadConfig, registerDefaults, createProviders, boot, enrich, injectRoot, formatContext, NoopLogger, JsonFileLogger } from '@dot-ai/core';
+import type { Logger } from '@dot-ai/core';
 
 async function main(): Promise<void> {
   // Read event from stdin
@@ -34,8 +35,13 @@ async function main(): Promise<void> {
 
     // Inject workspaceRoot into all provider options
     const config = injectRoot(rawConfig, workspaceRoot);
+
+    // Setup logger
+    const logPath = process.env.DOT_AI_LOG ?? rawConfig.debug?.logPath;
+    const logger: Logger = logPath ? new JsonFileLogger(logPath) : new NoopLogger();
+
     const providers = await createProviders(config);
-    const cache = await boot(providers);
+    const cache = await boot(providers, logger);
 
     // Extract prompt from the event
     const prompt = (event.prompt ?? event.content ?? '') as string;
@@ -50,11 +56,12 @@ async function main(): Promise<void> {
       if (identityContext) {
         process.stdout.write(JSON.stringify({ result: identityContext }));
       }
+      await logger.flush();
       return;
     }
 
     // Enrich the prompt
-    const enriched = await enrich(prompt, providers, cache);
+    const enriched = await enrich(prompt, providers, cache, logger);
 
     // Load skill content for matched skills
     for (const skill of enriched.skills) {
@@ -68,10 +75,12 @@ async function main(): Promise<void> {
       skipIdentities: true,
       maxSkillLength: 3000,
       maxSkills: 5,
+      logger,
     });
     if (formatted) {
       process.stdout.write(JSON.stringify({ result: formatted }));
     }
+    await logger.flush();
   } catch (err) {
     // Fail silently — don't block the agent
     process.stderr.write(`[dot-ai] Error: ${err}\n`);
