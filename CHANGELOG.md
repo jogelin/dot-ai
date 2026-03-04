@@ -1,3 +1,14 @@
+## 0.5.2 (2026-03-04)
+
+### 🩹 Fixes
+
+- **infra:** add repository field to all packages for npm provenance ([fb369f7](https://github.com/jogelin/dot-ai/commit/fb369f7))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.5.1 (2026-03-04)
 
 ### 🩹 Fixes
