@@ -1,3 +1,15 @@
+## 0.5.1 (2026-03-04)
+
+### 🩹 Fixes
+
+- **infra:** remove registry from publishConfig ([0da69b3](https://github.com/jogelin/dot-ai/commit/0da69b3))
+- **infra:** remove --first-release flag (v0.5.0 tag exists now) ([b925ba8](https://github.com/jogelin/dot-ai/commit/b925ba8))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.5.0 (2026-03-04)
 
 ### 🚀 Features
