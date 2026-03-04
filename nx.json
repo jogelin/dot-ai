@@ -22,5 +22,25 @@
   "targetDefaults": {
     "build": { "dependsOn": ["^build"], "inputs": ["production"], "cache": true },
     "test": { "cache": true }
+  },
+  "release": {
+    "projects": ["packages/*"],
+    "projectsRelationship": "fixed",
+    "releaseTagPattern": "v{version}",
+    "version": {
+      "preVersionCommand": "pnpm nx run-many -t build test",
+      "conventionalCommits": true,
+      "fallbackCurrentVersionResolver": "disk"
+    },
+    "changelog": {
+      "workspaceChangelog": {
+        "file": "CHANGELOG.md",
+        "createRelease": "github"
+      },
+      "projectChangelogs": false
+    },
+    "git": {
+      "commitMessage": "chore(release): v{version}"
+    }
   }
 }
