@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { join } from 'node:path';
 import type { MemoryProvider } from '@dot-ai/core';
 import type { MemoryEntry } from '@dot-ai/core';
 
@@ -6,7 +7,9 @@ export class SqliteMemoryProvider implements MemoryProvider {
   private db: Database.Database;
 
   constructor(options: Record<string, unknown> = {}) {
-    const dbPath = (options.path as string) ?? ':memory:';
+    const root = (options.root as string) ?? process.cwd();
+    const rawPath = (options.path as string) ?? ':memory:';
+    const dbPath = rawPath === ':memory:' ? rawPath : (rawPath.startsWith('/') ? rawPath : join(root, rawPath));
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.init();
@@ -20,37 +23,41 @@ export class SqliteMemoryProvider implements MemoryProvider {
         type    TEXT    NOT NULL DEFAULT 'log',
         date    TEXT,
         labels  TEXT    DEFAULT '[]',
+        node    TEXT,
+        source  TEXT    DEFAULT 'sqlite-memory',
         created INTEGER DEFAULT (unixepoch())
       );
 
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content,
         labels,
+        node,
         content='memories',
         content_rowid='id'
       );
 
       CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
-        INSERT INTO memories_fts(rowid, content, labels)
-        VALUES (new.id, new.content, new.labels);
+        INSERT INTO memories_fts(rowid, content, labels, node)
+        VALUES (new.id, new.content, new.labels, new.node);
       END;
 
       CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
-        INSERT INTO memories_fts(memories_fts, rowid, content, labels)
-        VALUES ('delete', old.id, old.content, old.labels);
+        INSERT INTO memories_fts(memories_fts, rowid, content, labels, node)
+        VALUES ('delete', old.id, old.content, old.labels, old.node);
       END;
     `);
   }
 
   async store(entry: Omit<MemoryEntry, 'source'>): Promise<void> {
     const stmt = this.db.prepare(
-      'INSERT INTO memories (content, type, date, labels) VALUES (?, ?, ?, ?)'
+      'INSERT INTO memories (content, type, date, labels, node) VALUES (?, ?, ?, ?, ?)'
     );
     stmt.run(
       entry.content,
       entry.type ?? 'log',
       entry.date ?? new Date().toISOString().slice(0, 10),
       JSON.stringify(entry.labels ?? []),
+      entry.node ?? null,
     );
   }
 
@@ -65,7 +72,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
     if (!cleanQuery) return [];
 
     const rows = this.db.prepare(`
-      SELECT m.content, m.type, m.date, m.labels,
+      SELECT m.content, m.type, m.date, m.labels, m.node,
              bm25(memories_fts) AS rank
       FROM memories_fts
       JOIN memories m ON m.id = memories_fts.rowid
@@ -77,6 +84,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
       type: string;
       date: string | null;
       labels: string;
+      node: string | null;
       rank: number;
     }>;
 
@@ -86,6 +94,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
       source: 'sqlite-memory' as const,
       date: row.date ?? undefined,
       labels: JSON.parse(row.labels) as string[],
+      node: row.node ?? undefined,
     }));
 
     // Filter by labels if provided
