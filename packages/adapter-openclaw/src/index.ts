@@ -41,7 +41,23 @@ interface OpenClawPluginApi {
     start(ctx: { logger: OpenClawLogger }): void;
     stop(ctx: { logger: OpenClawLogger }): void;
   }): void;
+  registerTool(tool: OpenClawTool | OpenClawToolFactory, opts?: { name?: string; names?: string[] }): void;
 }
+
+interface OpenClawToolResult {
+  content: Array<{ type: string; text: string }>;
+  details?: Record<string, unknown>;
+}
+
+interface OpenClawTool {
+  name: string;
+  label: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  execute(toolCallId: string, params: Record<string, unknown>): Promise<OpenClawToolResult>;
+}
+
+type OpenClawToolFactory = (ctx: Record<string, unknown>) => OpenClawTool | OpenClawTool[] | null;
 
 /**
  * Load custom providers declared in pluginConfig.
@@ -90,6 +106,7 @@ const plugin = {
   name: 'dot-ai — Universal AI Workspace Convention',
   version: '0.4.0',
   description: 'Deterministic context enrichment for OpenClaw agents',
+  kind: 'memory' as const,
 
   register(api: OpenClawPluginApi) {
     api.logger.info('[dot-ai] Plugin loaded (v4)');
@@ -102,6 +119,79 @@ const plugin = {
 
     // Register default file-based providers
     registerDefaults();
+
+    // Register memory tools that delegate to dot-ai's memory provider
+    api.registerTool(
+      (_ctx: Record<string, unknown>) => {
+        // Return tools that use cachedProviders (set in before_agent_start)
+        const tools: OpenClawTool[] = [
+          {
+            name: 'memory_recall',
+            label: 'Memory Recall',
+            description: 'Search through memories managed by dot-ai. Use when you need context about prior work, decisions, preferences, or previously discussed topics.',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query' },
+                limit: { type: 'number', description: 'Max results (default: 10)' },
+              },
+              required: ['query'],
+            },
+            async execute(_toolCallId: string, params: Record<string, unknown>) {
+              if (!cachedProviders) {
+                return { content: [{ type: 'text', text: 'Memory not initialized yet. Try again after first prompt.' }] };
+              }
+              const query = params.query as string;
+              const limit = (params.limit as number) ?? 10;
+              const results = await cachedProviders.memory.search(query);
+              const limited = results.slice(0, limit);
+
+              if (limited.length === 0) {
+                return { content: [{ type: 'text', text: 'No relevant memories found.' }], details: { count: 0 } };
+              }
+
+              const text = limited.map((m, i) => `${i + 1}. ${m.content}${m.date ? ` (${m.date})` : ''}`).join('\n');
+              const description = cachedProviders.memory.describe();
+              return {
+                content: [{ type: 'text', text: `${description}\n\nFound ${limited.length} memories:\n\n${text}` }],
+                details: { count: limited.length, provider: description },
+              };
+            },
+          },
+          {
+            name: 'memory_store',
+            label: 'Memory Store',
+            description: 'Save important information to dot-ai memory. Use for preferences, facts, decisions, patterns.',
+            parameters: {
+              type: 'object',
+              properties: {
+                text: { type: 'string', description: 'Information to remember' },
+                type: { type: 'string', description: 'Memory type: fact, decision, log, pattern (default: log)' },
+              },
+              required: ['text'],
+            },
+            async execute(_toolCallId: string, params: Record<string, unknown>) {
+              if (!cachedProviders) {
+                return { content: [{ type: 'text', text: 'Memory not initialized yet.' }] };
+              }
+              const text = params.text as string;
+              const type = (params.type as string) ?? 'log';
+              await cachedProviders.memory.store({
+                content: text,
+                type,
+                date: new Date().toISOString().slice(0, 10),
+              });
+              return {
+                content: [{ type: 'text', text: `Stored: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"` }],
+                details: { action: 'created' },
+              };
+            },
+          },
+        ];
+        return tools;
+      },
+      { names: ['memory_recall', 'memory_store'] },
+    );
 
     // Hook: before_agent_start — run the full pipeline
     api.on(
@@ -153,7 +243,7 @@ const plugin = {
           // Format and inject
           const formatted = formatContext(enriched);
           if (formatted) {
-            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.skills.length} skills`);
+            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.skills.length} skills (${enriched.memoryDescription ?? 'unknown provider'})`);
             return { prependContext: formatted };
           }
         } catch (err) {
