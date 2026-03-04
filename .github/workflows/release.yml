@@ -2,6 +2,10 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      specifier:
+        description: 'Version bump (auto from commits, or: patch, minor, major, premajor, preminor, prepatch, prerelease, or exact like 1.0.0)'
+        type: string
+        default: ''
       dry-run:
         description: 'Dry run (no publish)'
         type: boolean
@@ -32,7 +36,7 @@ jobs:
       - name: Test
         run: pnpm nx run-many -t test
       - name: Release
-        run: pnpm tsx scripts/release.ts ${{ inputs.dry-run && '--dry-run' || '' }}
+        run: pnpm tsx scripts/release.ts ${{ inputs.specifier && format('--specifier={0}', inputs.specifier) || '' }} ${{ inputs.dry-run && '--dry-run' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true

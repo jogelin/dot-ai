@@ -6,7 +6,9 @@
  * in the same git commit as the package.json bumps.
  *
  * Usage:
- *   pnpm tsx scripts/release.ts [--dry-run] [--verbose]
+ *   pnpm tsx scripts/release.ts [--specifier=patch|minor|major|1.0.0] [--dry-run] [--verbose]
+ *
+ * Without --specifier, the bump is auto-detected from conventional commits.
  */
 
 import { releaseChangelog, releasePublish, releaseVersion } from 'nx/release';
@@ -22,11 +24,14 @@ const MANIFEST_FILES = [
 
 const dryRun = process.argv.includes('--dry-run');
 const verbose = process.argv.includes('--verbose');
+const specifierArg = process.argv.find((a) => a.startsWith('--specifier='));
+const specifier = specifierArg ? specifierArg.split('=')[1] : undefined;
 
 async function main() {
   // 1. Version all packages (writes package.json files, but does NOT git commit yet)
   // git commit/tag disabled in nx.json version.git — changelog handles it
   const { workspaceVersion, projectsVersionData } = await releaseVersion({
+    specifier,
     dryRun,
     verbose,
   });
