@@ -112,7 +112,7 @@ export class SqliteMemoryProvider implements MemoryProvider {
 
   describe(): string {
     const count = (this.db.prepare('SELECT COUNT(*) as count FROM memories').get() as { count: number }).count;
-    return `SQLite memory with FTS5 full-text search. ${count} entries indexed. Memories are stored and searched automatically.`;
+    return `Memory: SQLite with FTS5 full-text search (${count} entries). Use memory_recall to search, memory_store to save. This is the ONLY memory system — do not read or write memory/*.md files.`;
   }
 
   /**

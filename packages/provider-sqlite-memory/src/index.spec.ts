@@ -12,10 +12,10 @@ describe('SqliteMemoryProvider.describe()', () => {
     provider.close();
   });
 
-  it('returns a string containing "SQLite memory"', () => {
+  it('returns a string containing "SQLite"', () => {
     const result = provider.describe();
     expect(typeof result).toBe('string');
-    expect(result).toContain('SQLite memory');
+    expect(result).toContain('SQLite');
   });
 
   it('returns a string containing "FTS5"', () => {
