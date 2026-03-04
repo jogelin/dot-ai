@@ -8,6 +8,7 @@
 // ── Types ──
 export type {
   Label,
+  Node,
   MemoryEntry,
   Skill,
   Identity,
@@ -19,6 +20,7 @@ export type {
   DotAiConfig,
   DebugConfig,
   ProviderConfig,
+  WorkspaceConfig,
 } from './types.js';
 
 // ── Contracts ──
@@ -53,6 +55,9 @@ export { registerProvider, clearProviders, createProviders } from './loader.js';
 
 // ── Labels ──
 export { extractLabels, buildVocabulary } from './labels.js';
+
+// ── Nodes ──
+export { discoverNodes, parseScanDirs } from './nodes.js';
 
 // ── registerDefaults ──
 export { registerDefaults } from './loader.js';

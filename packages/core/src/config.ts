@@ -1,12 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DotAiConfig, ProviderConfig } from './types.js';
+import { discoverNodes, parseScanDirs } from './nodes.js';
 
 /**
  * Inject the workspace root into all provider sections of a DotAiConfig.
  * This ensures file-based providers resolve paths relative to the workspace.
  */
 export function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
+  // Discover workspace nodes
+  const globalScanDirs = parseScanDirs(config.workspace?.scanDirs ?? 'projects');
+  const nodes = discoverNodes(root, globalScanDirs);
+
   const result: DotAiConfig = {};
   const providerKeys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
   for (const key of providerKeys) {
@@ -14,13 +19,16 @@ export function injectRoot(config: DotAiConfig, root: string): DotAiConfig {
     if (section && typeof section === 'object') {
       result[key] = {
         ...section,
-        with: { root, ...(section.with ?? {}) },
+        with: { root, nodes, ...(section.with ?? {}) },
       };
     }
   }
   // Preserve non-provider sections
   if (config.debug) {
     result.debug = config.debug;
+  }
+  if (config.workspace) {
+    result.workspace = config.workspace;
   }
   return result;
 }
@@ -153,6 +161,16 @@ function parseYaml(raw: string): DotAiConfig {
     config.debug = {};
     if (typeof node['logPath'] === 'string') {
       config.debug.logPath = node['logPath'];
+    }
+  }
+
+  // Parse workspace section
+  const workspaceSection = result['workspace'];
+  if (workspaceSection && typeof workspaceSection === 'object') {
+    const node = workspaceSection as YamlNode;
+    config.workspace = {};
+    if (typeof node['scanDirs'] === 'string') {
+      config.workspace.scanDirs = node['scanDirs'];
     }
   }
 

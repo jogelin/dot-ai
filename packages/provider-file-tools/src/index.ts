@@ -1,34 +1,41 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ToolProvider, Tool, Label } from '@dot-ai/core';
+import type { ToolProvider, Tool, Label, Node } from '@dot-ai/core';
 
 export class FileToolProvider implements ToolProvider {
-  private toolsDir: string;
+  private toolsDirs: Array<{ dir: string; node: string }>;
   private cache: Tool[] | null = null;
 
   constructor(options: Record<string, unknown> = {}) {
     const root = (options.root as string) ?? process.cwd();
-    this.toolsDir = join(root, '.ai', 'tools');
+    const nodes = (options.nodes as Node[]) ?? [{ name: 'root', path: join(root, '.ai'), root: true }];
+    this.toolsDirs = nodes.map(n => ({ dir: join(n.path, 'tools'), node: n.name }));
   }
 
   async list(): Promise<Tool[]> {
     if (this.cache) return this.cache;
 
     const tools: Tool[] = [];
-    let files: string[];
-    try {
-      files = await readdir(this.toolsDir);
-    } catch {
-      return [];
-    }
 
-    for (const file of files.filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))) {
+    for (const { dir: toolsDir, node } of this.toolsDirs) {
+      let files: string[];
       try {
-        const content = await readFile(join(this.toolsDir, file), 'utf-8');
-        const tool = parseToolYaml(content, file);
-        if (tool) tools.push(tool);
+        files = await readdir(toolsDir);
       } catch {
-        // Skip invalid tools
+        continue;
+      }
+
+      for (const file of files.filter(f => f.endsWith('.yaml') || f.endsWith('.yml'))) {
+        try {
+          const content = await readFile(join(toolsDir, file), 'utf-8');
+          const tool = parseToolYaml(content, file);
+          if (tool) {
+            tool.node = node;
+            tools.push(tool);
+          }
+        } catch {
+          // Skip invalid tools
+        }
       }
     }
 

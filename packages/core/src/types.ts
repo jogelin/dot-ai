@@ -7,12 +7,23 @@ export interface Label {
   source: string; // which provider/step produced this
 }
 
+/**
+ * A workspace node — a directory containing .ai/ context.
+ * Root node is always included. Sub-nodes are discovered via scanDirs.
+ */
+export interface Node {
+  name: string;       // "root", "pro", "cockpit"
+  path: string;       // absolute path to the .ai/ directory
+  root: boolean;      // is this the workspace root node?
+}
+
 export interface MemoryEntry {
   content: string;
   type: string; // "fact", "decision", "log", "pattern"
   source: string;
   date?: string;
   labels?: string[];
+  node?: string;        // which node this came from
 }
 
 export interface Skill {
@@ -25,6 +36,7 @@ export interface Skill {
   dependsOn?: string[];
   requiresTools?: string[];
   enabled?: boolean;
+  node?: string;          // which node this came from
 }
 
 export interface Identity {
@@ -51,6 +63,7 @@ export interface Tool {
   labels: string[];
   config: Record<string, unknown>;
   source: string;
+  node?: string;          // which node this came from
 }
 
 export interface RoutingResult {
@@ -89,6 +102,10 @@ export interface DebugConfig {
   logPath?: string;
 }
 
+export interface WorkspaceConfig {
+  scanDirs?: string;    // comma-separated dirs to scan, default "projects"
+}
+
 export interface DotAiConfig {
   memory?: ProviderConfig;
   skills?: ProviderConfig;
@@ -97,6 +114,7 @@ export interface DotAiConfig {
   tasks?: ProviderConfig;
   tools?: ProviderConfig;
   debug?: DebugConfig;
+  workspace?: WorkspaceConfig;
 }
 
 export interface ProviderConfig {

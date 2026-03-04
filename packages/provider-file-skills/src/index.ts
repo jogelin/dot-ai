@@ -1,16 +1,15 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SkillProvider, Skill, Label } from '@dot-ai/core';
+import type { SkillProvider, Skill, Label, Node } from '@dot-ai/core';
 
 export class FileSkillProvider implements SkillProvider {
-  private skillsDirs: string[];
+  private skillsDirs: Array<{ dir: string; node: string }>;
   private cache: Skill[] | null = null;
   private disabledNames: Set<string>;
 
   constructor(options: Record<string, unknown> = {}) {
     const root = (options.root as string) ?? process.cwd();
-    this.skillsDirs = [join(root, '.ai', 'skills')];
+    const nodes = (options.nodes as Node[]) ?? [{ name: 'root', path: join(root, '.ai'), root: true }];
 
     // Parse disabled skills list from config
     const disabled = typeof options.disabled === 'string' ? options.disabled : '';
@@ -18,18 +17,7 @@ export class FileSkillProvider implements SkillProvider {
       disabled.split(',').map(s => s.trim()).filter(Boolean)
     );
 
-    // Also scan project-level skills (projects/*/.ai/skills/)
-    const projectsDir = join(root, 'projects');
-    try {
-      const projects = readdirSync(projectsDir, { withFileTypes: true });
-      for (const p of projects) {
-        if (p.isDirectory()) {
-          this.skillsDirs.push(join(projectsDir, p.name, '.ai', 'skills'));
-        }
-      }
-    } catch {
-      // No projects directory
-    }
+    this.skillsDirs = nodes.map(n => ({ dir: join(n.path, 'skills'), node: n.name }));
   }
 
   async list(): Promise<Skill[]> {
@@ -37,7 +25,7 @@ export class FileSkillProvider implements SkillProvider {
 
     const skills: Skill[] = [];
 
-    for (const skillsDir of this.skillsDirs) {
+    for (const { dir: skillsDir, node } of this.skillsDirs) {
       let dirs: string[];
       try {
         dirs = await readdir(skillsDir);
@@ -50,7 +38,10 @@ export class FileSkillProvider implements SkillProvider {
         try {
           const content = await readFile(skillPath, 'utf-8');
           const skill = parseSkillFrontmatter(content, dir, skillPath);
-          if (skill) skills.push(skill);
+          if (skill) {
+            skill.node = node;
+            skills.push(skill);
+          }
         } catch {
           // Skip invalid skills
         }
@@ -86,7 +77,7 @@ export class FileSkillProvider implements SkillProvider {
   }
 
   async load(name: string): Promise<string | null> {
-    for (const dir of this.skillsDirs) {
+    for (const { dir } of this.skillsDirs) {
       const skillPath = join(dir, name, 'SKILL.md');
       try {
         return await readFile(skillPath, 'utf-8');
