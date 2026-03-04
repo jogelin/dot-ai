@@ -7,10 +7,17 @@ import type { Skill, Label } from '../types.js';
 export class FileSkillProvider implements SkillProvider {
   private skillsDirs: string[];
   private cache: Skill[] | null = null;
+  private disabledNames: Set<string>;
 
   constructor(options: Record<string, unknown> = {}) {
     const root = (options.root as string) ?? process.cwd();
     this.skillsDirs = [join(root, '.ai', 'skills')];
+
+    // Parse disabled skills list from config
+    const disabled = typeof options.disabled === 'string' ? options.disabled : '';
+    this.disabledNames = new Set(
+      disabled.split(',').map(s => s.trim()).filter(Boolean)
+    );
 
     // Also scan project-level skills (projects/*/.ai/skills/)
     const projectsDir = join(root, 'projects');
@@ -51,8 +58,11 @@ export class FileSkillProvider implements SkillProvider {
       }
     }
 
-    this.cache = skills;
-    return skills;
+    // Filter out disabled skills (frontmatter enabled:false OR config disabled list)
+    this.cache = skills.filter(s =>
+      s.enabled !== false && !this.disabledNames.has(s.name)
+    );
+    return this.cache;
   }
 
   async match(labels: Label[]): Promise<Skill[]> {
@@ -111,8 +121,10 @@ function parseSkillFrontmatter(content: string, name: string, path: string): Ski
   const triggers = extractArray(frontmatter, 'triggers');
   const dependsOn = extractArray(frontmatter, 'dependsOn');
   const requiresTools = extractArray(frontmatter, 'requiresTools');
+  const enabledStr = extractValue(frontmatter, 'enabled');
+  const enabled = enabledStr === 'false' ? false : undefined;
 
-  return { name, description, labels, triggers, dependsOn, requiresTools, path };
+  return { name, description, labels, triggers, dependsOn, requiresTools, enabled, path };
 }
 
 function extractValue(yaml: string, key: string): string | undefined {

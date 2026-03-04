@@ -154,6 +154,85 @@ describe('FileSkillProvider', () => {
     });
   });
 
+  describe('enable/disable', () => {
+    it('excludes skills with enabled: false in frontmatter', async () => {
+      const disabledSkill = `---
+description: Disabled skill
+labels: [disabled]
+enabled: false
+---
+
+# Disabled Skill
+`;
+      await createSkill(testDir, 'active-skill', SKILL_WITH_FRONTMATTER);
+      await createSkill(testDir, 'disabled-skill', disabledSkill);
+
+      const provider = new FileSkillProvider({ root: testDir });
+      const skills = await provider.list();
+      expect(skills).toHaveLength(1);
+      expect(skills[0].name).toBe('active-skill');
+    });
+
+    it('excludes skills listed in disabled config option', async () => {
+      await createSkill(testDir, 'skill-a', SKILL_WITH_FRONTMATTER);
+      await createSkill(testDir, 'skill-b', SKILL_ALWAYS_TRIGGER);
+
+      const provider = new FileSkillProvider({
+        root: testDir,
+        disabled: 'skill-b',
+      });
+      const skills = await provider.list();
+      expect(skills).toHaveLength(1);
+      expect(skills[0].name).toBe('skill-a');
+    });
+
+    it('supports comma-separated disabled list', async () => {
+      await createSkill(testDir, 'skill-a', SKILL_WITH_FRONTMATTER);
+      await createSkill(testDir, 'skill-b', SKILL_ALWAYS_TRIGGER);
+      await createSkill(testDir, 'skill-c', SKILL_NO_FRONTMATTER);
+
+      const provider = new FileSkillProvider({
+        root: testDir,
+        disabled: 'skill-a, skill-c',
+      });
+      const skills = await provider.list();
+      expect(skills).toHaveLength(1);
+      expect(skills[0].name).toBe('skill-b');
+    });
+
+    it('disabled skills are excluded from match()', async () => {
+      await createSkill(testDir, 'dot-ai-tasks', SKILL_WITH_FRONTMATTER);
+      const disabledSkill = `---
+description: Also about tasks
+labels: [tasks]
+enabled: false
+---
+Content
+`;
+      await createSkill(testDir, 'disabled-tasks', disabledSkill);
+
+      const provider = new FileSkillProvider({ root: testDir });
+      const matches = await provider.match([{ name: 'tasks', source: 'test' }]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].name).toBe('dot-ai-tasks');
+    });
+
+    it('enabled: true is treated as enabled (default)', async () => {
+      const enabledSkill = `---
+description: Explicitly enabled
+labels: [test]
+enabled: true
+---
+Content
+`;
+      await createSkill(testDir, 'enabled-skill', enabledSkill);
+
+      const provider = new FileSkillProvider({ root: testDir });
+      const skills = await provider.list();
+      expect(skills).toHaveLength(1);
+    });
+  });
+
   describe('load', () => {
     it('returns skill content by name', async () => {
       await createSkill(testDir, 'dot-ai-tasks', SKILL_WITH_FRONTMATTER);

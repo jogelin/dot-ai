@@ -24,6 +24,7 @@ export interface Skill {
   content?: string;         // lazy loaded
   dependsOn?: string[];
   requiresTools?: string[];
+  enabled?: boolean;
 }
 
 export interface Identity {
