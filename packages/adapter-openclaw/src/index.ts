@@ -155,7 +155,7 @@ const plugin = {
 
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
-            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
+            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir, skipIdentities: true });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
             api.logger.info('[dot-ai] Runtime booted');
