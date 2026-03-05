@@ -9,6 +9,11 @@ import {
   registerProvider,
   DotAiRuntime,
 } from '@dot-ai/core';
+import { SqliteMemoryProvider } from '@dot-ai/provider-sqlite-memory';
+import { FileIdentityProvider } from '@dot-ai/provider-file-identity';
+import { FileSkillProvider } from '@dot-ai/provider-file-skills';
+import { RulesRoutingProvider } from '@dot-ai/provider-rules-routing';
+import { FileToolProvider } from '@dot-ai/provider-file-tools';
 
 // Inline OpenClaw plugin API types
 interface OpenClawLogger {
@@ -109,6 +114,14 @@ const plugin = {
 
     // Register default file-based providers
     registerDefaults();
+
+    // Explicitly register sibling providers to bypass dynamic import resolution
+    // issues when loaded via jiti in the OpenClaw gateway process.
+    registerProvider('@dot-ai/provider-sqlite-memory', (opts) => new SqliteMemoryProvider(opts as Record<string, unknown>));
+    registerProvider('@dot-ai/provider-file-identity', (opts) => new FileIdentityProvider(opts as Record<string, unknown>));
+    registerProvider('@dot-ai/provider-file-skills', (opts) => new FileSkillProvider(opts as Record<string, unknown>));
+    registerProvider('@dot-ai/provider-rules-routing', (opts) => new RulesRoutingProvider(opts as Record<string, unknown>));
+    registerProvider('@dot-ai/provider-file-tools', (opts) => new FileToolProvider(opts as Record<string, unknown>));
 
     // Register tools from core capabilities (delegates to providers)
     api.registerTool(

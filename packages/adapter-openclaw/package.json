@@ -22,7 +22,12 @@
     "openclaw": "^2026.2.0"
   },
   "dependencies": {
-    "@dot-ai/core": "workspace:*"
+    "@dot-ai/core": "workspace:*",
+    "@dot-ai/provider-sqlite-memory": "workspace:*",
+    "@dot-ai/provider-file-identity": "workspace:*",
+    "@dot-ai/provider-file-skills": "workspace:*",
+    "@dot-ai/provider-rules-routing": "workspace:*",
+    "@dot-ai/provider-file-tools": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -60,6 +60,21 @@ importers:
       '@dot-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@dot-ai/provider-file-identity':
+        specifier: workspace:*
+        version: link:../provider-file-identity
+      '@dot-ai/provider-file-skills':
+        specifier: workspace:*
+        version: link:../provider-file-skills
+      '@dot-ai/provider-file-tools':
+        specifier: workspace:*
+        version: link:../provider-file-tools
+      '@dot-ai/provider-rules-routing':
+        specifier: workspace:*
+        version: link:../provider-rules-routing
+      '@dot-ai/provider-sqlite-memory':
+        specifier: workspace:*
+        version: link:../provider-sqlite-memory
       openclaw:
         specifier: ^2026.2.0
         version: 2026.2.25(@napi-rs/canvas@0.1.95)(@types/express@5.0.6)(hono@4.12.2)(node-llama-cpp@3.15.1(typescript@5.9.3))
