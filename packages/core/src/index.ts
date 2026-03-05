@@ -21,6 +21,7 @@ export type {
   DebugConfig,
   ProviderConfig,
   WorkspaceConfig,
+  BudgetWarning,
 } from './types.js';
 
 // ── Contracts ──
@@ -45,6 +46,10 @@ export type { ResolvedConfig } from './config.js';
 // ── Format ──
 export { formatContext } from './format.js';
 export type { FormatOptions } from './format.js';
+
+// ── Capabilities ──
+export { buildCapabilities } from './capabilities.js';
+export type { Capability, CapabilityResult } from './capabilities.js';
 
 // ── Logger ──
 export type { LogLevel, LogEntry, Logger } from './logger.js';

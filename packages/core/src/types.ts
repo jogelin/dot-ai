@@ -123,3 +123,13 @@ export interface ProviderConfig {
   use: string;   // "@dot-ai/provider-file-memory", "@dot-ai/cockpit-memory", etc.
   with?: Record<string, unknown>; // provider-specific options
 }
+
+/**
+ * Warning emitted when formatContext() exceeds the token budget.
+ * Diagnostic signal that labeling/matching may be too broad.
+ */
+export interface BudgetWarning {
+  budget: number;
+  actual: number;
+  actions: string[];  // e.g. "dropped 3 skills", "truncated 2 skills to 2000 chars"
+}

@@ -1,4 +1,4 @@
-import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult } from './types.js';
+import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult, BudgetWarning } from './types.js';
 import type { Logger } from './logger.js';
 
 export interface FormatOptions {
@@ -8,6 +8,10 @@ export interface FormatOptions {
   maxSkillLength?: number;
   /** Max number of skills to include (already sorted by match relevance). Default: unlimited */
   maxSkills?: number;
+  /** Max estimated tokens (chars / 4). When exceeded, content is trimmed. Default: no limit */
+  tokenBudget?: number;
+  /** Called when budget was exceeded and trimming occurred. Diagnostic signal. */
+  onBudgetExceeded?: (warning: BudgetWarning) => void;
   /** Optional logger for tracing */
   logger?: Logger;
 }
@@ -57,6 +61,67 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   // Routing hint
   if (ctx.routing.model !== 'default') {
     sections.push(formatRouting(ctx.routing));
+  }
+
+  // Budget enforcement — trim if over token budget
+  if (options?.tokenBudget != null) {
+    const estimate = () => Math.round(sections.join('\n\n---\n\n').length / 4);
+    let current = estimate();
+
+    if (current > options.tokenBudget) {
+      const actions: string[] = [];
+
+      // Strategy 1: Drop skills by reverse order (least relevant last in the array)
+      const skillSectionIdx = sections.findIndex(s => s.startsWith('## Active Skills'));
+      if (skillSectionIdx !== -1 && loadedSkills.length > 1) {
+        while (loadedSkills.length > 1 && estimate() > options.tokenBudget) {
+          const dropped = loadedSkills.pop()!;
+          actions.push(`dropped skill: ${dropped.name}`);
+          // Rebuild skills section
+          sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength);
+        }
+        current = estimate();
+      }
+
+      // Strategy 2: Apply maxSkillLength=2000 if not already set
+      if (current > options.tokenBudget && skillSectionIdx !== -1 && options?.maxSkillLength == null) {
+        const before = loadedSkills.filter(s => (s.content?.length ?? 0) > 2000).length;
+        if (before > 0) {
+          sections[skillSectionIdx] = formatSkills(loadedSkills, 2000);
+          actions.push(`truncated ${before} skills to 2000 chars`);
+          current = estimate();
+        }
+      }
+
+      // Strategy 3: Drop oldest memories (keep most recent 5)
+      const memorySectionIdx = sections.findIndex(s => s.startsWith('## Relevant Memory'));
+      if (current > options.tokenBudget && memorySectionIdx !== -1 && ctx.memories.length > 5) {
+        const kept = ctx.memories.slice(0, 5);
+        const dropped = ctx.memories.length - 5;
+        sections[memorySectionIdx] = formatMemory(kept, ctx.memoryDescription);
+        actions.push(`dropped ${dropped} oldest memories`);
+        current = estimate();
+      }
+
+      // If trimming occurred → warn
+      if (actions.length > 0) {
+        const warning: BudgetWarning = {
+          budget: options.tokenBudget,
+          actual: current,
+          actions,
+        };
+        options.onBudgetExceeded?.(warning);
+
+        options?.logger?.log({
+          timestamp: new Date().toISOString(),
+          level: current > options.tokenBudget ? 'warn' : 'info',
+          phase: 'format',
+          event: 'budget_trimmed',
+          data: warning as unknown as Record<string, unknown>,
+          durationMs: Math.round(performance.now() - start),
+        });
+      }
+    }
   }
 
   const result = sections.join('\n\n---\n\n');

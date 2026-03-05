@@ -15,6 +15,7 @@ import {
   enrich,
   injectRoot,
   formatContext,
+  buildCapabilities,
   type Providers,
   type BootCache,
 } from '@dot-ai/core';
@@ -120,177 +121,24 @@ const plugin = {
     // Register default file-based providers
     registerDefaults();
 
-    // Register memory tools that delegate to dot-ai's memory provider
+    // Register tools from core capabilities (delegates to providers)
     api.registerTool(
       (_ctx: Record<string, unknown>) => {
-        // Return tools that use cachedProviders (set in before_agent_start)
-        const tools: OpenClawTool[] = [
-          {
-            name: 'memory_recall',
-            label: 'Memory Recall',
-            description: 'Search through memories managed by dot-ai. Use when you need context about prior work, decisions, preferences, or previously discussed topics.',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: { type: 'string', description: 'Search query' },
-                limit: { type: 'number', description: 'Max results (default: 10)' },
-              },
-              required: ['query'],
-            },
-            async execute(_toolCallId: string, params: Record<string, unknown>) {
-              if (!cachedProviders) {
-                return { content: [{ type: 'text', text: 'Memory not initialized yet. Try again after first prompt.' }] };
-              }
-              const query = params.query as string;
-              const limit = (params.limit as number) ?? 10;
-              const results = await cachedProviders.memory.search(query);
-              const limited = results.slice(0, limit);
-
-              if (limited.length === 0) {
-                return { content: [{ type: 'text', text: 'No relevant memories found.' }], details: { count: 0 } };
-              }
-
-              const text = limited.map((m, i) => `${i + 1}. ${m.content}${m.date ? ` (${m.date})` : ''}`).join('\n');
-              const description = cachedProviders.memory.describe();
-              return {
-                content: [{ type: 'text', text: `${description}\n\nFound ${limited.length} memories:\n\n${text}` }],
-                details: { count: limited.length, provider: description },
-              };
-            },
+        if (!cachedProviders) return null;
+        const capabilities = buildCapabilities(cachedProviders);
+        return capabilities.map((cap): OpenClawTool => ({
+          name: cap.name,
+          label: cap.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          description: cap.description,
+          parameters: cap.parameters,
+          async execute(_toolCallId: string, params: Record<string, unknown>): Promise<OpenClawToolResult> {
+            const result = await cap.execute(params);
+            return {
+              content: [{ type: 'text', text: result.text }],
+              ...(result.details && { details: result.details }),
+            };
           },
-          {
-            name: 'memory_store',
-            label: 'Memory Store',
-            description: 'Save important information to dot-ai memory. Use for preferences, facts, decisions, patterns.',
-            parameters: {
-              type: 'object',
-              properties: {
-                text: { type: 'string', description: 'Information to remember' },
-                type: { type: 'string', description: 'Memory type: fact, decision, log, pattern (default: log)' },
-              },
-              required: ['text'],
-            },
-            async execute(_toolCallId: string, params: Record<string, unknown>) {
-              if (!cachedProviders) {
-                return { content: [{ type: 'text', text: 'Memory not initialized yet.' }] };
-              }
-              const text = params.text as string;
-              const type = (params.type as string) ?? 'log';
-              await cachedProviders.memory.store({
-                content: text,
-                type,
-                date: new Date().toISOString().slice(0, 10),
-              });
-              return {
-                content: [{ type: 'text', text: `Stored: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"` }],
-                details: { action: 'created' },
-              };
-            },
-          },
-          {
-            name: 'task_list',
-            label: 'Task List',
-            description: 'List tasks from the dot-ai task provider. Filter by status, project, or tags.',
-            parameters: {
-              type: 'object',
-              properties: {
-                status: { type: 'string', description: 'Filter by status: pending, in_progress, done' },
-                project: { type: 'string', description: 'Filter by project name' },
-                tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
-              },
-              required: [],
-            },
-            async execute(_toolCallId: string, params: Record<string, unknown>) {
-              if (!cachedProviders?.tasks) {
-                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
-              }
-              const filter: Record<string, unknown> = {};
-              if (params.status !== undefined) filter.status = params.status;
-              if (params.project !== undefined) filter.project = params.project;
-              if (params.tags !== undefined) filter.tags = params.tags;
-              const tasks = await cachedProviders.tasks.list(filter);
-
-              if (tasks.length === 0) {
-                return { content: [{ type: 'text', text: 'No tasks found.' }], details: { count: 0 } };
-              }
-
-              const text = tasks
-                .map((t, i) => `${i + 1}. [${t.status ?? 'pending'}] ${t.text}${t.project ? ` (${t.project})` : ''}${t.tags?.length ? ` #${t.tags.join(' #')}` : ''} (id: ${t.id})`)
-                .join('\n');
-              return {
-                content: [{ type: 'text', text: `Found ${tasks.length} tasks:\n\n${text}` }],
-                details: { count: tasks.length },
-              };
-            },
-          },
-          {
-            name: 'task_create',
-            label: 'Task Create',
-            description: 'Create a new task in the dot-ai task provider.',
-            parameters: {
-              type: 'object',
-              properties: {
-                text: { type: 'string', description: 'Task description' },
-                status: { type: 'string', description: 'Task status (default: pending)' },
-                priority: { type: 'string', description: 'Task priority' },
-                project: { type: 'string', description: 'Project name' },
-                tags: { type: 'array', items: { type: 'string' }, description: 'Tags' },
-              },
-              required: ['text'],
-            },
-            async execute(_toolCallId: string, params: Record<string, unknown>) {
-              if (!cachedProviders?.tasks) {
-                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
-              }
-              const task = await cachedProviders.tasks.create({
-                text: params.text as string,
-                status: (params.status as string) ?? 'pending',
-                ...(params.priority !== undefined && { priority: params.priority as string }),
-                ...(params.project !== undefined && { project: params.project as string }),
-                ...(params.tags !== undefined && { tags: params.tags as string[] }),
-              });
-              return {
-                content: [{ type: 'text', text: `Created task: "${(params.text as string).slice(0, 100)}" (id: ${task.id})` }],
-                details: { action: 'created', id: task.id },
-              };
-            },
-          },
-          {
-            name: 'task_update',
-            label: 'Task Update',
-            description: 'Update an existing task in the dot-ai task provider.',
-            parameters: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', description: 'Task ID to update' },
-                status: { type: 'string', description: 'New status' },
-                text: { type: 'string', description: 'New task description' },
-                priority: { type: 'string', description: 'New priority' },
-                project: { type: 'string', description: 'New project name' },
-                tags: { type: 'array', items: { type: 'string' }, description: 'New tags' },
-              },
-              required: ['id'],
-            },
-            async execute(_toolCallId: string, params: Record<string, unknown>) {
-              if (!cachedProviders?.tasks) {
-                return { content: [{ type: 'text', text: 'Task provider not available.' }] };
-              }
-              const id = params.id as string;
-              const patch: Record<string, unknown> = {};
-              if (params.status !== undefined) patch.status = params.status;
-              if (params.text !== undefined) patch.text = params.text;
-              if (params.priority !== undefined) patch.priority = params.priority;
-              if (params.project !== undefined) patch.project = params.project;
-              if (params.tags !== undefined) patch.tags = params.tags;
-              await cachedProviders.tasks.update(id, patch);
-              return {
-                content: [{ type: 'text', text: `Updated task ${id}.` }],
-                details: { action: 'updated', id },
-              };
-            },
-          },
-        ];
-        return tools;
+        }));
       },
       { names: ['memory_recall', 'memory_store', 'task_list', 'task_create', 'task_update'] },
     );
@@ -343,7 +191,7 @@ const plugin = {
           }
 
           // Format and inject
-          const formatted = formatContext(enriched);
+          const formatted = formatContext(enriched, { skipIdentities: true });
           if (formatted) {
             api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.recentTasks?.length ?? 0} tasks, ${enriched.skills.length} skills (${enriched.memoryDescription ?? 'unknown provider'})`);
             return { prependContext: formatted };
