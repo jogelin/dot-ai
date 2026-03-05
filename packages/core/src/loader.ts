@@ -13,7 +13,18 @@ import { resolveConfig } from './config.js';
  * Registry of provider factories.
  * Adapters register their providers here before boot.
  */
-const registry = new Map<string, (options: Record<string, unknown>) => unknown>();
+// Use globalThis to share the registry across module instances.
+// When loaded via jiti (e.g., OpenClaw gateway), the same package may be instantiated
+// multiple times with separate module scopes. A global registry ensures that
+// registerProvider() calls from the adapter are visible to the runtime's resolve().
+const REGISTRY_KEY = '__dotai_provider_registry__';
+const registry: Map<string, (options: Record<string, unknown>) => unknown> =
+  ((globalThis as Record<string, unknown>)[REGISTRY_KEY] as Map<string, (options: Record<string, unknown>) => unknown>) ??
+  (() => {
+    const map = new Map<string, (options: Record<string, unknown>) => unknown>();
+    (globalThis as Record<string, unknown>)[REGISTRY_KEY] = map;
+    return map;
+  })();
 
 /** Cache for dynamic imports — same package imported once, reused across roles */
 const importCache = new Map<string, Record<string, unknown>>();
