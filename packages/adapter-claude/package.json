@@ -10,7 +10,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "dot-ai-hook": "dist/hook.js"
+    "dot-ai-hook": "dist/hook.js",
+    "dot-ai-mcp": "dist/mcp-server.js"
   },
   "scripts": {
     "build": "tsc",

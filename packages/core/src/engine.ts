@@ -9,6 +9,8 @@ import type {
 import type { EnrichedContext, Identity, Skill } from './types.js';
 import type { Logger } from './logger.js';
 import { extractLabels, buildVocabulary } from './labels.js';
+import type { ResolvedHook } from './hooks.js';
+import { runAfterBoot, runAfterEnrich, runAfterLearn } from './hooks.js';
 
 /**
  * All providers needed by the engine.
@@ -35,7 +37,11 @@ export interface BootCache {
  * Boot phase — run once per session.
  * Loads identities, indexes skills/tools, builds label vocabulary.
  */
-export async function boot(providers: Providers, logger?: Logger): Promise<BootCache> {
+export async function boot(
+  providers: Providers,
+  logger?: Logger,
+  hooks?: ResolvedHook[],
+): Promise<BootCache> {
   const start = performance.now();
 
   const [identities, skills, tools] = await Promise.all([
@@ -64,7 +70,14 @@ export async function boot(providers: Providers, logger?: Logger): Promise<BootC
     durationMs: Math.round(performance.now() - start),
   });
 
-  return { identities, vocabulary, skills };
+  const cache: BootCache = { identities, vocabulary, skills };
+
+  // Run after_boot hooks
+  if (hooks && hooks.length > 0) {
+    await runAfterBoot(hooks, cache, logger);
+  }
+
+  return cache;
 }
 
 /**
@@ -76,6 +89,7 @@ export async function enrich(
   providers: Providers,
   cache: BootCache,
   logger?: Logger,
+  hooks?: ResolvedHook[],
 ): Promise<EnrichedContext> {
   const start = performance.now();
 
@@ -117,7 +131,7 @@ export async function enrich(
 
   const memoryDescription = providers.memory.describe();
 
-  return {
+  let enriched: EnrichedContext = {
     prompt,
     labels,
     identities: cache.identities,
@@ -128,6 +142,13 @@ export async function enrich(
     tools: matchedTools,
     routing,
   };
+
+  // Run after_enrich hooks
+  if (hooks && hooks.length > 0) {
+    enriched = await runAfterEnrich(hooks, enriched, logger);
+  }
+
+  return enriched;
 }
 
 /**
@@ -137,6 +158,7 @@ export async function enrich(
 export async function learn(
   response: string,
   providers: Providers,
+  hooks?: ResolvedHook[],
 ): Promise<void> {
   const MAX_LEARN_LENGTH = 500;
   const truncated = response.length > MAX_LEARN_LENGTH
@@ -148,4 +170,9 @@ export async function learn(
     type: 'log',
     date: new Date().toISOString().slice(0, 10),
   });
+
+  // Run after_learn hooks
+  if (hooks && hooks.length > 0) {
+    await runAfterLearn(hooks, response);
+  }
 }

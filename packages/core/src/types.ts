@@ -117,11 +117,24 @@ export interface DotAiConfig {
   tools?: ProviderConfig;
   debug?: DebugConfig;
   workspace?: WorkspaceConfig;
+  hooks?: HooksConfig;
 }
 
 export interface ProviderConfig {
   use: string;   // "@dot-ai/provider-file-memory", "@dot-ai/cockpit-memory", etc.
   with?: Record<string, unknown>; // provider-specific options
+}
+
+export interface HookEntryConfig {
+  use: string;
+  with?: Record<string, unknown>;
+}
+
+export interface HooksConfig {
+  after_boot?: HookEntryConfig[];
+  after_enrich?: HookEntryConfig[];
+  after_format?: HookEntryConfig[];
+  after_learn?: HookEntryConfig[];
 }
 
 /**
@@ -133,3 +146,4 @@ export interface BudgetWarning {
   actual: number;
   actions: string[];  // e.g. "dropped 3 skills", "truncated 2 skills to 2000 chars"
 }
+

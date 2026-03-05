@@ -15,6 +15,9 @@ import { resolveConfig } from './config.js';
  */
 const registry = new Map<string, (options: Record<string, unknown>) => unknown>();
 
+/** Cache for dynamic imports — same package imported once, reused across roles */
+const importCache = new Map<string, Record<string, unknown>>();
+
 /**
  * Register a provider factory.
  * Call this before createProviders().
@@ -35,6 +38,7 @@ export function registerProvider(
  */
 export function clearProviders(): void {
   registry.clear();
+  importCache.clear();
 }
 
 /**
@@ -87,7 +91,12 @@ async function tryImportProvider(
   name: string,
 ): Promise<((options: Record<string, unknown>) => unknown) | undefined> {
   try {
-    const mod = await import(name);
+    // Check import cache first
+    let mod = importCache.get(name);
+    if (!mod) {
+      mod = await import(name) as Record<string, unknown>;
+      importCache.set(name, mod);
+    }
 
     // 1. Check for default export (function)
     if (typeof mod.default === 'function') {

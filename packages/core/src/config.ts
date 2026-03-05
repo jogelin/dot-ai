@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { DotAiConfig, ProviderConfig } from './types.js';
+import type { DotAiConfig, HooksConfig, ProviderConfig } from './types.js';
 import { discoverNodes, parseScanDirs } from './nodes.js';
 
 /**
@@ -174,5 +174,105 @@ function parseYaml(raw: string): DotAiConfig {
     }
   }
 
+  // Parse hooks section
+  const hooksSection = result['hooks'];
+  if (hooksSection && typeof hooksSection === 'object') {
+    // hooks section needs special parsing — re-parse from raw lines
+    config.hooks = parseHooksSection(raw);
+  }
+
   return config;
+}
+
+function parseHooksSection(raw: string): HooksConfig {
+  const hooks: HooksConfig = {};
+  const lines = raw.split('\n');
+  let inHooks = false;
+  let currentEvent: string | null = null;
+  let currentEntry: { use?: string; with?: Record<string, unknown> } | null = null;
+
+  for (const line of lines) {
+    // Detect hooks: top-level
+    if (line.match(/^hooks:$/)) {
+      inHooks = true;
+      continue;
+    }
+    // Exit hooks section on next top-level key
+    if (inHooks && line.match(/^\w+:/) && !line.match(/^hooks:/)) {
+      inHooks = false;
+      // Flush last entry
+      if (currentEntry?.use && currentEvent) {
+        pushHookEntry(hooks, currentEvent, currentEntry as { use: string; with?: Record<string, unknown> });
+      }
+      break;
+    }
+    if (!inHooks) continue;
+
+    // Event name (2-space indent): "  after_enrich:"
+    const eventMatch = line.match(/^  (\w+):$/);
+    if (eventMatch) {
+      // Flush previous entry
+      if (currentEntry?.use && currentEvent) {
+        pushHookEntry(hooks, currentEvent, currentEntry as { use: string; with?: Record<string, unknown> });
+      }
+      currentEvent = eventMatch[1];
+      currentEntry = null;
+      continue;
+    }
+
+    // List item start (4-space indent + dash): "    - use: ..."
+    const listItemMatch = line.match(/^    - (\w+):\s*(.+)$/);
+    if (listItemMatch && currentEvent) {
+      // Flush previous entry
+      if (currentEntry?.use) {
+        pushHookEntry(hooks, currentEvent, currentEntry as { use: string; with?: Record<string, unknown> });
+      }
+      currentEntry = { [listItemMatch[1]]: stripQuotes(listItemMatch[2].trim()) };
+      continue;
+    }
+
+    // Continuation of list item (6-space indent): "      key: value"
+    const contMatch = line.match(/^      (\w+):\s*(.+)$/);
+    if (contMatch && currentEntry) {
+      const key = contMatch[1];
+      const value = stripQuotes(contMatch[2].trim());
+      if (key === 'with') {
+        // 'with' needs to be an object — handled in deeper indent
+        currentEntry.with = {};
+      } else if (currentEntry.with !== undefined) {
+        // We're already in a 'with' block — but wait, this could be a direct property
+        (currentEntry as Record<string, unknown>)[key] = value;
+      } else {
+        (currentEntry as Record<string, unknown>)[key] = value;
+      }
+      continue;
+    }
+
+    // Deep nested (8-space indent) for with block: "        option: value"
+    const deepMatch = line.match(/^        (\w+):\s*(.+)$/);
+    if (deepMatch && currentEntry) {
+      if (!currentEntry.with) currentEntry.with = {};
+      currentEntry.with[deepMatch[1]] = stripQuotes(deepMatch[2].trim());
+      continue;
+    }
+  }
+
+  // Flush last entry
+  if (currentEntry?.use && currentEvent) {
+    pushHookEntry(hooks, currentEvent, currentEntry as { use: string; with?: Record<string, unknown> });
+  }
+
+  return hooks;
+}
+
+function pushHookEntry(
+  hooks: HooksConfig,
+  event: string,
+  entry: { use: string; with?: Record<string, unknown> },
+): void {
+  const validEvents = ['after_boot', 'after_enrich', 'after_format', 'after_learn'] as const;
+  if (!validEvents.includes(event as typeof validEvents[number])) return;
+  const key = event as keyof HooksConfig;
+  if (!hooks[key]) hooks[key] = [];
+  hooks[key]!.push(entry);
 }

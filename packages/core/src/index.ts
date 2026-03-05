@@ -22,6 +22,8 @@ export type {
   ProviderConfig,
   WorkspaceConfig,
   BudgetWarning,
+  HookEntryConfig,
+  HooksConfig,
 } from './types.js';
 
 // ── Contracts ──
@@ -46,6 +48,10 @@ export type { ResolvedConfig } from './config.js';
 // ── Format ──
 export { formatContext } from './format.js';
 export type { FormatOptions } from './format.js';
+
+// ── Hooks ──
+export { loadHooks, runAfterBoot, runAfterEnrich, runAfterFormat, runAfterLearn } from './hooks.js';
+export type { HookEvent, HookHandler, ResolvedHook } from './hooks.js';
 
 // ── Capabilities ──
 export { buildCapabilities } from './capabilities.js';
