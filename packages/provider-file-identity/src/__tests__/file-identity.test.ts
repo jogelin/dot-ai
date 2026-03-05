@@ -126,5 +126,165 @@ describe('FileIdentityProvider', () => {
       expect(byType['user']).toBe('user content');
       expect(byType['identity']).toBe('identity content');
     });
+
+    it('does NOT load project AGENT.md files from non-root nodes', async () => {
+      // Root node
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+      await writeFile(join(rootAiDir, 'AGENTS.md'), 'root agents', 'utf-8');
+
+      // Project node
+      const projDir = join(testDir, 'projects', 'myapp', '.ai');
+      await mkdir(projDir, { recursive: true });
+      await writeFile(join(projDir, 'AGENT.md'), 'myapp agent content', 'utf-8');
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'myapp', path: projDir, root: false },
+        ],
+      });
+
+      const identities = await provider.load();
+      // Should only have root identities
+      expect(identities).toHaveLength(1);
+      expect(identities[0].type).toBe('agents');
+      expect(identities[0].content).toBe('root agents');
+      // Project identity should NOT be loaded
+      const types = identities.map(i => i.type);
+      expect(types).not.toContain('agent');
+    });
+  });
+
+  describe('match', () => {
+    it('returns empty array when no project nodes exist', async () => {
+      const aiDir = join(testDir, '.ai');
+      await mkdir(aiDir, { recursive: true });
+
+      const provider = new FileIdentityProvider({ root: testDir });
+      const result = await provider.match!([{ name: 'anything', source: 'test' }]);
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when no labels match project node names', async () => {
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+
+      const projDir = join(testDir, 'projects', 'myapp', '.ai');
+      await mkdir(projDir, { recursive: true });
+      await writeFile(join(projDir, 'AGENT.md'), 'myapp agent content', 'utf-8');
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'myapp', path: projDir, root: false },
+        ],
+      });
+
+      // Label 'other' does not match 'myapp'
+      const result = await provider.match!([{ name: 'other', source: 'test' }]);
+      expect(result).toEqual([]);
+    });
+
+    it('returns project identity when label matches node name', async () => {
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+
+      const projDir = join(testDir, 'projects', 'myapp', '.ai');
+      await mkdir(projDir, { recursive: true });
+      await writeFile(join(projDir, 'AGENT.md'), 'myapp agent content', 'utf-8');
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'myapp', path: projDir, root: false },
+        ],
+      });
+
+      const result = await provider.match!([{ name: 'myapp', source: 'labels' }]);
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('agent');
+      expect(result[0].content).toBe('myapp agent content');
+      expect(result[0].node).toBe('myapp');
+      expect(result[0].priority).toBe(50);
+      expect(result[0].source).toBe('file-identity');
+    });
+
+    it('returns only matching project identities when multiple nodes exist', async () => {
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+
+      const proj1Dir = join(testDir, 'projects', 'proj1', '.ai');
+      await mkdir(proj1Dir, { recursive: true });
+      await writeFile(join(proj1Dir, 'AGENT.md'), 'proj1 content', 'utf-8');
+
+      const proj2Dir = join(testDir, 'projects', 'proj2', '.ai');
+      await mkdir(proj2Dir, { recursive: true });
+      await writeFile(join(proj2Dir, 'AGENT.md'), 'proj2 content', 'utf-8');
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'proj1', path: proj1Dir, root: false },
+          { name: 'proj2', path: proj2Dir, root: false },
+        ],
+      });
+
+      // Only label 'proj1' matches
+      const result = await provider.match!([{ name: 'proj1', source: 'labels' }]);
+      expect(result).toHaveLength(1);
+      expect(result[0].content).toBe('proj1 content');
+      expect(result[0].node).toBe('proj1');
+    });
+
+    it('returns multiple project identities when multiple labels match', async () => {
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+
+      const proj1Dir = join(testDir, 'projects', 'proj1', '.ai');
+      await mkdir(proj1Dir, { recursive: true });
+      await writeFile(join(proj1Dir, 'AGENT.md'), 'proj1 content', 'utf-8');
+
+      const proj2Dir = join(testDir, 'projects', 'proj2', '.ai');
+      await mkdir(proj2Dir, { recursive: true });
+      await writeFile(join(proj2Dir, 'AGENT.md'), 'proj2 content', 'utf-8');
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'proj1', path: proj1Dir, root: false },
+          { name: 'proj2', path: proj2Dir, root: false },
+        ],
+      });
+
+      const result = await provider.match!([
+        { name: 'proj1', source: 'labels' },
+        { name: 'proj2', source: 'labels' },
+      ]);
+      expect(result).toHaveLength(2);
+      const nodes = result.map(r => r.node);
+      expect(nodes).toContain('proj1');
+      expect(nodes).toContain('proj2');
+    });
+
+    it('skips project nodes whose AGENT.md file is missing', async () => {
+      const rootAiDir = join(testDir, '.ai');
+      await mkdir(rootAiDir, { recursive: true });
+
+      // proj1 has no AGENT.md
+      const proj1Dir = join(testDir, 'projects', 'proj1', '.ai');
+      await mkdir(proj1Dir, { recursive: true });
+      // No AGENT.md written
+
+      const provider = new FileIdentityProvider({
+        nodes: [
+          { name: 'root', path: rootAiDir, root: true },
+          { name: 'proj1', path: proj1Dir, root: false },
+        ],
+      });
+
+      const result = await provider.match!([{ name: 'proj1', source: 'labels' }]);
+      expect(result).toEqual([]);
+    });
   });
 });

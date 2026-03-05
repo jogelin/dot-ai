@@ -244,4 +244,126 @@ describe('formatContext', () => {
     expect(result).toContain('Real content');
     expect(result).not.toContain('no-content');
   });
+
+  describe('format stability (determinism)', () => {
+    it('produces identical output for same inputs called twice', () => {
+      const ctx = makeContext({
+        identities: [
+          makeIdentity({ content: 'Identity A', priority: 80, type: 'user' }),
+          makeIdentity({ content: 'Identity B', priority: 100, type: 'agents' }),
+        ],
+        memories: [
+          makeMemory({ content: 'Memory 1', date: '2025-01-01' }),
+          makeMemory({ content: 'Memory 2', date: '2025-03-01' }),
+        ],
+        skills: [
+          makeSkill({ name: 'zebra-skill', content: 'Zebra content' }),
+          makeSkill({ name: 'alpha-skill', content: 'Alpha content' }),
+        ],
+        tools: [
+          makeTool({ name: 'z-tool', description: 'Z tool' }),
+          makeTool({ name: 'a-tool', description: 'A tool' }),
+        ],
+      });
+
+      const result1 = formatContext(ctx);
+      const result2 = formatContext(ctx);
+
+      expect(result1).toBe(result2);
+    });
+
+    it('produces same output regardless of input ordering (skills sorted by name)', () => {
+      const ctxA = makeContext({
+        skills: [
+          makeSkill({ name: 'zebra-skill', content: 'Zebra content' }),
+          makeSkill({ name: 'alpha-skill', content: 'Alpha content' }),
+          makeSkill({ name: 'middle-skill', content: 'Middle content' }),
+        ],
+      });
+
+      const ctxB = makeContext({
+        skills: [
+          makeSkill({ name: 'middle-skill', content: 'Middle content' }),
+          makeSkill({ name: 'alpha-skill', content: 'Alpha content' }),
+          makeSkill({ name: 'zebra-skill', content: 'Zebra content' }),
+        ],
+      });
+
+      expect(formatContext(ctxA)).toBe(formatContext(ctxB));
+    });
+
+    it('sorts skills by name alphabetically', () => {
+      const ctx = makeContext({
+        skills: [
+          makeSkill({ name: 'zebra-skill', content: 'Zebra content' }),
+          makeSkill({ name: 'alpha-skill', content: 'Alpha content' }),
+          makeSkill({ name: 'middle-skill', content: 'Middle content' }),
+        ],
+      });
+
+      const result = formatContext(ctx);
+      const alphaPos = result.indexOf('alpha-skill');
+      const middlePos = result.indexOf('middle-skill');
+      const zebraPos = result.indexOf('zebra-skill');
+
+      expect(alphaPos).toBeLessThan(middlePos);
+      expect(middlePos).toBeLessThan(zebraPos);
+    });
+
+    it('sorts memories by date DESC (most recent first)', () => {
+      const ctx = makeContext({
+        memories: [
+          makeMemory({ content: 'Oldest memory', date: '2024-01-01' }),
+          makeMemory({ content: 'Newest memory', date: '2025-12-31' }),
+          makeMemory({ content: 'Middle memory', date: '2025-06-15' }),
+        ],
+      });
+
+      const result = formatContext(ctx);
+      const newestPos = result.indexOf('Newest memory');
+      const middlePos = result.indexOf('Middle memory');
+      const oldestPos = result.indexOf('Oldest memory');
+
+      expect(newestPos).toBeLessThan(middlePos);
+      expect(middlePos).toBeLessThan(oldestPos);
+    });
+
+    it('produces same output for memories regardless of input ordering', () => {
+      const ctxA = makeContext({
+        memories: [
+          makeMemory({ content: 'Old memory', date: '2024-01-01' }),
+          makeMemory({ content: 'New memory', date: '2025-12-31' }),
+        ],
+      });
+
+      const ctxB = makeContext({
+        memories: [
+          makeMemory({ content: 'New memory', date: '2025-12-31' }),
+          makeMemory({ content: 'Old memory', date: '2024-01-01' }),
+        ],
+      });
+
+      expect(formatContext(ctxA)).toBe(formatContext(ctxB));
+    });
+
+    it('sorts identities by priority DESC then type alphabetically', () => {
+      const ctx = makeContext({
+        identities: [
+          makeIdentity({ content: 'Type z same priority', priority: 50, type: 'z-type' }),
+          makeIdentity({ content: 'Type a same priority', priority: 50, type: 'a-type' }),
+          makeIdentity({ content: 'High priority identity', priority: 100, type: 'agents' }),
+        ],
+      });
+
+      const result = formatContext(ctx);
+      const highPos = result.indexOf('High priority identity');
+      const typeAPos = result.indexOf('Type a same priority');
+      const typeZPos = result.indexOf('Type z same priority');
+
+      // High priority first
+      expect(highPos).toBeLessThan(typeAPos);
+      // Same priority: 'a-type' before 'z-type' alphabetically
+      expect(typeAPos).toBeLessThan(typeZPos);
+    });
+  });
 });

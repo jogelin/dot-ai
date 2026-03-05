@@ -32,9 +32,13 @@ export interface SkillProvider {
 /**
  * Identity provider — load identity documents.
  * Implementation decides format and source.
+ *
+ * load() returns root identities (always loaded at boot).
+ * match() is optional: lazily loads project-level identities based on matched labels.
  */
 export interface IdentityProvider {
   load(): Promise<Identity[]>;
+  match?(labels: Label[]): Promise<Identity[]>; // optional lazy-load for project identities
 }
 
 /**

@@ -56,8 +56,18 @@ export async function boot(
     (s.triggers ?? []).filter((t) => !META_TRIGGERS.has(t)),
   );
 
+  // Collect project node names from identity provider (if it exposes them)
+  // so they can be matched as labels in enrich()
+  const projectNodeNames: string[] = [];
+  if ('projectNodes' in providers.identity) {
+    const nodes = (providers.identity as unknown as { projectNodes: Array<{ name: string }> }).projectNodes;
+    if (Array.isArray(nodes)) {
+      projectNodeNames.push(...nodes.map((n) => n.name));
+    }
+  }
+
   const vocabulary = buildVocabulary(
-    [...skills.map((s) => s.labels), ...skillTriggers],
+    [...skills.map((s) => s.labels), ...skillTriggers, projectNodeNames],
     tools.map((t) => t.labels),
   );
 
@@ -131,10 +141,19 @@ export async function enrich(
 
   const memoryDescription = providers.memory.describe();
 
+  // Lazily load project identities based on matched labels (if provider supports it)
+  let enrichedIdentities = cache.identities;
+  if (providers.identity.match) {
+    const projectIdentities = await providers.identity.match(labels);
+    if (projectIdentities.length > 0) {
+      enrichedIdentities = [...cache.identities, ...projectIdentities];
+    }
+  }
+
   let enriched: EnrichedContext = {
     prompt,
     labels,
-    identities: cache.identities,
+    identities: enrichedIdentities,
     memories,
     memoryDescription,
     recentTasks: recentTasks.length > 0 ? recentTasks : undefined,

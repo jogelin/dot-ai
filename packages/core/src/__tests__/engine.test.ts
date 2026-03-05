@@ -272,6 +272,79 @@ describe('enrich', () => {
     expect(callOrder).toContain('tools');
     expect(callOrder).toContain('routing');
   });
+
+  it('calls identity.match() when provider supports it and includes project identities', async () => {
+    const projectIdentity = { type: 'agent', content: 'Project AGENT.md', source: 'file-identity', priority: 50, node: 'myapp' };
+    const identityMatchFn = vi.fn().mockResolvedValue([projectIdentity]);
+
+    const providers = createMockProviders({
+      identity: {
+        load: vi.fn().mockResolvedValue([]),
+        match: identityMatchFn,
+      },
+    });
+
+    const cache = {
+      identities: [{ type: 'agents', content: 'Root identity', source: 'file', priority: 100 }],
+      vocabulary: ['myapp'],
+      skills: [],
+    };
+
+    const result = await enrich('myapp needs fixing', providers, cache);
+
+    expect(identityMatchFn).toHaveBeenCalledOnce();
+    expect(identityMatchFn).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ name: 'myapp' })]),
+    );
+    // Should include both root (from cache) and project identities
+    expect(result.identities).toHaveLength(2);
+    expect(result.identities).toContainEqual(
+      expect.objectContaining({ type: 'agents', content: 'Root identity' }),
+    );
+    expect(result.identities).toContainEqual(
+      expect.objectContaining({ type: 'agent', content: 'Project AGENT.md' }),
+    );
+  });
+
+  it('does not call identity.match() when provider does not support it', async () => {
+    const providers = createMockProviders({
+      identity: {
+        load: vi.fn().mockResolvedValue([]),
+        // No match() method
+      },
+    });
+
+    const cache = {
+      identities: [{ type: 'agents', content: 'Root identity', source: 'file', priority: 100 }],
+      vocabulary: [],
+      skills: [],
+    };
+
+    const result = await enrich('hello', providers, cache);
+
+    // Should only have cache identities, no project identities
+    expect(result.identities).toEqual(cache.identities);
+  });
+
+  it('keeps only cache identities when identity.match() returns empty', async () => {
+    const providers = createMockProviders({
+      identity: {
+        load: vi.fn().mockResolvedValue([]),
+        match: vi.fn().mockResolvedValue([]),
+      },
+    });
+
+    const cache = {
+      identities: [{ type: 'agents', content: 'Root identity', source: 'file', priority: 100 }],
+      vocabulary: [],
+      skills: [],
+    };
+
+    const result = await enrich('hello', providers, cache);
+
+    // Should still have cache identities unchanged
+    expect(result.identities).toEqual(cache.identities);
+  });
 });
 
 describe('learn', () => {

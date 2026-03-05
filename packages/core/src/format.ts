@@ -26,9 +26,12 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   const start = performance.now();
   const sections: string[] = [];
 
-  // Identity sections (sorted by priority, highest first)
+  // Identity sections (sorted by priority DESC, then by type alphabetically for stability)
   if (!options?.skipIdentities) {
-    const sortedIdentities = [...ctx.identities].sort((a, b) => b.priority - a.priority);
+    const sortedIdentities = [...ctx.identities].sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return a.type.localeCompare(b.type);
+    });
     for (const identity of sortedIdentities) {
       if (identity.content) {
         sections.push(identity.content);
@@ -36,9 +39,15 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
     }
   }
 
-  // Memory section
-  if (ctx.memories.length > 0 || ctx.memoryDescription) {
-    sections.push(formatMemory(ctx.memories, ctx.memoryDescription));
+  // Memory section (sorted by date DESC for stability)
+  const sortedMemories = [...ctx.memories].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date);
+  });
+  if (sortedMemories.length > 0 || ctx.memoryDescription) {
+    sections.push(formatMemory(sortedMemories, ctx.memoryDescription));
   }
 
   // Recent tasks section
@@ -46,8 +55,8 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
     sections.push(formatTasks(ctx.recentTasks));
   }
 
-  // Skills section
-  let loadedSkills = ctx.skills.filter(s => s.content);
+  // Skills section (sorted by name alphabetically for determinism)
+  let loadedSkills = [...ctx.skills].sort((a, b) => a.name.localeCompare(b.name)).filter(s => s.content);
   if (options?.maxSkills != null) {
     loadedSkills = loadedSkills.slice(0, options.maxSkills);
   }
@@ -55,9 +64,10 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
     sections.push(formatSkills(loadedSkills, options?.maxSkillLength));
   }
 
-  // Tools section
-  if (ctx.tools.length > 0) {
-    sections.push(formatTools(ctx.tools));
+  // Tools section (sorted by name alphabetically for determinism)
+  const sortedTools = [...ctx.tools].sort((a, b) => a.name.localeCompare(b.name));
+  if (sortedTools.length > 0) {
+    sections.push(formatTools(sortedTools));
   }
 
   // Routing hint
@@ -85,10 +95,10 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
         }
       }
 
-      // Strategy 2: Drop oldest memories (keep most recent 5)
-      if (current > options.tokenBudget && memorySectionIdx !== -1 && ctx.memories.length > 5) {
-        const kept = ctx.memories.slice(0, 5);
-        const dropped = ctx.memories.length - 5;
+      // Strategy 2: Drop oldest memories (keep most recent 5, already sorted by date DESC)
+      if (current > options.tokenBudget && memorySectionIdx !== -1 && sortedMemories.length > 5) {
+        const kept = sortedMemories.slice(0, 5);
+        const dropped = sortedMemories.length - 5;
         sections[memorySectionIdx] = formatMemory(kept, ctx.memoryDescription);
         actions.push(`dropped ${dropped} oldest memories`);
         current = estimate();
