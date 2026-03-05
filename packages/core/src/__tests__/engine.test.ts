@@ -350,7 +350,7 @@ describe('enrich', () => {
 describe('learn', () => {
   it('calls memory.store with the response', async () => {
     const providers = createMockProviders();
-    const longResponse = 'This is what I learned today — a detailed explanation of the architecture and design decisions made';
+    const longResponse = 'This is what I learned today — a detailed explanation of the architecture and design decisions made here';
     await learn(longResponse, providers);
     expect(providers.memory.store).toHaveBeenCalledOnce();
     expect(providers.memory.store).toHaveBeenCalledWith(
@@ -361,7 +361,7 @@ describe('learn', () => {
   it('stores entry with today\'s date', async () => {
     const providers = createMockProviders();
     const today = new Date().toISOString().slice(0, 10);
-    await learn('This is a sufficiently long response to pass the minimum length threshold for learning', providers);
+    await learn('This is a sufficiently long response to pass the minimum length threshold for learning and should be stored', providers);
     expect(providers.memory.store).toHaveBeenCalledWith(
       expect.objectContaining({ date: today }),
     );
@@ -378,5 +378,60 @@ describe('learn', () => {
   it('resolves without error on successful store', async () => {
     const providers = createMockProviders();
     await expect(learn('response', providers)).resolves.toBeUndefined();
+  });
+
+  it('skips responses shorter than 100 chars', async () => {
+    const providers = createMockProviders();
+    await learn('Short response under 100 characters', providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses containing NO_REPLY', async () => {
+    const providers = createMockProviders();
+    const response = 'NO_REPLY — this is a long enough response but should not be stored in memory at all';
+    await learn(response + ' extra text to make it over 100 characters long for this test', providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses containing HEARTBEAT_OK', async () => {
+    const providers = createMockProviders();
+    const response = 'HEARTBEAT_OK — system is healthy and running fine, nothing to store in memory for this heartbeat check';
+    await learn(response, providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses starting with "OK"', async () => {
+    const providers = createMockProviders();
+    const response = "OK, I've updated the configuration file as requested. All settings have been applied successfully to the system.";
+    await learn(response, providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses starting with "Done"', async () => {
+    const providers = createMockProviders();
+    const response = "Done — the migration has been completed successfully. All records have been updated in the database.";
+    await learn(response, providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses starting with "Here\'s"', async () => {
+    const providers = createMockProviders();
+    const response = "Here's the summary you requested. The analysis shows that everything is working correctly as expected.";
+    await learn(response, providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('skips responses starting with "Sure"', async () => {
+    const providers = createMockProviders();
+    const response = "Sure, I can help with that. Let me look into this issue and provide you with a detailed explanation right now.";
+    await learn(response, providers);
+    expect(providers.memory.store).not.toHaveBeenCalled();
+  });
+
+  it('stores substantive responses that don\'t match conversational patterns', async () => {
+    const providers = createMockProviders();
+    const response = 'The authentication system was refactored to use JWT with refresh tokens. The decision was made to improve security and scalability.';
+    await learn(response, providers);
+    expect(providers.memory.store).toHaveBeenCalledOnce();
   });
 });

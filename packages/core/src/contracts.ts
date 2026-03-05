@@ -17,6 +17,7 @@ export interface MemoryProvider {
   search(query: string, labels?: string[]): Promise<MemoryEntry[]>;
   store(entry: Omit<MemoryEntry, 'source'>): Promise<void>;
   describe(): string;
+  consolidate?(): Promise<{ archived: number; deleted: number }>;
 }
 
 /**

@@ -181,7 +181,15 @@ export async function learn(
   logger?: Logger,
 ): Promise<void> {
   // Skip very short responses (likely acknowledgments, not learnable)
-  if (response.length < 50) return;
+  if (response.length < 100) return;
+
+  // Skip responses containing noise markers
+  if (response.includes('NO_REPLY') || response.includes('HEARTBEAT_OK')) return;
+
+  // Skip responses that start with common conversational patterns
+  const CONVERSATIONAL_PREFIXES = ['OK', 'Done', "Here's", "I've", 'Sure', 'No problem', 'Voilà', 'C\'est fait'];
+  const trimmed = response.trimStart();
+  if (CONVERSATIONAL_PREFIXES.some(prefix => trimmed.startsWith(prefix))) return;
 
   const MAX_LEARN_LENGTH = 500;
   const truncated = response.length > MAX_LEARN_LENGTH

@@ -28,12 +28,16 @@ async function main(): Promise<void> {
     case 'trace':
       await cmdTrace(args.slice(1));
       break;
+    case 'consolidate':
+      await cmdConsolidate();
+      break;
     default:
       console.log('dot-ai v0.4.0\n');
       console.log('Commands:');
       console.log('  init              Create .ai/ directory with defaults');
       console.log('  boot              Run boot and show workspace info');
       console.log('  trace "<prompt>"  Dry-run enrich pipeline with token estimates');
+      console.log('  consolidate       Clean up low-value memories (deduplicate, archive old)');
       exit(command ? 1 : 0);
   }
 }
@@ -220,6 +224,27 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   }
 
   console.log(`\nTrace complete in ${duration}ms`);
+}
+
+async function cmdConsolidate(): Promise<void> {
+  const root = cwd();
+
+  clearProviders();
+  registerDefaults();
+
+  const rawConfig = await loadConfig(root);
+  const config = injectRoot(rawConfig, root);
+  const providers = await createProviders(config);
+
+  if (!providers.memory.consolidate) {
+    console.log('Memory provider does not support consolidation.');
+    return;
+  }
+
+  const report = await providers.memory.consolidate();
+  console.log(`dot-ai consolidate — ${root}\n`);
+  console.log(`Archived: ${report.archived}`);
+  console.log(`Deleted:  ${report.deleted}`);
 }
 
 main().catch((err) => {
