@@ -10,24 +10,14 @@
  *   "PreToolUse":       [{ "type": "command", "command": "node hook.js pre-tool-use" }]
  */
 import {
-  loadConfig,
-  registerDefaults,
-  createProviders,
-  boot,
-  enrich,
-  learn,
-  injectRoot,
-  formatContext,
-  applyFormatHooks,
-  loadHooks,
+  DotAiRuntime,
   NoopLogger,
   JsonFileLogger,
-  type Providers,
-  type BootCache,
+  loadConfig,
 } from '@dot-ai/core';
-import type { Logger, ResolvedHook } from '@dot-ai/core';
+import type { Logger } from '@dot-ai/core';
 
-// ── Shared helpers ──
+// ── Shared ──
 
 async function readStdin(): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
@@ -37,118 +27,93 @@ async function readStdin(): Promise<Record<string, unknown>> {
   return JSON.parse(Buffer.concat(chunks).toString('utf-8'));
 }
 
-function createLogger(rawConfig: { debug?: { logPath?: string } }): Logger {
-  const logPath = process.env.DOT_AI_LOG ?? rawConfig.debug?.logPath;
-  return logPath ? new JsonFileLogger(logPath) : new NoopLogger();
-}
-
-async function initPipeline(workspaceRoot: string): Promise<{
-  providers: Providers;
-  cache: BootCache;
-  logger: Logger;
-  hooks: ResolvedHook[];
-}> {
-  registerDefaults();
+async function createRuntime(workspaceRoot: string): Promise<DotAiRuntime> {
   const rawConfig = await loadConfig(workspaceRoot);
-  const config = injectRoot(rawConfig, workspaceRoot);
-  const logger = createLogger(rawConfig);
-  const hooks = await loadHooks(rawConfig.hooks, logger);
-  const providers = await createProviders(config);
-  const cache = await boot(providers, logger, hooks);
-  return { providers, cache, logger, hooks };
+  const logPath = process.env.DOT_AI_LOG ?? rawConfig.debug?.logPath;
+  const logger: Logger = logPath ? new JsonFileLogger(logPath) : new NoopLogger();
+
+  const runtime = new DotAiRuntime({
+    workspaceRoot,
+    logger,
+    skipIdentities: true,
+    maxSkillLength: 3000,
+    maxSkills: 5,
+  });
+  await runtime.boot();
+  return runtime;
 }
 
 // ── Event handlers ──
 
-/** UserPromptSubmit — enrich pipeline + inject context (existing behavior) */
-async function handlePromptSubmit(event: Record<string, unknown>): Promise<void> {
+async function handlePromptSubmit(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
-  const { providers, cache, logger, hooks } = await initPipeline(workspaceRoot);
+  const runtime = await createRuntime(workspaceRoot);
 
   const prompt = (event.prompt ?? event.content ?? '') as string;
-  if (!prompt) {
-    await logger.flush();
-    return;
-  }
+  if (!prompt) return runtime;
 
-  const enriched = await enrich(prompt, providers, cache, logger, hooks);
-
-  for (const skill of enriched.skills) {
-    if (!skill.content && skill.name) {
-      skill.content = await providers.skills.load(skill.name) ?? undefined;
-    }
-  }
-
-  let formatted = formatContext(enriched, {
-    skipIdentities: true,
-    maxSkillLength: 3000,
-    maxSkills: 5,
-    logger,
-  });
-
-  if (hooks.length > 0) {
-    formatted = await applyFormatHooks(formatted, enriched, hooks, logger);
-  }
-
+  const { formatted } = await runtime.processPrompt(prompt);
   if (formatted) {
     process.stdout.write(JSON.stringify({ result: formatted }));
   }
-  await logger.flush();
+  return runtime;
 }
 
-/** PreCompact — store compaction summary in memory before context is compressed */
-async function handlePreCompact(event: Record<string, unknown>): Promise<void> {
+async function handlePreCompact(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
-
+  const runtime = await createRuntime(workspaceRoot);
   try {
-    const { providers, logger, hooks: _hooks } = await initPipeline(workspaceRoot);
-
     const summary = (event.summary ?? event.content ?? '') as string;
-    if (summary) {
-      await providers.memory.store({
+    if (summary && runtime.providers) {
+      await runtime.providers.memory.store({
         content: `[compaction] ${summary.slice(0, 1000)}`,
         type: 'log',
         date: new Date().toISOString().slice(0, 10),
       });
     }
-    await logger.flush();
   } catch (err) {
     process.stderr.write(`[dot-ai] pre-compact error: ${err}\n`);
   }
+  return runtime;
 }
 
-/** Stop — extract key decisions/facts from session and store in memory */
-async function handleStop(event: Record<string, unknown>): Promise<void> {
+async function handleStop(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
-
+  const runtime = await createRuntime(workspaceRoot);
   try {
-    const { providers, logger, hooks } = await initPipeline(workspaceRoot);
-
     const response = (event.response ?? event.content ?? '') as string;
     if (response) {
-      await learn(response, providers, hooks, logger);
+      await runtime.learn(response);
     }
-    await logger.flush();
   } catch (err) {
     process.stderr.write(`[dot-ai] stop error: ${err}\n`);
   }
+  return runtime;
 }
 
-/** PreToolUse — block writes to memory/*.md files (enforce SQLite-only memory) */
-async function handlePreToolUse(event: Record<string, unknown>): Promise<void> {
+async function handlePreToolUse(event: Record<string, unknown>): Promise<undefined> {
   const toolName = (event.tool_name ?? '') as string;
   const input = (event.tool_input ?? {}) as Record<string, unknown>;
 
-  // Only check Write and Edit tools
-  if (toolName !== 'Write' && toolName !== 'Edit') return;
+  if (toolName === 'Write' || toolName === 'Edit') {
+    const filePath = (input.file_path ?? input.path ?? '') as string;
+    if (filePath && /memory\/[^\s]*\.md$/i.test(filePath)) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: 'Memory is managed by dot-ai SQLite provider. Use the memory_store tool instead.',
+      }));
+      return;
+    }
+  }
 
-  const filePath = (input.file_path ?? input.path ?? '') as string;
-  if (filePath && /memory\/.*\.md$/i.test(filePath)) {
-    // Block the write — output rejection
-    process.stdout.write(JSON.stringify({
-      decision: 'block',
-      reason: 'Memory is managed by dot-ai SQLite provider. Do not write to memory/*.md files directly. Use the memory_store tool instead.',
-    }));
+  if (toolName === 'Bash') {
+    const command = (input.command ?? '') as string;
+    if (/memory\/[^\s]*\.md/i.test(command) && /(?:>|tee|cp|mv|cat\s*<<|echo\s.*>)/i.test(command)) {
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: 'Memory is managed by dot-ai SQLite provider. Use the memory_store tool instead.',
+      }));
+    }
   }
 }
 
@@ -165,26 +130,21 @@ async function main(): Promise<void> {
     return;
   }
 
+  let runtime: DotAiRuntime | undefined;
   try {
     switch (eventType) {
-      case 'prompt-submit':
-        await handlePromptSubmit(event);
-        break;
-      case 'pre-compact':
-        await handlePreCompact(event);
-        break;
-      case 'stop':
-        await handleStop(event);
-        break;
-      case 'pre-tool-use':
-        await handlePreToolUse(event);
-        break;
-      default:
-        process.stderr.write(`[dot-ai] Unknown event type: ${eventType}\n`);
+      case 'prompt-submit': runtime = await handlePromptSubmit(event); break;
+      case 'pre-compact': runtime = await handlePreCompact(event); break;
+      case 'stop': runtime = await handleStop(event); break;
+      case 'pre-tool-use': await handlePreToolUse(event); break;
+      default: process.stderr.write(`[dot-ai] Unknown event type: ${eventType}\n`);
     }
   } catch (err) {
     process.stderr.write(`[dot-ai] Error: ${err}\n`);
   }
+
+  // Flush logger before process exit
+  if (runtime) await runtime.flush();
 }
 
 main();

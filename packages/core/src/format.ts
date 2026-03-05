@@ -96,12 +96,12 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
 
       // Strategy 3: Drop skills by reverse order (least relevant last in the array)
       if (current > options.tokenBudget && skillSectionIdx !== -1 && loadedSkills.length > 1) {
-        while (loadedSkills.length > 1 && estimate() > options.tokenBudget) {
+        while (loadedSkills.length > 1 && current > options.tokenBudget) {
           const dropped = loadedSkills.pop()!;
           actions.push(`dropped skill: ${dropped.name}`);
           sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength ?? 2000);
+          current = estimate();
         }
-        current = estimate();
       }
 
       // Emit warning if any trimming occurred

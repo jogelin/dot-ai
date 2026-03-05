@@ -70,5 +70,9 @@ export { extractLabels, buildVocabulary } from './labels.js';
 // ── Nodes ──
 export { discoverNodes, parseScanDirs } from './nodes.js';
 
+// ── Runtime ──
+export { DotAiRuntime } from './runtime.js';
+export type { RuntimeOptions, ProcessResult } from './runtime.js';
+
 // ── registerDefaults ──
 export { registerDefaults } from './loader.js';

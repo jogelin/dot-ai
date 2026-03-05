@@ -161,6 +161,9 @@ export async function learn(
   hooks?: ResolvedHook[],
   logger?: Logger,
 ): Promise<void> {
+  // Skip very short responses (likely acknowledgments, not learnable)
+  if (response.length < 50) return;
+
   const MAX_LEARN_LENGTH = 500;
   const truncated = response.length > MAX_LEARN_LENGTH
     ? response.slice(0, MAX_LEARN_LENGTH) + '…'

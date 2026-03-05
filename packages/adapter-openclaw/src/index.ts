@@ -1,23 +1,13 @@
 /**
  * dot-ai OpenClaw plugin v4
  *
- * Hooks into before_agent_start to run the full dot-ai pipeline:
- * loadConfig → registerDefaults → createProviders → boot → enrich → formatContext
- *
+ * Hooks into before_agent_start to run the full dot-ai pipeline via DotAiRuntime.
  * Returns enriched context as prependContext for the agent.
  */
 import {
-  loadConfig,
   registerDefaults,
   registerProvider,
-  createProviders,
-  boot,
-  enrich,
-  injectRoot,
-  formatContext,
-  buildCapabilities,
-  type Providers,
-  type BootCache,
+  DotAiRuntime,
 } from '@dot-ai/core';
 
 // Inline OpenClaw plugin API types
@@ -98,8 +88,7 @@ async function loadCustomProviders(
 }
 
 // Session-level cache
-let cachedProviders: Providers | null = null;
-let cachedBoot: BootCache | null = null;
+let cachedRuntime: DotAiRuntime | null = null;
 let cachedWorkspace: string | null = null;
 
 const plugin = {
@@ -124,8 +113,8 @@ const plugin = {
     // Register tools from core capabilities (delegates to providers)
     api.registerTool(
       (_ctx: Record<string, unknown>) => {
-        if (!cachedProviders) return null;
-        const capabilities = buildCapabilities(cachedProviders);
+        if (!cachedRuntime?.isBooted) return null;
+        const capabilities = cachedRuntime.capabilities;
         return capabilities.map((cap): OpenClawTool => ({
           name: cap.name,
           label: cap.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -150,7 +139,6 @@ const plugin = {
         _event: unknown,
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
-        // Ensure custom providers are registered before proceeding
         await providerPromise;
 
         const workspaceDir = ctx.workspaceDir;
@@ -159,7 +147,6 @@ const plugin = {
           return;
         }
 
-        // Skip sub-agent/cron sessions
         const isSubagent = ctx.sessionKey?.includes(':subagent:') || ctx.sessionKey?.includes(':cron:');
         if (isSubagent) {
           api.logger.debug?.('[dot-ai] Sub-agent/cron session, skipping');
@@ -167,33 +154,18 @@ const plugin = {
         }
 
         try {
-          // Boot once per workspace (cache across prompts in same session)
-          if (!cachedProviders || cachedWorkspace !== workspaceDir) {
-            const rawConfig = await loadConfig(workspaceDir);
-
-            // Inject workspaceDir into all provider options
-            const config = injectRoot(rawConfig, workspaceDir);
-            cachedProviders = await createProviders(config);
-            cachedBoot = await boot(cachedProviders);
+          if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
+            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
+            await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
-            api.logger.info(`[dot-ai] Booted: ${cachedBoot.identities.length} identities, ${cachedBoot.vocabulary.length} vocabulary, ${cachedBoot.skills.length} skills`);
+            api.logger.info('[dot-ai] Runtime booted');
           }
 
-          // Enrich the prompt
           const prompt = ctx.prompt ?? '';
-          const enriched = await enrich(prompt, cachedProviders, cachedBoot!);
+          const { formatted, enriched } = await cachedRuntime.processPrompt(prompt);
 
-          // Load skill content for matched skills
-          for (const skill of enriched.skills) {
-            if (!skill.content && skill.name) {
-              skill.content = await cachedProviders.skills.load(skill.name) ?? undefined;
-            }
-          }
-
-          // Format and inject
-          const formatted = formatContext(enriched, { skipIdentities: true });
           if (formatted) {
-            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} identities, ${enriched.memories.length} memories, ${enriched.recentTasks?.length ?? 0} tasks, ${enriched.skills.length} skills (${enriched.memoryDescription ?? 'unknown provider'})`);
+            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} ids, ${enriched.memories.length} mems, ${enriched.skills.length} skills`);
             return { prependContext: formatted };
           }
         } catch (err) {

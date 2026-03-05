@@ -17,6 +17,14 @@ export interface Capability {
   description: string;
   parameters: Record<string, unknown>; // JSON Schema
   execute(params: Record<string, unknown>): Promise<CapabilityResult>;
+  /** Capability category */
+  category?: 'memory' | 'tasks' | string;
+  /** Whether this capability only reads data (no side effects) */
+  readOnly?: boolean;
+  /** Whether the adapter should ask for user confirmation before executing */
+  confirmationRequired?: boolean;
+  /** Capability version — incremented when parameter schema changes */
+  version?: number;
 }
 
 /**
@@ -31,6 +39,9 @@ export function buildCapabilities(providers: Providers): Capability[] {
   caps.push({
     name: 'memory_recall',
     description: `Search stored memories. ${providers.memory.describe()}`,
+    category: 'memory',
+    readOnly: true,
+    version: 1,
     parameters: {
       type: 'object',
       properties: {
@@ -73,6 +84,9 @@ export function buildCapabilities(providers: Providers): Capability[] {
   caps.push({
     name: 'memory_store',
     description: 'Store a new entry in memory for future recall.',
+    category: 'memory',
+    readOnly: false,
+    version: 1,
     parameters: {
       type: 'object',
       properties: {
@@ -109,6 +123,9 @@ export function buildCapabilities(providers: Providers): Capability[] {
   caps.push({
     name: 'task_list',
     description: 'List tasks, optionally filtered by status, project, or tags.',
+    category: 'tasks',
+    readOnly: true,
+    version: 1,
     parameters: {
       type: 'object',
       properties: {
@@ -157,6 +174,9 @@ export function buildCapabilities(providers: Providers): Capability[] {
   caps.push({
     name: 'task_create',
     description: 'Create a new task.',
+    category: 'tasks',
+    readOnly: false,
+    version: 1,
     parameters: {
       type: 'object',
       properties: {
@@ -208,6 +228,9 @@ export function buildCapabilities(providers: Providers): Capability[] {
   caps.push({
     name: 'task_update',
     description: 'Update an existing task by ID.',
+    category: 'tasks',
+    readOnly: false,
+    version: 1,
     parameters: {
       type: 'object',
       properties: {
@@ -260,6 +283,18 @@ export function buildCapabilities(providers: Providers): Capability[] {
       };
     },
   });
+
+  // Check for custom capabilities from providers
+  for (const provider of Object.values(providers)) {
+    if (provider && typeof (provider as Record<string, unknown>)['capabilities'] === 'function') {
+      try {
+        const custom = (provider as { capabilities(): Capability[] }).capabilities();
+        caps.push(...custom);
+      } catch {
+        // Skip if custom capabilities fail
+      }
+    }
+  }
 
   return caps;
 }

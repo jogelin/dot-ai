@@ -1,4 +1,4 @@
-import type { EnrichedContext, HooksConfig, HookEntryConfig } from './types.js';
+import type { EnrichedContext, HooksConfig } from './types.js';
 import type { BootCache } from './engine.js';
 import type { Logger } from './logger.js';
 
@@ -12,9 +12,6 @@ export type AfterFormatHook = (formatted: string, ctx: EnrichedContext) => Promi
 export type AfterLearnHook = (response: string) => Promise<void>;
 
 export type HookHandler = AfterBootHook | AfterEnrichHook | AfterFormatHook | AfterLearnHook;
-
-/** Re-export for convenience */
-export type { HookEntryConfig };
 
 /** Resolved hook — a handler function ready to call */
 export interface ResolvedHook {

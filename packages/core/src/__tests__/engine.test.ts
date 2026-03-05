@@ -277,17 +277,18 @@ describe('enrich', () => {
 describe('learn', () => {
   it('calls memory.store with the response', async () => {
     const providers = createMockProviders();
-    await learn('This is what I learned today', providers);
+    const longResponse = 'This is what I learned today — a detailed explanation of the architecture and design decisions made';
+    await learn(longResponse, providers);
     expect(providers.memory.store).toHaveBeenCalledOnce();
     expect(providers.memory.store).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'This is what I learned today', type: 'log' }),
+      expect.objectContaining({ content: longResponse, type: 'log' }),
     );
   });
 
   it('stores entry with today\'s date', async () => {
     const providers = createMockProviders();
     const today = new Date().toISOString().slice(0, 10);
-    await learn('response', providers);
+    await learn('This is a sufficiently long response to pass the minimum length threshold for learning', providers);
     expect(providers.memory.store).toHaveBeenCalledWith(
       expect.objectContaining({ date: today }),
     );
