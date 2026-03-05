@@ -115,13 +115,16 @@ const plugin = {
     // Register default file-based providers
     registerDefaults();
 
-    // Explicitly register sibling providers to bypass dynamic import resolution
-    // issues when loaded via jiti in the OpenClaw gateway process.
-    registerProvider('@dot-ai/provider-sqlite-memory', (opts) => new SqliteMemoryProvider(opts as Record<string, unknown>));
-    registerProvider('@dot-ai/provider-file-identity', (opts) => new FileIdentityProvider(opts as Record<string, unknown>));
-    registerProvider('@dot-ai/provider-file-skills', (opts) => new FileSkillProvider(opts as Record<string, unknown>));
-    registerProvider('@dot-ai/provider-rules-routing', (opts) => new RulesRoutingProvider(opts as Record<string, unknown>));
-    registerProvider('@dot-ai/provider-file-tools', (opts) => new FileToolProvider(opts as Record<string, unknown>));
+    // Build explicit provider factories to pass directly to DotAiRuntime.
+    // This bypasses the registry entirely, avoiding jiti module duplication issues
+    // where registerProvider() and resolve() operate on different Map instances.
+    const providerFactories: Record<string, (opts: Record<string, unknown>) => unknown> = {
+      '@dot-ai/provider-sqlite-memory': (opts) => new SqliteMemoryProvider(opts),
+      '@dot-ai/provider-file-identity': (opts) => new FileIdentityProvider(opts),
+      '@dot-ai/provider-file-skills': (opts) => new FileSkillProvider(opts),
+      '@dot-ai/provider-rules-routing': (opts) => new RulesRoutingProvider(opts),
+      '@dot-ai/provider-file-tools': (opts) => new FileToolProvider(opts),
+    };
 
     // Register tools from core capabilities (delegates to providers)
     api.registerTool(
@@ -168,7 +171,11 @@ const plugin = {
 
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
-            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir, skipIdentities: true });
+            cachedRuntime = new DotAiRuntime({
+              workspaceRoot: workspaceDir,
+              skipIdentities: true,
+              providerFactories,
+            });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
             api.logger.info('[dot-ai] Runtime booted');

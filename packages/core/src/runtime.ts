@@ -1,5 +1,5 @@
 import { loadConfig, injectRoot } from './config.js';
-import { registerDefaults, createProviders } from './loader.js';
+import { registerDefaults, registerProvider, createProviders } from './loader.js';
 import { boot, enrich, learn } from './engine.js';
 import type { Providers, BootCache } from './engine.js';
 import { formatContext, applyFormatHooks } from './format.js';
@@ -25,6 +25,12 @@ export interface RuntimeOptions {
   maxSkillLength?: number;
   /** Token budget for formatted output */
   tokenBudget?: number;
+  /**
+   * Explicit provider factory overrides. Bypasses the registry-based resolution.
+   * Use when the registry isn't shared across module scopes (e.g., jiti in OpenClaw).
+   * Keys are package names (e.g., "@dot-ai/provider-sqlite-memory").
+   */
+  providerFactories?: Record<string, (options: Record<string, unknown>) => unknown>;
 }
 
 export interface ProcessResult {
@@ -63,6 +69,12 @@ export class DotAiRuntime {
     if (this.booted) return;
 
     registerDefaults();
+    // Register explicit provider factories if provided (bypasses dynamic import)
+    if (this.options.providerFactories) {
+      for (const [name, factory] of Object.entries(this.options.providerFactories)) {
+        registerProvider(name, factory as (options: Record<string, unknown>) => unknown);
+      }
+    }
     const rawConfig = await loadConfig(this.options.workspaceRoot);
     const config = injectRoot(rawConfig, this.options.workspaceRoot);
     this.hooks = await loadHooks(rawConfig.hooks, this.logger);
