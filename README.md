@@ -16,11 +16,12 @@ The dot-ai convention provides a universal workspace structure that helps AI ass
 - 🏗️ **Workspace Structure** — Standardized `.ai/` directory with boot sequence and project routing
 - ✅ **Task Management** — TaskProvider pattern (Cockpit API, file-based, or custom) that replaces built-in todos
 - 🎯 **Model Selection** — Smart routing between Haiku/Sonnet/Opus to optimize costs
-- 📊 **Context Management** — Proactive delegation strategies based on context budget
+- 📊 **Token Budget** — Auto-trims skills/memories to fit context window with BudgetWarning diagnostics
+- 🔧 **Capabilities** — Interactive tools (memory_recall, task_list, etc.) defined once in core, mapped by adapters
+- 🪝 **Hooks** — 4 pipeline extension points (after_boot, after_enrich, after_format, after_learn)
 - 🔍 **Health Monitoring** — Built-in diagnostics and troubleshooting (doctor skill)
-- 📝 **Auto-Generation** — Maintains AGENT.md, SKILL.md with markers
-- 🚀 **Fast Startup** — Lightweight INDEX files (61% token reduction vs full docs)
-- 🔄 **Progressive Loading** — Overview at startup, details loaded on-demand
+- 🚀 **DotAiRuntime** — Single class encapsulating the full pipeline (boot, enrich, format, learn)
+- 🔄 **Progressive Loading** — Overview at startup, skill content loaded on-demand
 
 ---
 
@@ -301,26 +302,29 @@ projects/backend/
 
 ## 🏛️ Architecture
 
-### Plugin Architecture
+### Engine Architecture (v4.2)
 
 ```
-dot-ai plugin
-├── OpenClaw Integration
-│   ├── before_agent_start hook
-│   │   ├── Injects BOOTSTRAP.md (95 lines)
-│   │   ├── Injects INDEX.md files
-│   │   └── Enriches prompt via label-based routing
-│   │
-│   └── registerService
-│       └── Workspace convention enforcement
-│
-└── Claude Code Integration
-    ├── SessionStart hook
-    │   └── Triggers dot-ai boot sequence
-    │
-    └── SubagentStart hook
-        └── Enforces model selection rules
+Agent (Claude Code / OpenClaw / Custom)
+  └── Adapter (hooks into native events)
+        └── DotAiRuntime (@dot-ai/core)
+              ├── boot()           → cache identities + vocabulary
+              ├── processPrompt()  → enrich + format + hooks
+              ├── learn()          → store in memory
+              └── flush()          → flush logger
+
+  Providers (pluggable):        Capabilities (tools):
+  ├── Memory (sqlite, file)     ├── memory_recall
+  ├── Skills (file)             ├── memory_store
+  ├── Identity (file)           ├── task_list
+  ├── Routing (rules)           ├── task_create
+  ├── Tasks (cockpit, file)     └── task_update
+  └── Tools (file)
+
+  Hooks: after_boot → after_enrich → after_format → after_learn
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference.
 
 ### INDEX/SKILL Pattern
 
@@ -391,11 +395,11 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
 
 ## 📖 Documentation
 
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full v4.2 architecture (engine, providers, capabilities, hooks, token budget)
 - **[BOOTSTRAP.md](skills/dot-ai/BOOTSTRAP.md)** — Lightweight startup context (what agent sees at boot)
+- **[dot-ai-architecture skill](skills/dot-ai-architecture/)** — Architecture comprehension skill for AI agents
 - **[SKILL.md](skills/dot-ai/SKILL.md)** — Full dot-ai convention documentation
 - **[CONVENTIONS.md](skills/dot-ai/CONVENTIONS.md)** — Shared conventions across all skills
-- **[OPTIMIZATION_RESULTS.md](OPTIMIZATION_RESULTS.md)** — Token optimization details (61% reduction)
-- **[COMPLETE_OPTIMIZATION_SUMMARY.md](COMPLETE_OPTIMIZATION_SUMMARY.md)** — All optimization phases
 
 ---
 
@@ -516,14 +520,14 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **dot-ai** provides a universal workspace convention for AI assistants:
 
-- ✅ Standardized `.ai/` structure
-- ✅ Comprehensive skill set
-- ✅ Task management that works
-- ✅ Smart model routing
-- ✅ Context budget management
-- ✅ Health monitoring
-- ✅ 61% faster startup
-- ✅ Works with OpenClaw and Claude Code
+- ✅ Standardized `.ai/` structure with multi-project support
+- ✅ 6 provider contracts (memory, skills, identity, routing, tasks, tools)
+- ✅ DotAiRuntime for easy adapter integration
+- ✅ 5 interactive capabilities (memory_recall/store, task_list/create/update)
+- ✅ 4 pipeline hooks for extensibility
+- ✅ Token budget with auto-trimming
+- ✅ Deterministic label-based matching (no LLM in pipeline)
+- ✅ Works with Claude Code, OpenClaw, Cursor, Copilot
 
 **Get started:** Create `.ai/AGENTS.md` in your project root and let the plugin handle the rest!
 
@@ -531,4 +535,4 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **Made with ❤️ by the dot-ai community**
 
-*Version 0.5.2 — Last updated: 2026-03-04*
+*Version 0.5.2 — Last updated: 2026-03-05*

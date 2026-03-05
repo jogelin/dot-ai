@@ -1,4 +1,4 @@
-# dot-ai v4 Architecture
+# dot-ai v4.2 Architecture
 
 ## What is dot-ai?
 
@@ -18,20 +18,23 @@ Key insight: **The agent is the consumer, dot-ai is the provider.** Adapters int
 │  ┌────────────────────────────────────────────────────┐    │
 │  │  Adapter (adapter-claude / adapter-openclaw)       │    │
 │  │  Hooks into native agent events:                   │    │
-│  │  - Claude Code: UserPromptSubmit hook             │    │
+│  │  - Claude Code: UserPromptSubmit + pre-compact    │    │
+│  │    + stop + pre-tool-use hooks, MCP server        │    │
 │  │  - OpenClaw: before_agent_start hook              │    │
 │  └────────────────────────────────────────────────────┘    │
 │                       │                                      │
 │                       ▼                                      │
 │  ┌────────────────────────────────────────────────────┐    │
-│  │  dot-ai Core Engine (core package)                │    │
+│  │  DotAiRuntime (core package)                      │    │
+│  │  Encapsulates full pipeline lifecycle:            │    │
 │  │                                                    │    │
 │  │  1. loadConfig(.ai/dot-ai.yml)                    │    │
 │  │  2. resolve providers via dynamic import()         │    │
 │  │  3. createProviders(config)                       │    │
 │  │  4. boot() → cache identities + vocabulary        │    │
-│  │  5. enrich(prompt) → EnrichedContext              │    │
-│  │  6. format() → markdown for agent injection       │    │
+│  │  5. processPrompt() → enrich + format + hooks     │    │
+│  │  6. learn() → store in memory                     │    │
+│  │  7. flush() → flush logger before exit            │    │
 │  └────────────────────────────────────────────────────┘    │
 │                       │                                      │
 │           ┌───────────┼───────────────┬──────────┐          │
@@ -44,8 +47,15 @@ Key insight: **The agent is the consumer, dot-ai is the provider.** Adapters int
 │           │           │               │          │          │
 │           └───────────┼───────────────┴──────────┘          │
 │                       ▼                                      │
-│           .ai/ directory structure                          │
-│           (file-based providers' domain)                    │
+│        ┌──────────────┴──────────────┐                      │
+│        ▼                             ▼                      │
+│   Capabilities (tools)         Hooks (pipeline events)      │
+│   memory_recall, task_create   after_boot, after_enrich     │
+│   → mapped to native format    after_format, after_learn    │
+│        │                             │                      │
+│        ▼                             ▼                      │
+│   .ai/ directory structure                                  │
+│   (file-based providers' domain)                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +83,11 @@ All providers are **interchangeable**: file-based defaults, or custom implementa
 ### 1. Boot Phase (once per session)
 
 ```typescript
-async function boot(providers: Providers): Promise<BootCache>
+async function boot(
+  providers: Providers,
+  logger?: Logger,
+  hooks?: Hook[],
+): Promise<BootCache>
 ```
 
 Runs **once** at session start. Caches static data across multiple prompts:
@@ -94,6 +108,8 @@ async function enrich(
   prompt: string,
   providers: Providers,
   cache: BootCache,
+  logger?: Logger,
+  hooks?: Hook[],
 ): Promise<EnrichedContext>
 ```
 
@@ -128,16 +144,149 @@ Runs **for each prompt**. Transforms a raw prompt into enriched context:
 async function learn(
   response: string,
   providers: Providers,
+  logger?: Logger,
+  hooks?: Hook[],
 ): Promise<void>
 ```
 
 Called after agent produces a response. Stores learnings in memory:
 
+- **Min-length guard:** Responses shorter than 50 characters are skipped (avoids storing noise)
 - Entry type: `'log'` (could also be `'fact'`, `'decision'`, `'pattern'`)
 - Date: auto-set to today
 - Source: `'learn'`
 
 Adapters decide when to call this (typically not on every response, but on significant outcomes).
+
+---
+
+## DotAiRuntime
+
+`DotAiRuntime` is a class in `packages/core/src/runtime.ts` that encapsulates the full pipeline lifecycle. Adapters should use this instead of wiring `loadConfig → createProviders → boot → enrich → format` manually.
+
+```typescript
+import { DotAiRuntime } from '@dot-ai/core';
+
+const runtime = new DotAiRuntime({
+  workspaceRoot: '/path/to/workspace',
+  logger,
+  skipIdentities: true,    // if adapter injects identities separately
+  maxSkillLength: 3000,
+  maxSkills: 5,
+  tokenBudget: 8000,
+});
+
+await runtime.boot();                              // once per session
+const { formatted, enriched, capabilities } = await runtime.processPrompt(prompt);
+await runtime.learn(response);                     // after significant responses
+await runtime.flush();                             // before process exit (CLI hooks)
+```
+
+Key properties: `.capabilities`, `.providers`, `.isBooted`
+
+Both `adapter-claude` and `adapter-openclaw` use `DotAiRuntime` internally. New adapters should too — it eliminates the boilerplate of manually orchestrating the pipeline.
+
+---
+
+## Capabilities
+
+Capabilities are interactive tools defined once in core, mapped by adapters to native agent format.
+
+```typescript
+interface Capability {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;  // JSON Schema
+  execute(params: Record<string, unknown>): Promise<CapabilityResult>;
+  category?: 'memory' | 'tasks' | string;
+  readOnly?: boolean;
+  confirmationRequired?: boolean;
+  version?: number;
+}
+```
+
+### Built-in Capabilities
+
+Providers expose capabilities automatically:
+
+| Provider | Capability | Method |
+|----------|-----------|--------|
+| MemoryProvider | `memory_recall` | `search(query, limit)` |
+| MemoryProvider | `memory_store` | `store({ content, type })` |
+| TaskProvider | `task_list` | `list({ status?, project?, tags? })` |
+| TaskProvider | `task_create` | `create({ text, project?, priority?, tags? })` |
+| TaskProvider | `task_update` | `update(id, { status?, text?, priority? })` |
+
+### Adapter Mapping
+
+Adapters map capabilities to native format:
+- **OpenClaw**: `api.registerTool()` for each capability
+- **Claude Code**: MCP server exposes capabilities as MCP tools
+
+### Provider Extensibility
+
+Providers can implement an optional `capabilities()` method to add custom tools beyond the built-in ones. This lets third-party providers surface domain-specific operations (e.g., a Jira provider could expose `jira_create_issue`).
+
+---
+
+## Hooks
+
+4 pipeline events for extension:
+
+| Event | When | Transform? | Signature |
+|-------|------|-----------|-----------|
+| `after_boot` | After boot() | No | `(cache: BootCache) => Promise<void>` |
+| `after_enrich` | After enrich() | Yes → EnrichedContext | `(ctx: EnrichedContext) => Promise<EnrichedContext \| void>` |
+| `after_format` | After formatContext() | Yes → string | `(formatted: string, ctx: EnrichedContext) => Promise<string \| void>` |
+| `after_learn` | After learn() | No | `(response: string) => Promise<void>` |
+
+### Configuration
+
+Hooks are declared in `dot-ai.yml`:
+
+```yaml
+hooks:
+  after_enrich:
+    - use: "@my-org/hook-custom-enrichment"
+      with: { option: value }
+```
+
+### Execution Model
+
+- Hooks are loaded like providers (dynamic import, factory pattern)
+- Sequential execution in declaration order
+- Errors caught and logged, never block pipeline
+- If a transforming hook (`after_enrich`, `after_format`) returns a value, it replaces the data downstream; returning `void` passes through unchanged
+
+---
+
+## Token Budget
+
+`formatContext()` now accepts `tokenBudget` and `onBudgetExceeded` options for controlling output size.
+
+### Trimming Strategy
+
+When formatted context exceeds the budget, trimming is applied in order (stops as soon as under budget):
+
+1. Truncate all skills to 2000 chars
+2. Drop oldest memories (keep most recent 5)
+3. Drop skills by reverse match order (least relevant first)
+
+### Budget Warning
+
+If still over budget after all trimming, calls `onBudgetExceeded(warning)`:
+
+```typescript
+interface BudgetWarning {
+  budget: number;
+  actual: number;
+  actions: string[];  // What was trimmed
+}
+```
+
+### Non-Trimmable Sections
+
+Identity sections (AGENTS.md, SOUL.md, USER.md, IDENTITY.md) are **never trimmed**. If identities alone exceed the budget, a warning is emitted but no content is removed.
 
 ---
 
@@ -210,20 +359,23 @@ Adapters are the bridge between agents and dot-ai. Each adapter integrates the c
 
 **Package:** `packages/adapter-claude`
 
-**Hook:** `UserPromptSubmit` (native Claude Code hook)
+**Hooks:** Multi-hook dispatch — `UserPromptSubmit`, `PreCompact`, `Stop`, `PreToolUse` (native Claude Code hooks)
 
 **Flow:**
 1. Receives hook event (JSON on stdin)
-2. Calls core engine: `loadConfig → registerDefaults → createProviders → boot → enrich`
+2. Uses `DotAiRuntime` internally for full pipeline lifecycle
 3. Formats output as markdown
 4. Injects result into Claude's context (via stdout)
 
+**MCP Server:** `dot-ai-mcp` binary exposes capabilities as MCP tools (memory_recall, memory_store, task_list, etc.)
+
 **File:** `hook.ts` (executable)
-**Config:** `hooks/hooks.json` (declares the hook)
+**Config:** `hooks/hooks.json` (declares the hooks)
 
 **Special handling:**
 - If no prompt text (e.g., SessionStart), injects identities only
 - Loads skill content for matched skills (lazy loading)
+- `PreToolUse` hook blocks writes to `memory/*.md` files (enforces SQLite-only memory)
 - Silent failure: errors logged but don't block the agent
 
 ### adapter-openclaw
@@ -233,10 +385,11 @@ Adapters are the bridge between agents and dot-ai. Each adapter integrates the c
 **Hook:** `before_agent_start` (native OpenClaw hook)
 
 **Flow:**
-1. Registers default providers
+1. Uses `DotAiRuntime` internally with `skipIdentities: true` (OpenClaw injects identities separately)
 2. Loads custom providers from `pluginConfig.customProviders[]` (if declared in openclaw.json)
-3. Caches boot output per workspace (reused across prompts in same session)
-4. On each prompt: `enrich → load skill content → format → inject as prependContext`
+3. Calls `buildCapabilities()` to register capabilities as native OpenClaw tools via `api.registerTool()`
+4. Caches boot output per workspace (reused across prompts in same session)
+5. On each prompt: `runtime.processPrompt() → inject as prependContext`
 
 **Special handling:**
 - Skips sub-agent and cron sessions (only main agent gets injected context)
@@ -413,8 +566,8 @@ Adapters then call `formatContext(enriched)` to convert to markdown, which is in
 
 | Package | Location | Purpose | Exports |
 |---------|----------|---------|---------|
-| **core** | `packages/core/` | Engine, contracts, types, loaders | `boot()`, `enrich()`, `learn()`, `registerProvider()`, interfaces |
-| **adapter-claude** | `packages/adapter-claude/` | Claude Code integration | Hook script, format function |
+| **core** | `packages/core/` | Engine, contracts, types, loaders, runtime | `boot()`, `enrich()`, `learn()`, `DotAiRuntime`, `registerProvider()`, interfaces |
+| **adapter-claude** | `packages/adapter-claude/` | Claude Code integration | Hook script, format function, `dot-ai-mcp` MCP server |
 | **adapter-openclaw** | `packages/adapter-openclaw/` | OpenClaw integration | Plugin object, custom provider loader |
 | **sqlite-memory** | `packages/provider-sqlite-memory/` | SQLite memory backend | `SqliteMemoryProvider` class |
 | **cockpit-tasks** | *(external — kiwi repo)* | Cockpit API task backend | `CockpitTaskProvider` class |
@@ -489,7 +642,17 @@ const skills = await skills.match(labels);
 - Reduces provider query cost
 - Centralized label concept (all providers see same labels)
 
-### 6. Why formatContext Produces Markdown?
+### 6. Why DotAiRuntime?
+
+Adapters were duplicating the same pipeline wiring (`loadConfig → createProviders → boot → enrich → format`). DotAiRuntime encapsulates this in one reusable class. New adapters only need to instantiate it and call `processPrompt()`.
+
+**Benefits:**
+- Single entry point for the full lifecycle
+- Consistent hook and capability wiring
+- Reduces adapter code from ~50 lines of pipeline setup to 5 lines
+- Centralizes token budget, logger, and format options
+
+### 7. Why formatContext Produces Markdown?
 
 Adapters don't care what format context is in. Markdown:
 
@@ -502,29 +665,30 @@ Adapters don't care what format context is in. Markdown:
 
 ## Workflow Summary
 
+The recommended path uses `DotAiRuntime`:
+
 1. **Startup (Adapter)**
-   - Hook fires (UserPromptSubmit or before_agent_start)
-   - Adapter resolves providers (dynamic import) and registers custom providers
+   - Adapter creates `DotAiRuntime(options)` with workspace root, logger, format options, token budget
 
-2. **Boot (Core)**
-   - Load config from `.ai/dot-ai.yml`
-   - Create provider instances from registry
-   - Load identities, skills, tools, build vocabulary
-   - Cache result in `BootCache`
+2. **Boot (Runtime)**
+   - `runtime.boot()` — loads config, creates providers, caches identities + vocabulary, loads hooks, builds capabilities
+   - Fires `after_boot` hooks
 
-3. **Enrich (Core)**
-   - For each prompt:
+3. **Process Prompt (Runtime)**
+   - `runtime.processPrompt(prompt)` — enrich + format + hooks in one call
    - Extract labels deterministically
    - Query all providers in parallel
-   - Return `EnrichedContext`
+   - Fire `after_enrich` hooks (may transform context)
+   - Format to markdown with token budget trimming
+   - Fire `after_format` hooks (may transform output)
+   - Returns `{ formatted, enriched, capabilities }`
 
-4. **Format (Adapter)**
-   - Convert EnrichedContext to markdown
-   - Inject into agent's context
+4. **Learn (Runtime)**
+   - `runtime.learn(response)` — store in memory (skips responses < 50 chars)
+   - Fires `after_learn` hooks
 
-5. **Learn (Core)**
-   - After significant agent responses
-   - Store learnings in memory
+5. **Shutdown (Runtime)**
+   - `runtime.flush()` — flush logger before process exit (important for CLI hooks)
 
 ---
 
@@ -533,17 +697,20 @@ Adapters don't care what format context is in. Markdown:
 ```
 Input: string (raw prompt)
   ↓
-[boot(providers)] → BootCache { identities, vocabulary, skills }
+[runtime.boot()] → BootCache { identities, vocabulary, skills }
+                   → after_boot hooks fire
   ↓
-[enrich(prompt, providers, cache)] → EnrichedContext
-  {
-    prompt, labels, identities, memories,
-    skills, tools, routing
-  }
+[runtime.processPrompt(prompt)]
+  ├─ enrich(prompt, providers, cache) → EnrichedContext
+  │    { prompt, labels, identities, memories, skills, tools, routing }
+  ├─ after_enrich hooks (may transform context)
+  ├─ formatContext(enriched, { tokenBudget }) → string (markdown)
+  ├─ after_format hooks (may transform output)
+  └─ returns { formatted, enriched, capabilities }
   ↓
-[formatContext(enriched)] → string (markdown)
+[Agent injection] → Agent sees context + capabilities as native tools
   ↓
-[Agent injection] → Agent sees context
+[runtime.learn(response)] → memory.store() + after_learn hooks
 ```
 
 ---
@@ -576,29 +743,29 @@ All missing entries get file-based defaults. Custom providers override as needed
 ### Claude Code Adapter
 
 ```
-1. Claude Code fires UserPromptSubmit hook
+1. Claude Code fires hook (UserPromptSubmit, PreCompact, Stop, or PreToolUse)
 2. hook.ts receives hook event JSON on stdin
-3. loadConfig, registerDefaults, createProviders, boot, enrich
-4. formatContext produces markdown
-5. Output JSON { result: markdown } to stdout
-6. Claude Code injects into context
-7. Agent sees enriched prompt
+3. DotAiRuntime handles pipeline: boot (cached) → processPrompt
+4. MCP server (dot-ai-mcp) exposes capabilities as MCP tools
+5. PreToolUse blocks writes to memory/*.md (enforces SQLite-only)
+6. Output JSON { result: markdown } to stdout
+7. Claude Code injects into context
+8. Agent sees enriched prompt + capabilities
 ```
 
 ### OpenClaw Adapter
 
 ```
 1. OpenClaw plugin.register() called at startup
-2. registerDefaults() + loadCustomProviders()
+2. DotAiRuntime created with skipIdentities: true
 3. Hook: before_agent_start registers with OpenClaw
-4. When agent starts:
-   - Load config, create providers, boot (cached per workspace)
-   - Extract workspace context
-   - Enrich prompt
-   - formatContext produces markdown
-   - Return { prependContext: markdown }
-5. OpenClaw prepends to agent context
-6. Agent sees enriched prompt
+4. buildCapabilities() registers capabilities as native OpenClaw tools
+5. When agent starts:
+   - runtime.boot() (cached per workspace)
+   - runtime.processPrompt(prompt)
+   - Return { prependContext: formatted }
+6. OpenClaw prepends to agent context
+7. Agent sees enriched prompt + capabilities as tools
 ```
 
 ---
@@ -650,24 +817,37 @@ memory:
 
 ### Create a Custom Adapter
 
-Integrate dot-ai into a new agent platform:
-
-1. Import core functions:
+Integrate dot-ai into a new agent platform using `DotAiRuntime`:
 
 ```typescript
-import {
-  loadConfig,
-  registerDefaults,
-  createProviders,
-  boot,
-  enrich,
-} from '@dot-ai/core';
-```
+import { DotAiRuntime } from '@dot-ai/core';
 
-2. Hook into agent's native event system
-3. Call the pipeline
-4. Format and inject context
-5. Done!
+// 1. Create runtime
+const runtime = new DotAiRuntime({
+  workspaceRoot: '/path/to/workspace',
+  logger,
+  tokenBudget: 8000,
+});
+
+// 2. Boot once at startup
+await runtime.boot();
+
+// 3. Hook into agent's native event system
+agent.onPrompt(async (prompt) => {
+  const { formatted, capabilities } = await runtime.processPrompt(prompt);
+  // 4. Inject formatted context + register capabilities as native tools
+  agent.injectContext(formatted);
+  capabilities.forEach(cap => agent.registerTool(cap));
+});
+
+// 5. Learn from responses
+agent.onResponse(async (response) => {
+  await runtime.learn(response);
+});
+
+// 6. Flush on exit
+process.on('exit', () => runtime.flush());
+```
 
 ---
 
@@ -731,15 +911,19 @@ CLI includes `validate()` and `audit()` commands for workspace health.
 
 ## Summary
 
-dot-ai v4 is a **provider-based context enrichment engine**:
+dot-ai v4.2 is a **provider-based context enrichment engine**:
 
 1. **Contracts** define what providers must implement
 2. **Config** declares which providers to use
 3. **Loader** instantiates providers from registry
-4. **Engine** coordinates the enrichment pipeline
-5. **Adapters** integrate into specific agents
-6. **Determinism** ensures reproducible context
-7. **Caching** optimizes performance
-8. **Extensibility** lets workspaces customize everything
+4. **DotAiRuntime** encapsulates the full pipeline lifecycle
+5. **Engine** coordinates the enrichment pipeline
+6. **Capabilities** expose provider operations as native agent tools
+7. **Hooks** extend the pipeline at 4 key events
+8. **Token Budget** trims context to fit agent limits
+9. **Adapters** integrate into specific agents
+10. **Determinism** ensures reproducible context
+11. **Caching** optimizes performance
+12. **Extensibility** lets workspaces customize everything
 
 Result: **Agents get complete, consistent workspace context without hard-coding any knowledge.**
