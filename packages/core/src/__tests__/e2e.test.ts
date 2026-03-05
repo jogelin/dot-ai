@@ -245,13 +245,13 @@ describe('E2E: full pipeline', () => {
     expect(ctx2.identities).toEqual(ctx3.identities);
   });
 
-  it('resolveConfig fills defaults for missing providers', () => {
+  it('resolveConfig returns undefined for unconfigured providers', () => {
     const resolved = resolveConfig({});
-    expect(resolved.memory.use).toBe('@dot-ai/provider-file-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
-    expect(resolved.identity.use).toBe('@dot-ai/provider-file-identity');
-    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
-    expect(resolved.tasks.use).toBe('@dot-ai/provider-file-tasks');
-    expect(resolved.tools.use).toBe('@dot-ai/provider-file-tools');
+    expect(resolved.memory).toBeUndefined();
+    expect(resolved.skills).toBeUndefined();
+    expect(resolved.identity).toBeUndefined();
+    expect(resolved.routing).toBeUndefined();
+    expect(resolved.tasks).toBeUndefined();
+    expect(resolved.tools).toBeUndefined();
   });
 });

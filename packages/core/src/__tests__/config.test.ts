@@ -114,36 +114,27 @@ describe('loadConfig', () => {
 });
 
 describe('resolveConfig', () => {
-  it('fills all defaults for empty config', () => {
+  it('returns undefined for all providers when config is empty', () => {
     const resolved = resolveConfig({});
-    expect(resolved.memory.use).toBe('@dot-ai/provider-file-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
-    expect(resolved.identity.use).toBe('@dot-ai/provider-file-identity');
-    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
-    expect(resolved.tasks.use).toBe('@dot-ai/provider-file-tasks');
-    expect(resolved.tools.use).toBe('@dot-ai/provider-file-tools');
+    expect(resolved.memory).toBeUndefined();
+    expect(resolved.skills).toBeUndefined();
+    expect(resolved.identity).toBeUndefined();
+    expect(resolved.routing).toBeUndefined();
+    expect(resolved.tasks).toBeUndefined();
+    expect(resolved.tools).toBeUndefined();
   });
 
   it('preserves existing memory config', () => {
     const resolved = resolveConfig({ memory: { use: '@dot-ai/cockpit-memory', with: { url: 'http://x' } } });
-    expect(resolved.memory.use).toBe('@dot-ai/cockpit-memory');
-    expect(resolved.memory.with?.['url']).toBe('http://x');
+    expect(resolved.memory?.use).toBe('@dot-ai/cockpit-memory');
+    expect(resolved.memory?.with?.['url']).toBe('http://x');
   });
 
-  it('fills defaults only for missing providers', () => {
+  it('only includes explicitly configured providers', () => {
     const resolved = resolveConfig({ memory: { use: '@dot-ai/cockpit-memory' } });
-    expect(resolved.memory.use).toBe('@dot-ai/cockpit-memory');
-    expect(resolved.skills.use).toBe('@dot-ai/provider-file-skills');
-    expect(resolved.routing.use).toBe('@dot-ai/provider-rules-routing');
-  });
-
-  it('returns a Required<DotAiConfig> with all keys present', () => {
-    const resolved = resolveConfig({});
-    const keys = ['memory', 'skills', 'identity', 'routing', 'tasks', 'tools'] as const;
-    for (const key of keys) {
-      expect(resolved[key]).toBeDefined();
-      expect(typeof resolved[key].use).toBe('string');
-    }
+    expect(resolved.memory?.use).toBe('@dot-ai/cockpit-memory');
+    expect(resolved.skills).toBeUndefined();
+    expect(resolved.routing).toBeUndefined();
   });
 
   it('preserves all six provided providers', () => {
@@ -156,11 +147,11 @@ describe('resolveConfig', () => {
       tools: { use: 'tls' },
     };
     const resolved = resolveConfig(full);
-    expect(resolved.memory.use).toBe('mem');
-    expect(resolved.skills.use).toBe('ski');
-    expect(resolved.identity.use).toBe('idn');
-    expect(resolved.routing.use).toBe('rte');
-    expect(resolved.tasks.use).toBe('tsk');
-    expect(resolved.tools.use).toBe('tls');
+    expect(resolved.memory?.use).toBe('mem');
+    expect(resolved.skills?.use).toBe('ski');
+    expect(resolved.identity?.use).toBe('idn');
+    expect(resolved.routing?.use).toBe('rte');
+    expect(resolved.tasks?.use).toBe('tsk');
+    expect(resolved.tools?.use).toBe('tls');
   });
 });
