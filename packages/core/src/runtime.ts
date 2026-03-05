@@ -31,6 +31,11 @@ export interface RuntimeOptions {
    * Keys are package names (e.g., "@dot-ai/provider-sqlite-memory").
    */
   providerFactories?: Record<string, (options: Record<string, unknown>) => unknown>;
+  /**
+   * Pre-built providers. Bypasses config loading and provider creation entirely.
+   * Use when the adapter has direct access to provider constructors.
+   */
+  providers?: Providers;
 }
 
 export interface ProcessResult {
@@ -68,17 +73,24 @@ export class DotAiRuntime {
   async boot(): Promise<void> {
     if (this.booted) return;
 
-    registerDefaults();
-    // Register explicit provider factories if provided (bypasses dynamic import)
-    if (this.options.providerFactories) {
-      for (const [name, factory] of Object.entries(this.options.providerFactories)) {
-        registerProvider(name, factory as (options: Record<string, unknown>) => unknown);
-      }
-    }
     const rawConfig = await loadConfig(this.options.workspaceRoot);
-    const config = injectRoot(rawConfig, this.options.workspaceRoot);
     this.hooks = await loadHooks(rawConfig.hooks, this.logger);
-    this._providers = await createProviders(config);
+
+    if (this.options.providers) {
+      // Use pre-built providers directly (bypasses config resolution + dynamic import)
+      this._providers = this.options.providers;
+    } else {
+      registerDefaults();
+      // Register explicit provider factories if provided (bypasses dynamic import)
+      if (this.options.providerFactories) {
+        for (const [name, factory] of Object.entries(this.options.providerFactories)) {
+          registerProvider(name, factory as (options: Record<string, unknown>) => unknown);
+        }
+      }
+      const config = injectRoot(rawConfig, this.options.workspaceRoot);
+      this._providers = await createProviders(config);
+    }
+
     this.cache = await boot(this._providers, this.logger, this.hooks);
     this.caps = buildCapabilities(this._providers);
     this.booted = true;

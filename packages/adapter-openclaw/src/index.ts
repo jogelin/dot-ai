@@ -5,15 +5,28 @@
  * Returns enriched context as prependContext for the agent.
  */
 import {
-  registerDefaults,
   registerProvider,
   DotAiRuntime,
+  loadConfig,
+  discoverNodes,
+  parseScanDirs,
 } from '@dot-ai/core';
+import type { Providers } from '@dot-ai/core';
 import { SqliteMemoryProvider } from '@dot-ai/provider-sqlite-memory';
 import { FileIdentityProvider } from '@dot-ai/provider-file-identity';
 import { FileSkillProvider } from '@dot-ai/provider-file-skills';
 import { RulesRoutingProvider } from '@dot-ai/provider-rules-routing';
 import { FileToolProvider } from '@dot-ai/provider-file-tools';
+
+// Optional: cockpit-tasks provider (workspace-specific)
+let CockpitTaskProviderClass: (new (opts: Record<string, unknown>) => unknown) | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('@dot-ai/cockpit-tasks');
+  CockpitTaskProviderClass = mod.CockpitTaskProvider ?? null;
+} catch {
+  // Not available — use noop tasks
+}
 
 // Inline OpenClaw plugin API types
 interface OpenClawLogger {
@@ -112,19 +125,32 @@ const plugin = {
       providerPromise = loadCustomProviders(api.pluginConfig, api.logger);
     }
 
-    // Register default file-based providers
-    registerDefaults();
+    // Build providers directly from config + imported constructors.
+    // This bypasses the registry + dynamic import entirely, avoiding jiti module
+    // duplication issues where loader.ts runs in a different module scope.
+    async function buildProviders(workspaceDir: string): Promise<Providers> {
+      const rawConfig = await loadConfig(workspaceDir);
+      const globalScanDirs = parseScanDirs(rawConfig.workspace?.scanDirs ?? 'projects');
+      const nodes = discoverNodes(workspaceDir, globalScanDirs);
+      const baseOpts = { root: workspaceDir, nodes };
 
-    // Build explicit provider factories to pass directly to DotAiRuntime.
-    // This bypasses the registry entirely, avoiding jiti module duplication issues
-    // where registerProvider() and resolve() operate on different Map instances.
-    const providerFactories: Record<string, (opts: Record<string, unknown>) => unknown> = {
-      '@dot-ai/provider-sqlite-memory': (opts) => new SqliteMemoryProvider(opts),
-      '@dot-ai/provider-file-identity': (opts) => new FileIdentityProvider(opts),
-      '@dot-ai/provider-file-skills': (opts) => new FileSkillProvider(opts),
-      '@dot-ai/provider-rules-routing': (opts) => new RulesRoutingProvider(opts),
-      '@dot-ai/provider-file-tools': (opts) => new FileToolProvider(opts),
-    };
+      const memCfg = rawConfig.memory?.with ?? {};
+      const skillCfg = rawConfig.skills?.with ?? {};
+      const identityCfg = rawConfig.identity?.with ?? {};
+      const routingCfg = rawConfig.routing?.with ?? {};
+      const toolsCfg = rawConfig.tools?.with ?? {};
+
+      return {
+        memory: new SqliteMemoryProvider({ ...baseOpts, ...memCfg }),
+        skills: new FileSkillProvider({ ...baseOpts, ...skillCfg }),
+        identity: new FileIdentityProvider({ ...baseOpts, ...identityCfg }),
+        routing: new RulesRoutingProvider({ ...baseOpts, ...routingCfg }),
+        tasks: CockpitTaskProviderClass
+          ? new CockpitTaskProviderClass({ ...baseOpts, ...rawConfig.tasks?.with ?? {} }) as Providers['tasks']
+          : { async list() { return []; }, async match() { return []; }, describe() { return ''; }, async get() { return null; }, async create() {}, async update() {} } as unknown as Providers['tasks'],
+        tools: new FileToolProvider({ ...baseOpts, ...toolsCfg }),
+      };
+    }
 
     // Register tools from core capabilities (delegates to providers)
     api.registerTool(
@@ -171,10 +197,12 @@ const plugin = {
 
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
+            const providers = await buildProviders(workspaceDir);
+            api.logger.info(`[dot-ai] Providers built. Memory: ${providers.memory.describe().substring(0, 60)}`);
             cachedRuntime = new DotAiRuntime({
               workspaceRoot: workspaceDir,
               skipIdentities: true,
-              providerFactories,
+              providers,
             });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
