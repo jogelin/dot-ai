@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@dot-ai/cockpit-tasks':
+        specifier: file:/Users/jgelin/dev/kiwi/packages/cockpit-tasks
+        version: file:../kiwi/packages/cockpit-tasks
       '@nx/js':
         specifier: ^22.5.3
         version: 22.5.3(@babel/traverse@7.29.0)(nx@22.5.3)
@@ -959,6 +962,9 @@ packages:
   '@discordjs/voice@0.19.0':
     resolution: {integrity: sha512-UyX6rGEXzVyPzb1yvjHtPfTlnLvB5jX/stAMdiytHhfoydX+98hfympdOwsnTktzr+IRvphxTbdErgYDJkEsvw==}
     engines: {node: '>=22.12.0'}
+
+  '@dot-ai/cockpit-tasks@file:../kiwi/packages/cockpit-tasks':
+    resolution: {directory: ../kiwi/packages/cockpit-tasks, type: directory}
 
   '@emnapi/core@1.8.1':
     resolution: {integrity: sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg==}
@@ -6526,6 +6532,8 @@ snapshots:
       - opusscript
       - utf-8-validate
 
+  '@dot-ai/cockpit-tasks@file:../kiwi/packages/cockpit-tasks': {}
+
   '@emnapi/core@1.8.1':
     dependencies:
       '@emnapi/wasi-threads': 1.1.0
@@ -8172,6 +8180,14 @@ snapshots:
       '@vitest/utils': 4.0.18
       chai: 6.2.2
       tinyrainbow: 3.0.3
+
+  '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
+    dependencies:
+      '@vitest/spy': 4.0.18
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.3.1(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@25.3.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
@@ -10998,7 +11014,7 @@ snapshots:
   vitest@4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@25.3.1)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18

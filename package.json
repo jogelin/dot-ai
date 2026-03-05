@@ -22,6 +22,7 @@
     ]
   },
   "devDependencies": {
+    "@dot-ai/cockpit-tasks": "file:/Users/jgelin/dev/kiwi/packages/cockpit-tasks",
     "@nx/js": "^22.5.3",
     "@secretlint/secretlint-rule-pattern": "^11.3.1",
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
