@@ -64,6 +64,17 @@ export async function loadHooks(
 
         const handler = factory(entry.with ?? {});
 
+        if (typeof handler !== 'function') {
+          logger?.log({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            phase: 'boot',
+            event: 'hook_invalid_handler',
+            data: { source: entry.use, hookEvent: event, type: typeof handler },
+          });
+          continue;
+        }
+
         resolved.push({ event, handler, source: entry.use });
 
         logger?.log({

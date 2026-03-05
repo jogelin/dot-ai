@@ -46,7 +46,7 @@ export { loadConfig, resolveConfig, injectRoot } from './config.js';
 export type { ResolvedConfig } from './config.js';
 
 // ── Format ──
-export { formatContext } from './format.js';
+export { formatContext, applyFormatHooks } from './format.js';
 export type { FormatOptions } from './format.js';
 
 // ── Hooks ──

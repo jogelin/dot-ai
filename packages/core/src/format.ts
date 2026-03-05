@@ -1,5 +1,7 @@
 import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult, BudgetWarning } from './types.js';
 import type { Logger } from './logger.js';
+import type { ResolvedHook } from './hooks.js';
+import { runAfterFormat } from './hooks.js';
 
 export interface FormatOptions {
   /** Skip identity sections (useful when already injected at session start) */
@@ -70,31 +72,20 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
 
     if (current > options.tokenBudget) {
       const actions: string[] = [];
-
-      // Strategy 1: Drop skills by reverse order (least relevant last in the array)
       const skillSectionIdx = sections.findIndex(s => s.startsWith('## Active Skills'));
-      if (skillSectionIdx !== -1 && loadedSkills.length > 1) {
-        while (loadedSkills.length > 1 && estimate() > options.tokenBudget) {
-          const dropped = loadedSkills.pop()!;
-          actions.push(`dropped skill: ${dropped.name}`);
-          // Rebuild skills section
-          sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength);
-        }
-        current = estimate();
-      }
+      const memorySectionIdx = sections.findIndex(s => s.startsWith('## Relevant Memory'));
 
-      // Strategy 2: Apply maxSkillLength=2000 if not already set
+      // Strategy 1: Truncate skill content to 2000 chars (preserves all skills, just shorter)
       if (current > options.tokenBudget && skillSectionIdx !== -1 && options?.maxSkillLength == null) {
-        const before = loadedSkills.filter(s => (s.content?.length ?? 0) > 2000).length;
-        if (before > 0) {
+        const longSkills = loadedSkills.filter(s => (s.content?.length ?? 0) > 2000).length;
+        if (longSkills > 0) {
           sections[skillSectionIdx] = formatSkills(loadedSkills, 2000);
-          actions.push(`truncated ${before} skills to 2000 chars`);
+          actions.push(`truncated ${longSkills} skills to 2000 chars`);
           current = estimate();
         }
       }
 
-      // Strategy 3: Drop oldest memories (keep most recent 5)
-      const memorySectionIdx = sections.findIndex(s => s.startsWith('## Relevant Memory'));
+      // Strategy 2: Drop oldest memories (keep most recent 5)
       if (current > options.tokenBudget && memorySectionIdx !== -1 && ctx.memories.length > 5) {
         const kept = ctx.memories.slice(0, 5);
         const dropped = ctx.memories.length - 5;
@@ -103,7 +94,17 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
         current = estimate();
       }
 
-      // If trimming occurred → warn
+      // Strategy 3: Drop skills by reverse order (least relevant last in the array)
+      if (current > options.tokenBudget && skillSectionIdx !== -1 && loadedSkills.length > 1) {
+        while (loadedSkills.length > 1 && estimate() > options.tokenBudget) {
+          const dropped = loadedSkills.pop()!;
+          actions.push(`dropped skill: ${dropped.name}`);
+          sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength ?? 2000);
+        }
+        current = estimate();
+      }
+
+      // Emit warning if any trimming occurred
       if (actions.length > 0) {
         const warning: BudgetWarning = {
           budget: options.tokenBudget,
@@ -117,6 +118,23 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
           level: current > options.tokenBudget ? 'warn' : 'info',
           phase: 'format',
           event: 'budget_trimmed',
+          data: warning as unknown as Record<string, unknown>,
+          durationMs: Math.round(performance.now() - start),
+        });
+      } else if (current > options.tokenBudget) {
+        // Budget exceeded but nothing could be trimmed (identities alone exceed budget)
+        const warning: BudgetWarning = {
+          budget: options.tokenBudget,
+          actual: current,
+          actions: ['budget exceeded by non-trimmable content (identities)'],
+        };
+        options.onBudgetExceeded?.(warning);
+
+        options?.logger?.log({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          phase: 'format',
+          event: 'budget_exceeded_no_action',
           data: warning as unknown as Record<string, unknown>,
           durationMs: Math.round(performance.now() - start),
         });
@@ -143,6 +161,19 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
   });
 
   return result;
+}
+
+/**
+ * Apply after_format hooks to a formatted context string.
+ * Call this after formatContext() if hooks are configured.
+ */
+export async function applyFormatHooks(
+  formatted: string,
+  ctx: EnrichedContext,
+  hooks: ResolvedHook[],
+  logger?: Logger,
+): Promise<string> {
+  return runAfterFormat(hooks, formatted, ctx, logger);
 }
 
 function formatMemory(memories: MemoryEntry[], description?: string): string {

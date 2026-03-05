@@ -100,10 +100,11 @@ describe('formatContext budget', () => {
     expect(droppedActions.length).toBeGreaterThan(0);
   });
 
-  it('over budget — truncates skills when dropping alone is not enough', () => {
+  it('over budget — truncates skills first before dropping', () => {
     // 2 skills × 5000 chars = ~10000 chars = ~2500 tokens
-    // Budget 800 tokens: dropping 1 skill leaves ~1250 tokens (still over)
-    // truncating to 2000 chars per skill → ~1000 chars total → ~250 tokens (under)
+    // New order: strategy 1 (truncate to 2000) fires FIRST
+    // After truncation: ~4100 chars = ~1025 tokens — still over 800
+    // Strategy 3 then drops big-skill-b to bring it under budget
     const ctx = makeContext({
       skills: [
         makeSkill('big-skill-a', 5000),
@@ -117,8 +118,14 @@ describe('formatContext budget', () => {
     formatContext(ctx, { tokenBudget: 800, onBudgetExceeded });
 
     expect(onBudgetExceeded).toHaveBeenCalled();
-    const truncatedActions = actions.filter(a => a.includes('truncated'));
-    expect(truncatedActions.length).toBeGreaterThan(0);
+    // Truncation must appear before any drop action
+    const truncateIdx = actions.findIndex(a => a.includes('truncated'));
+    const dropIdx = actions.findIndex(a => a.startsWith('dropped skill:'));
+    expect(truncateIdx).toBeGreaterThanOrEqual(0);
+    // If a drop also happened, truncation came first
+    if (dropIdx !== -1) {
+      expect(truncateIdx).toBeLessThan(dropIdx);
+    }
   });
 
   it('over budget — drops memories after skills trimmed', () => {
@@ -185,5 +192,27 @@ describe('formatContext budget', () => {
     const result = formatContext(ctx, { tokenBudget: 100, onBudgetExceeded });
 
     expect(result).toContain('You are Kiwi. This is your identity.');
+  });
+
+  it('identity-only overflow calls onBudgetExceeded with non-trimmable message', () => {
+    // Identity content alone exceeds budget — no skills or memories to trim
+    const bigIdentity = 'You are Kiwi. '.repeat(500); // ~7000 chars = ~1750 tokens
+    const ctx = makeContext({
+      identities: [makeIdentity(bigIdentity)],
+      skills: [],
+      memories: [],
+    });
+
+    let capturedWarning: BudgetWarning | undefined;
+    const onBudgetExceeded = vi.fn((w: BudgetWarning) => {
+      capturedWarning = w;
+    });
+
+    formatContext(ctx, { tokenBudget: 100, onBudgetExceeded });
+
+    expect(onBudgetExceeded).toHaveBeenCalledOnce();
+    expect(capturedWarning).toBeDefined();
+    expect(capturedWarning!.actions).toHaveLength(1);
+    expect(capturedWarning!.actions[0]).toContain('non-trimmable');
   });
 });

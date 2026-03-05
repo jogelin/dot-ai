@@ -18,12 +18,14 @@ import {
   learn,
   injectRoot,
   formatContext,
+  applyFormatHooks,
+  loadHooks,
   NoopLogger,
   JsonFileLogger,
   type Providers,
   type BootCache,
 } from '@dot-ai/core';
-import type { Logger } from '@dot-ai/core';
+import type { Logger, ResolvedHook } from '@dot-ai/core';
 
 // ── Shared helpers ──
 
@@ -44,14 +46,16 @@ async function initPipeline(workspaceRoot: string): Promise<{
   providers: Providers;
   cache: BootCache;
   logger: Logger;
+  hooks: ResolvedHook[];
 }> {
   registerDefaults();
   const rawConfig = await loadConfig(workspaceRoot);
   const config = injectRoot(rawConfig, workspaceRoot);
   const logger = createLogger(rawConfig);
+  const hooks = await loadHooks(rawConfig.hooks, logger);
   const providers = await createProviders(config);
-  const cache = await boot(providers, logger);
-  return { providers, cache, logger };
+  const cache = await boot(providers, logger, hooks);
+  return { providers, cache, logger, hooks };
 }
 
 // ── Event handlers ──
@@ -59,7 +63,7 @@ async function initPipeline(workspaceRoot: string): Promise<{
 /** UserPromptSubmit — enrich pipeline + inject context (existing behavior) */
 async function handlePromptSubmit(event: Record<string, unknown>): Promise<void> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
-  const { providers, cache, logger } = await initPipeline(workspaceRoot);
+  const { providers, cache, logger, hooks } = await initPipeline(workspaceRoot);
 
   const prompt = (event.prompt ?? event.content ?? '') as string;
   if (!prompt) {
@@ -67,7 +71,7 @@ async function handlePromptSubmit(event: Record<string, unknown>): Promise<void>
     return;
   }
 
-  const enriched = await enrich(prompt, providers, cache, logger);
+  const enriched = await enrich(prompt, providers, cache, logger, hooks);
 
   for (const skill of enriched.skills) {
     if (!skill.content && skill.name) {
@@ -75,12 +79,16 @@ async function handlePromptSubmit(event: Record<string, unknown>): Promise<void>
     }
   }
 
-  const formatted = formatContext(enriched, {
+  let formatted = formatContext(enriched, {
     skipIdentities: true,
     maxSkillLength: 3000,
     maxSkills: 5,
     logger,
   });
+
+  if (hooks.length > 0) {
+    formatted = await applyFormatHooks(formatted, enriched, hooks, logger);
+  }
 
   if (formatted) {
     process.stdout.write(JSON.stringify({ result: formatted }));
@@ -93,7 +101,7 @@ async function handlePreCompact(event: Record<string, unknown>): Promise<void> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
 
   try {
-    const { providers, logger } = await initPipeline(workspaceRoot);
+    const { providers, logger, hooks: _hooks } = await initPipeline(workspaceRoot);
 
     const summary = (event.summary ?? event.content ?? '') as string;
     if (summary) {
@@ -114,11 +122,11 @@ async function handleStop(event: Record<string, unknown>): Promise<void> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
 
   try {
-    const { providers, logger } = await initPipeline(workspaceRoot);
+    const { providers, logger, hooks } = await initPipeline(workspaceRoot);
 
     const response = (event.response ?? event.content ?? '') as string;
     if (response) {
-      await learn(response, providers);
+      await learn(response, providers, hooks, logger);
     }
     await logger.flush();
   } catch (err) {

@@ -159,6 +159,7 @@ export async function learn(
   response: string,
   providers: Providers,
   hooks?: ResolvedHook[],
+  logger?: Logger,
 ): Promise<void> {
   const MAX_LEARN_LENGTH = 500;
   const truncated = response.length > MAX_LEARN_LENGTH
@@ -173,6 +174,6 @@ export async function learn(
 
   // Run after_learn hooks
   if (hooks && hooks.length > 0) {
-    await runAfterLearn(hooks, response);
+    await runAfterLearn(hooks, response, logger);
   }
 }

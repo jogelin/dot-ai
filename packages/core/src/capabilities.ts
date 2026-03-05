@@ -46,7 +46,10 @@ export function buildCapabilities(providers: Providers): Capability[] {
       required: ['query'],
     },
     async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const query = params['query'] as string;
+      const query = params['query'];
+      if (typeof query !== 'string') {
+        return { text: 'Error: "query" parameter must be a string.', details: { error: true } };
+      }
       const limit = typeof params['limit'] === 'number' ? params['limit'] : 10;
 
       const entries = await providers.memory.search(query);
@@ -85,7 +88,10 @@ export function buildCapabilities(providers: Providers): Capability[] {
       required: ['text'],
     },
     async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const text = params['text'] as string;
+      const text = params['text'];
+      if (typeof text !== 'string') {
+        return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
+      }
       const type = typeof params['type'] === 'string' ? params['type'] : 'log';
 
       await providers.memory.store({
@@ -179,7 +185,10 @@ export function buildCapabilities(providers: Providers): Capability[] {
       required: ['text'],
     },
     async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const text = params['text'] as string;
+      const text = params['text'];
+      if (typeof text !== 'string') {
+        return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
+      }
       const status = typeof params['status'] === 'string' ? params['status'] : 'pending';
 
       const taskData: Parameters<typeof providers.tasks.create>[0] = { text, status };
@@ -231,7 +240,10 @@ export function buildCapabilities(providers: Providers): Capability[] {
       required: ['id'],
     },
     async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const id = params['id'] as string;
+      const id = params['id'];
+      if (typeof id !== 'string') {
+        return { text: 'Error: "id" parameter must be a string.', details: { error: true } };
+      }
       const patch: Parameters<typeof providers.tasks.update>[1] = {};
 
       if (typeof params['status'] === 'string') patch.status = params['status'];

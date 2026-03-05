@@ -59,23 +59,33 @@ export async function createProviders(config: DotAiConfig): Promise<Providers> {
   const resolved = resolveConfig(config);
 
   return {
-    memory: await resolve<MemoryProvider>(resolved.memory.use, resolved.memory.with ?? {}, noopMemory),
-    skills: await resolve<SkillProvider>(resolved.skills.use, resolved.skills.with ?? {}, noopSkills),
-    identity: await resolve<IdentityProvider>(resolved.identity.use, resolved.identity.with ?? {}, noopIdentity),
-    routing: await resolve<RoutingProvider>(resolved.routing.use, resolved.routing.with ?? {}, noopRouting),
-    tasks: await resolve<TaskProvider>(resolved.tasks.use, resolved.tasks.with ?? {}, noopTasks),
-    tools: await resolve<ToolProvider>(resolved.tools.use, resolved.tools.with ?? {}, noopTools),
+    memory: await resolve<MemoryProvider>(resolved.memory.use, 'memory', resolved.memory.with ?? {}, noopMemory),
+    skills: await resolve<SkillProvider>(resolved.skills.use, 'skills', resolved.skills.with ?? {}, noopSkills),
+    identity: await resolve<IdentityProvider>(resolved.identity.use, 'identity', resolved.identity.with ?? {}, noopIdentity),
+    routing: await resolve<RoutingProvider>(resolved.routing.use, 'routing', resolved.routing.with ?? {}, noopRouting),
+    tasks: await resolve<TaskProvider>(resolved.tasks.use, 'tasks', resolved.tasks.with ?? {}, noopTasks),
+    tools: await resolve<ToolProvider>(resolved.tools.use, 'tools', resolved.tools.with ?? {}, noopTools),
   };
 }
 
-async function resolve<T>(name: string, options: Record<string, unknown>, fallback: T): Promise<T> {
-  let factory = registry.get(name);
+async function resolve<T>(
+  name: string,
+  role: string,
+  options: Record<string, unknown>,
+  fallback: T,
+): Promise<T> {
+  const registryKey = `${name}:${role}`;
+  let factory = registry.get(registryKey);
 
   if (!factory) {
-    // Auto-discovery: try dynamic import
-    factory = await tryImportProvider(name);
+    // Also check legacy key (just package name) for backward compatibility
+    factory = registry.get(name);
+  }
+
+  if (!factory) {
+    factory = await tryImportProvider(name, role);
     if (factory) {
-      registry.set(name, factory); // Cache for next time
+      registry.set(registryKey, factory);
     }
   }
 
@@ -85,10 +95,11 @@ async function resolve<T>(name: string, options: Record<string, unknown>, fallba
 
 /**
  * Try to import a provider package dynamically.
- * Looks for: default export factory, createXxxProvider function, or XxxProvider class.
+ * Looks for: role-specific export, default export factory, createXxxProvider function, or XxxProvider class.
  */
 async function tryImportProvider(
   name: string,
+  role?: string,
 ): Promise<((options: Record<string, unknown>) => unknown) | undefined> {
   try {
     // Check import cache first
@@ -98,19 +109,37 @@ async function tryImportProvider(
       importCache.set(name, mod);
     }
 
-    // 1. Check for default export (function)
+    // 1. If role specified, look for role-specific factory first
+    // e.g. role="memory" -> createMemoryProvider or MemoryProvider
+    if (role) {
+      const capitalRole = role.charAt(0).toUpperCase() + role.slice(1);
+
+      // Check for createXxxProvider factory (e.g., createMemoryProvider)
+      const factoryName = `create${capitalRole}Provider`;
+      if (typeof mod[factoryName] === 'function') {
+        return mod[factoryName] as (options: Record<string, unknown>) => unknown;
+      }
+
+      // Check for XxxProvider class (e.g., MemoryProvider)
+      const className = `${capitalRole}Provider`;
+      if (typeof mod[className] === 'function') {
+        return (opts: Record<string, unknown>) => new (mod![className] as new (opts: Record<string, unknown>) => unknown)(opts);
+      }
+    }
+
+    // 2. Fallback: default export (function)
     if (typeof mod.default === 'function') {
       return mod.default as (options: Record<string, unknown>) => unknown;
     }
 
-    // 2. Check for createXxxProvider factory function
+    // 3. Fallback: any createXxxProvider factory
     for (const [key, value] of Object.entries(mod)) {
       if (key.startsWith('create') && key.endsWith('Provider') && typeof value === 'function') {
         return value as (options: Record<string, unknown>) => unknown;
       }
     }
 
-    // 3. Check for XxxProvider class (constructor)
+    // 4. Fallback: any XxxProvider class
     for (const [key, value] of Object.entries(mod)) {
       if (key.endsWith('Provider') && typeof value === 'function') {
         return (opts: Record<string, unknown>) => new (value as new (opts: Record<string, unknown>) => unknown)(opts);

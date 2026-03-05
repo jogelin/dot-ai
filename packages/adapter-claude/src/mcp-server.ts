@@ -22,7 +22,6 @@ import {
   type Providers,
 } from '@dot-ai/core';
 import type { Capability } from '@dot-ai/core';
-import * as readline from 'node:readline';
 
 // ── JSON-RPC types ──
 
@@ -48,6 +47,15 @@ const SERVER_VERSION = '0.5.0';
 // ── State ──
 let capabilities: Capability[] = [];
 let initialized = false;
+let initPromise: Promise<void> | null = null;
+
+async function ensureInit(): Promise<void> {
+  if (initialized) return;
+  if (!initPromise) {
+    initPromise = initCapabilities();
+  }
+  return initPromise;
+}
 
 // ── Initialize providers ──
 async function initCapabilities(): Promise<void> {
@@ -82,7 +90,8 @@ function handleInitialize(_params: Record<string, unknown>): unknown {
   };
 }
 
-function handleToolsList(): unknown {
+async function handleToolsList(): Promise<unknown> {
+  await ensureInit();
   return {
     tools: capabilities.map((cap) => ({
       name: cap.name,
@@ -95,6 +104,7 @@ function handleToolsList(): unknown {
 }
 
 async function handleToolsCall(params: Record<string, unknown>): Promise<unknown> {
+  await ensureInit();
   const name = params.name as string;
   const args = (params.arguments ?? {}) as Record<string, unknown>;
 
@@ -126,16 +136,10 @@ function send(msg: JsonRpcResponse): void {
   process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
 }
 
-function sendNotification(method: string, _params?: Record<string, unknown>): void {
-  const json = JSON.stringify({ jsonrpc: '2.0', method, params: _params ?? {} });
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
-}
-
 async function handleMessage(msg: JsonRpcRequest): Promise<void> {
   // Notifications (no id) — just acknowledge
   if (msg.method === 'notifications/initialized') {
-    // Client acknowledges init — now load capabilities
-    await initCapabilities();
+    ensureInit().catch((err) => process.stderr.write(`[dot-ai-mcp] Init error: ${err}\n`));
     return;
   }
 
@@ -154,7 +158,7 @@ async function handleMessage(msg: JsonRpcRequest): Promise<void> {
         break;
 
       case 'tools/list':
-        result = handleToolsList();
+        result = await handleToolsList();
         break;
 
       case 'tools/call':
@@ -191,15 +195,6 @@ async function handleMessage(msg: JsonRpcRequest): Promise<void> {
 
 function main(): void {
   let buffer = '';
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    terminal: false,
-  });
-
-  // MCP uses Content-Length framed messages
-  process.stdin.removeAllListeners('data');
-  rl.close();
 
   process.stdin.on('data', (chunk: Buffer) => {
     buffer += chunk.toString('utf-8');
