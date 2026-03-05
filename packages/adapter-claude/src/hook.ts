@@ -64,7 +64,7 @@ async function handlePreCompact(event: Record<string, unknown>): Promise<DotAiRu
   const runtime = await createRuntime(workspaceRoot);
   try {
     const summary = (event.summary ?? event.content ?? '') as string;
-    if (summary && runtime.providers) {
+    if (summary && runtime.providers?.memory) {
       await runtime.providers.memory.store({
         content: `[compaction] ${summary.slice(0, 1000)}`,
         type: 'log',

@@ -135,9 +135,11 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   const ctx = await enrich(prompt, providers, cache);
 
   // Load skill content for matched skills
-  for (const skill of ctx.skills) {
-    if (!skill.content && skill.name) {
-      skill.content = await providers.skills.load(skill.name) ?? undefined;
+  if (providers.skills) {
+    for (const skill of ctx.skills) {
+      if (!skill.content && skill.name) {
+        skill.content = await providers.skills.load(skill.name) ?? undefined;
+      }
     }
   }
 
@@ -235,6 +237,11 @@ async function cmdConsolidate(): Promise<void> {
   const rawConfig = await loadConfig(root);
   const config = injectRoot(rawConfig, root);
   const providers = await createProviders(config);
+
+  if (!providers.memory) {
+    console.log('No memory provider configured.');
+    return;
+  }
 
   if (!providers.memory.consolidate) {
     console.log('Memory provider does not support consolidation.');

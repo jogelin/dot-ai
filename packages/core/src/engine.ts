@@ -14,14 +14,16 @@ import { runAfterBoot, runAfterEnrich, runAfterLearn } from './hooks.js';
 
 /**
  * All providers needed by the engine.
+ * All fields are optional — unconfigured providers are simply skipped.
+ * The host agent handles any unmanaged features with its own mechanisms.
  */
 export interface Providers {
-  memory: MemoryProvider;
-  skills: SkillProvider;
-  identity: IdentityProvider;
-  routing: RoutingProvider;
-  tasks: TaskProvider;
-  tools: ToolProvider;
+  memory?: MemoryProvider;
+  skills?: SkillProvider;
+  identity?: IdentityProvider;
+  routing?: RoutingProvider;
+  tasks?: TaskProvider;
+  tools?: ToolProvider;
 }
 
 /**
@@ -36,6 +38,7 @@ export interface BootCache {
 /**
  * Boot phase — run once per session.
  * Loads identities, indexes skills/tools, builds label vocabulary.
+ * Only calls providers that are configured (non-undefined).
  */
 export async function boot(
   providers: Providers,
@@ -45,9 +48,9 @@ export async function boot(
   const start = performance.now();
 
   const [identities, skills, tools] = await Promise.all([
-    providers.identity.load(),
-    providers.skills.list(),
-    providers.tools.list(),
+    providers.identity ? providers.identity.load() : Promise.resolve([]),
+    providers.skills ? providers.skills.list() : Promise.resolve([]),
+    providers.tools ? providers.tools.list() : Promise.resolve([]),
   ]);
 
   // Build vocabulary from skill labels, skill triggers (excluding meta-triggers), and tool labels
@@ -59,7 +62,7 @@ export async function boot(
   // Collect project node names from identity provider (if it exposes them)
   // so they can be matched as labels in enrich()
   const projectNodeNames: string[] = [];
-  if ('projectNodes' in providers.identity) {
+  if (providers.identity && 'projectNodes' in providers.identity) {
     const nodes = (providers.identity as unknown as { projectNodes: Array<{ name: string }> }).projectNodes;
     if (Array.isArray(nodes)) {
       projectNodeNames.push(...nodes.map((n) => n.name));
@@ -117,11 +120,21 @@ export async function enrich(
 
   // 2. Search memory + match skills + match tools + route + recent tasks — all in parallel
   const [memories, matchedSkills, matchedTools, routing, recentTasks] = await Promise.all([
-    providers.memory.search(prompt, labels.map((l) => l.name)),
-    providers.skills.match(labels),
-    providers.tools.match(labels),
-    providers.routing.route(labels),
-    providers.tasks.list({ status: 'in_progress' }).catch(() => []),
+    providers.memory
+      ? providers.memory.search(prompt, labels.map((l) => l.name))
+      : Promise.resolve([]),
+    providers.skills
+      ? providers.skills.match(labels)
+      : Promise.resolve([]),
+    providers.tools
+      ? providers.tools.match(labels)
+      : Promise.resolve([]),
+    providers.routing
+      ? providers.routing.route(labels)
+      : Promise.resolve({ model: 'default', reason: 'no routing provider' }),
+    providers.tasks
+      ? providers.tasks.list({ status: 'in_progress' }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   logger?.log({
@@ -139,11 +152,11 @@ export async function enrich(
     durationMs: Math.round(performance.now() - start),
   });
 
-  const memoryDescription = providers.memory.describe();
+  const memoryDescription = providers.memory ? providers.memory.describe() : undefined;
 
   // Lazily load project identities based on matched labels (if provider supports it)
   let enrichedIdentities = cache.identities;
-  if (providers.identity.match) {
+  if (providers.identity?.match) {
     const projectIdentities = await providers.identity.match(labels);
     if (projectIdentities.length > 0) {
       enrichedIdentities = [...cache.identities, ...projectIdentities];
@@ -172,7 +185,7 @@ export async function enrich(
 
 /**
  * Learn phase — run after agent response.
- * Stores learnings in memory.
+ * Stores learnings in memory (only if memory provider is configured).
  */
 export async function learn(
   response: string,
@@ -180,6 +193,9 @@ export async function learn(
   hooks?: ResolvedHook[],
   logger?: Logger,
 ): Promise<void> {
+  // Skip if no memory provider configured
+  if (!providers.memory) return;
+
   // Skip very short responses (likely acknowledgments, not learnable)
   if (response.length < 100) return;
 

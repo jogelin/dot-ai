@@ -61,9 +61,11 @@ async function main(): Promise<void> {
   const ctx = await enrich('', providers, cache);
 
   // Load skill content
-  for (const skill of ctx.skills) {
-    if (!skill.content && skill.name) {
-      skill.content = await providers.skills.load(skill.name) ?? undefined;
+  if (providers.skills) {
+    for (const skill of ctx.skills) {
+      if (!skill.content && skill.name) {
+        skill.content = await providers.skills.load(skill.name) ?? undefined;
+      }
     }
   }
 

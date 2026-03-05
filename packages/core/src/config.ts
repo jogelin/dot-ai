@@ -55,27 +55,28 @@ export async function loadConfig(workspaceRoot: string): Promise<DotAiConfig> {
 }
 
 /**
- * Resolve a config with defaults.
- * Any missing provider gets the built-in file-based default.
+ * Resolve a config — pass-through only.
+ * If a provider is NOT configured, it returns undefined for that section.
+ * The host agent handles unconfigured features with its own mechanisms.
  */
 export interface ResolvedConfig {
-  memory: ProviderConfig;
-  skills: ProviderConfig;
-  identity: ProviderConfig;
-  routing: ProviderConfig;
-  tasks: ProviderConfig;
-  tools: ProviderConfig;
+  memory?: ProviderConfig;
+  skills?: ProviderConfig;
+  identity?: ProviderConfig;
+  routing?: ProviderConfig;
+  tasks?: ProviderConfig;
+  tools?: ProviderConfig;
   debug?: import('./types.js').DebugConfig;
 }
 
 export function resolveConfig(config: DotAiConfig): ResolvedConfig {
   return {
-    memory: config.memory ?? { use: '@dot-ai/provider-file-memory' },
-    skills: config.skills ?? { use: '@dot-ai/provider-file-skills' },
-    identity: config.identity ?? { use: '@dot-ai/provider-file-identity' },
-    routing: config.routing ?? { use: '@dot-ai/provider-rules-routing' },
-    tasks: config.tasks ?? { use: '@dot-ai/provider-file-tasks' },
-    tools: config.tools ?? { use: '@dot-ai/provider-file-tools' },
+    memory: config.memory,
+    skills: config.skills,
+    identity: config.identity,
+    routing: config.routing,
+    tasks: config.tasks,
+    tools: config.tools,
     debug: config.debug,
   };
 }

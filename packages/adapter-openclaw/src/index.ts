@@ -134,22 +134,28 @@ const plugin = {
       const nodes = discoverNodes(workspaceDir, globalScanDirs);
       const baseOpts = { root: workspaceDir, nodes };
 
-      const memCfg = rawConfig.memory?.with ?? {};
-      const skillCfg = rawConfig.skills?.with ?? {};
-      const identityCfg = rawConfig.identity?.with ?? {};
-      const routingCfg = rawConfig.routing?.with ?? {};
-      const toolsCfg = rawConfig.tools?.with ?? {};
+      const providers: Providers = {};
 
-      return {
-        memory: new SqliteMemoryProvider({ ...baseOpts, ...memCfg }),
-        skills: new FileSkillProvider({ ...baseOpts, ...skillCfg }),
-        identity: new FileIdentityProvider({ ...baseOpts, ...identityCfg }),
-        routing: new RulesRoutingProvider({ ...baseOpts, ...routingCfg }),
-        tasks: CockpitTaskProviderClass
-          ? new CockpitTaskProviderClass({ ...baseOpts, ...rawConfig.tasks?.with ?? {} }) as Providers['tasks']
-          : { async list() { return []; }, async match() { return []; }, describe() { return ''; }, async get() { return null; }, async create() {}, async update() {} } as unknown as Providers['tasks'],
-        tools: new FileToolProvider({ ...baseOpts, ...toolsCfg }),
-      };
+      if (rawConfig.memory) {
+        providers.memory = new SqliteMemoryProvider({ ...baseOpts, ...rawConfig.memory.with ?? {} });
+      }
+      if (rawConfig.skills) {
+        providers.skills = new FileSkillProvider({ ...baseOpts, ...rawConfig.skills.with ?? {} });
+      }
+      if (rawConfig.identity) {
+        providers.identity = new FileIdentityProvider({ ...baseOpts, ...rawConfig.identity.with ?? {} });
+      }
+      if (rawConfig.routing) {
+        providers.routing = new RulesRoutingProvider({ ...baseOpts, ...rawConfig.routing.with ?? {} });
+      }
+      if (rawConfig.tasks && CockpitTaskProviderClass) {
+        providers.tasks = new CockpitTaskProviderClass({ ...baseOpts, ...rawConfig.tasks.with ?? {} }) as Providers['tasks'];
+      }
+      if (rawConfig.tools) {
+        providers.tools = new FileToolProvider({ ...baseOpts, ...rawConfig.tools.with ?? {} });
+      }
+
+      return providers;
     }
 
     // Register tools from core capabilities (delegates to providers)
@@ -198,7 +204,8 @@ const plugin = {
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
             const providers = await buildProviders(workspaceDir);
-            api.logger.info(`[dot-ai] Providers built. Memory: ${providers.memory.describe().substring(0, 60)}`);
+            const configured = Object.keys(providers).join(', ') || 'none';
+            api.logger.info(`[dot-ai] Providers built: ${configured}`);
             cachedRuntime = new DotAiRuntime({
               workspaceRoot: workspaceDir,
               skipIdentities: true,

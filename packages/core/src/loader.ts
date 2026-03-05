@@ -63,19 +63,33 @@ export function registerDefaults(): void {
 }
 
 /**
- * Create all providers from config.
- * Falls back to no-op providers for any missing registration.
+ * Create providers from config.
+ * Only creates providers that are explicitly configured in the config.
+ * Unconfigured providers return undefined — the host agent handles those features.
+ * When a configured provider fails to load, falls back to the noop implementation.
  */
 export async function createProviders(config: DotAiConfig): Promise<Providers> {
   const resolved = resolveConfig(config);
 
   return {
-    memory: await resolve<MemoryProvider>(resolved.memory.use, 'memory', resolved.memory.with ?? {}, noopMemory),
-    skills: await resolve<SkillProvider>(resolved.skills.use, 'skills', resolved.skills.with ?? {}, noopSkills),
-    identity: await resolve<IdentityProvider>(resolved.identity.use, 'identity', resolved.identity.with ?? {}, noopIdentity),
-    routing: await resolve<RoutingProvider>(resolved.routing.use, 'routing', resolved.routing.with ?? {}, noopRouting),
-    tasks: await resolve<TaskProvider>(resolved.tasks.use, 'tasks', resolved.tasks.with ?? {}, noopTasks),
-    tools: await resolve<ToolProvider>(resolved.tools.use, 'tools', resolved.tools.with ?? {}, noopTools),
+    memory: resolved.memory
+      ? await resolve<MemoryProvider>(resolved.memory.use, 'memory', resolved.memory.with ?? {}, noopMemory)
+      : undefined,
+    skills: resolved.skills
+      ? await resolve<SkillProvider>(resolved.skills.use, 'skills', resolved.skills.with ?? {}, noopSkills)
+      : undefined,
+    identity: resolved.identity
+      ? await resolve<IdentityProvider>(resolved.identity.use, 'identity', resolved.identity.with ?? {}, noopIdentity)
+      : undefined,
+    routing: resolved.routing
+      ? await resolve<RoutingProvider>(resolved.routing.use, 'routing', resolved.routing.with ?? {}, noopRouting)
+      : undefined,
+    tasks: resolved.tasks
+      ? await resolve<TaskProvider>(resolved.tasks.use, 'tasks', resolved.tasks.with ?? {}, noopTasks)
+      : undefined,
+    tools: resolved.tools
+      ? await resolve<ToolProvider>(resolved.tools.use, 'tools', resolved.tools.with ?? {}, noopTools)
+      : undefined,
   };
 }
 

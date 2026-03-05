@@ -29,260 +29,268 @@ export interface Capability {
 
 /**
  * Build the list of capabilities from active providers.
- * Always generates capabilities for memory and tasks — execution handles empty results gracefully.
+ * Only generates capabilities for providers that are configured (non-undefined).
  */
 export function buildCapabilities(providers: Providers): Capability[] {
   const caps: Capability[] = [];
 
-  // --- Memory capabilities ---
+  // --- Memory capabilities (only if memory provider is configured) ---
 
-  caps.push({
-    name: 'memory_recall',
-    description: `Search stored memories. ${providers.memory.describe()}`,
-    category: 'memory',
-    readOnly: true,
-    version: 1,
-    parameters: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query to find relevant memories.',
+  if (providers.memory) {
+    const memoryProvider = providers.memory;
+
+    caps.push({
+      name: 'memory_recall',
+      description: `Search stored memories. ${memoryProvider.describe()}`,
+      category: 'memory',
+      readOnly: true,
+      version: 1,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Search query to find relevant memories.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of results to return. Defaults to 10.',
+          },
         },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of results to return. Defaults to 10.',
-        },
+        required: ['query'],
       },
-      required: ['query'],
-    },
-    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const query = params['query'];
-      if (typeof query !== 'string') {
-        return { text: 'Error: "query" parameter must be a string.', details: { error: true } };
-      }
-      const limit = typeof params['limit'] === 'number' ? params['limit'] : 10;
+      async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+        const query = params['query'];
+        if (typeof query !== 'string') {
+          return { text: 'Error: "query" parameter must be a string.', details: { error: true } };
+        }
+        const limit = typeof params['limit'] === 'number' ? params['limit'] : 10;
 
-      const entries = await providers.memory.search(query);
-      const results = entries.slice(0, limit);
+        const entries = await memoryProvider.search(query);
+        const results = entries.slice(0, limit);
 
-      if (results.length === 0) {
-        return { text: 'No memories found for this query.', details: { count: 0 } };
-      }
+        if (results.length === 0) {
+          return { text: 'No memories found for this query.', details: { count: 0 } };
+        }
 
-      const lines = results.map(
-        (e, i) => `${i + 1}. [${e.type}] ${e.content}${e.date ? ` (${e.date})` : ''}`,
-      );
+        const lines = results.map(
+          (e, i) => `${i + 1}. [${e.type}] ${e.content}${e.date ? ` (${e.date})` : ''}`,
+        );
 
-      return {
-        text: lines.join('\n'),
-        details: { count: results.length },
-      };
-    },
-  });
-
-  caps.push({
-    name: 'memory_store',
-    description: 'Store a new entry in memory for future recall.',
-    category: 'memory',
-    readOnly: false,
-    version: 1,
-    parameters: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Content to store in memory.',
-        },
-        type: {
-          type: 'string',
-          description: 'Memory type: fact, decision, lesson, log, pattern. Defaults to log.',
-        },
+        return {
+          text: lines.join('\n'),
+          details: { count: results.length },
+        };
       },
-      required: ['text'],
-    },
-    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const text = params['text'];
-      if (typeof text !== 'string') {
-        return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
-      }
-      const type = typeof params['type'] === 'string' ? params['type'] : 'log';
+    });
 
-      await providers.memory.store({
-        content: text,
-        type,
-        date: new Date().toISOString().slice(0, 10),
-      });
-
-      return { text: `Memory stored (type: ${type}).` };
-    },
-  });
-
-  // --- Task capabilities ---
-
-  caps.push({
-    name: 'task_list',
-    description: 'List tasks, optionally filtered by status, project, or tags.',
-    category: 'tasks',
-    readOnly: true,
-    version: 1,
-    parameters: {
-      type: 'object',
-      properties: {
-        status: {
-          type: 'string',
-          description: 'Filter by status (e.g. pending, in_progress, done).',
+    caps.push({
+      name: 'memory_store',
+      description: 'Store a new entry in memory for future recall.',
+      category: 'memory',
+      readOnly: false,
+      version: 1,
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: 'Content to store in memory.',
+          },
+          type: {
+            type: 'string',
+            description: 'Memory type: fact, decision, lesson, log, pattern. Defaults to log.',
+          },
         },
-        project: {
-          type: 'string',
-          description: 'Filter by project name.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Filter by tags (all provided tags must match).',
-        },
+        required: ['text'],
       },
-      required: [],
-    },
-    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const filter: Record<string, unknown> = {};
-      if (typeof params['status'] === 'string') filter['status'] = params['status'];
-      if (typeof params['project'] === 'string') filter['project'] = params['project'];
-      if (Array.isArray(params['tags'])) filter['tags'] = params['tags'];
+      async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+        const text = params['text'];
+        if (typeof text !== 'string') {
+          return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
+        }
+        const type = typeof params['type'] === 'string' ? params['type'] : 'log';
 
-      const tasks = await providers.tasks.list(
-        Object.keys(filter).length > 0 ? filter as Parameters<typeof providers.tasks.list>[0] : undefined,
-      );
+        await memoryProvider.store({
+          content: text,
+          type,
+          date: new Date().toISOString().slice(0, 10),
+        });
 
-      if (tasks.length === 0) {
-        return { text: 'No tasks found.', details: { count: 0 } };
-      }
-
-      const lines = tasks.map((t, i) => {
-        const meta = [t.status, t.project, t.tags?.join(', ')].filter(Boolean).join(' | ');
-        return `${i + 1}. [${t.id}] ${t.text}${meta ? ` (${meta})` : ''}`;
-      });
-
-      return {
-        text: lines.join('\n'),
-        details: { count: tasks.length },
-      };
-    },
-  });
-
-  caps.push({
-    name: 'task_create',
-    description: 'Create a new task.',
-    category: 'tasks',
-    readOnly: false,
-    version: 1,
-    parameters: {
-      type: 'object',
-      properties: {
-        text: {
-          type: 'string',
-          description: 'Task description.',
-        },
-        status: {
-          type: 'string',
-          description: 'Initial status. Defaults to pending.',
-        },
-        priority: {
-          type: 'string',
-          description: 'Priority level (e.g. low, medium, high).',
-        },
-        project: {
-          type: 'string',
-          description: 'Project this task belongs to.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Tags to attach to the task.',
-        },
+        return { text: `Memory stored (type: ${type}).` };
       },
-      required: ['text'],
-    },
-    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const text = params['text'];
-      if (typeof text !== 'string') {
-        return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
-      }
-      const status = typeof params['status'] === 'string' ? params['status'] : 'pending';
+    });
+  }
 
-      const taskData: Parameters<typeof providers.tasks.create>[0] = { text, status };
-      if (typeof params['priority'] === 'string') taskData.priority = params['priority'];
-      if (typeof params['project'] === 'string') taskData.project = params['project'];
-      if (Array.isArray(params['tags'])) taskData.tags = params['tags'] as string[];
+  // --- Task capabilities (only if tasks provider is configured) ---
 
-      const task = await providers.tasks.create(taskData);
+  if (providers.tasks) {
+    const tasksProvider = providers.tasks;
 
-      return {
-        text: `Task created: [${task.id}] ${task.text}`,
-        details: { id: task.id },
-      };
-    },
-  });
-
-  caps.push({
-    name: 'task_update',
-    description: 'Update an existing task by ID.',
-    category: 'tasks',
-    readOnly: false,
-    version: 1,
-    parameters: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'string',
-          description: 'Task ID to update.',
+    caps.push({
+      name: 'task_list',
+      description: 'List tasks, optionally filtered by status, project, or tags.',
+      category: 'tasks',
+      readOnly: true,
+      version: 1,
+      parameters: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'string',
+            description: 'Filter by status (e.g. pending, in_progress, done).',
+          },
+          project: {
+            type: 'string',
+            description: 'Filter by project name.',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Filter by tags (all provided tags must match).',
+          },
         },
-        status: {
-          type: 'string',
-          description: 'New status.',
-        },
-        text: {
-          type: 'string',
-          description: 'Updated task description.',
-        },
-        priority: {
-          type: 'string',
-          description: 'Updated priority.',
-        },
-        project: {
-          type: 'string',
-          description: 'Updated project.',
-        },
-        tags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Updated tags (replaces existing).',
-        },
+        required: [],
       },
-      required: ['id'],
-    },
-    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
-      const id = params['id'];
-      if (typeof id !== 'string') {
-        return { text: 'Error: "id" parameter must be a string.', details: { error: true } };
-      }
-      const patch: Parameters<typeof providers.tasks.update>[1] = {};
+      async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+        const filter: Record<string, unknown> = {};
+        if (typeof params['status'] === 'string') filter['status'] = params['status'];
+        if (typeof params['project'] === 'string') filter['project'] = params['project'];
+        if (Array.isArray(params['tags'])) filter['tags'] = params['tags'];
 
-      if (typeof params['status'] === 'string') patch.status = params['status'];
-      if (typeof params['text'] === 'string') patch.text = params['text'];
-      if (typeof params['priority'] === 'string') patch.priority = params['priority'];
-      if (typeof params['project'] === 'string') patch.project = params['project'];
-      if (Array.isArray(params['tags'])) patch.tags = params['tags'] as string[];
+        const tasks = await tasksProvider.list(
+          Object.keys(filter).length > 0 ? filter as Parameters<typeof tasksProvider.list>[0] : undefined,
+        );
 
-      const task = await providers.tasks.update(id, patch);
+        if (tasks.length === 0) {
+          return { text: 'No tasks found.', details: { count: 0 } };
+        }
 
-      return {
-        text: `Task updated: [${task.id}] ${task.text} (status: ${task.status})`,
-        details: { id: task.id },
-      };
-    },
-  });
+        const lines = tasks.map((t, i) => {
+          const meta = [t.status, t.project, t.tags?.join(', ')].filter(Boolean).join(' | ');
+          return `${i + 1}. [${t.id}] ${t.text}${meta ? ` (${meta})` : ''}`;
+        });
+
+        return {
+          text: lines.join('\n'),
+          details: { count: tasks.length },
+        };
+      },
+    });
+
+    caps.push({
+      name: 'task_create',
+      description: 'Create a new task.',
+      category: 'tasks',
+      readOnly: false,
+      version: 1,
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: 'Task description.',
+          },
+          status: {
+            type: 'string',
+            description: 'Initial status. Defaults to pending.',
+          },
+          priority: {
+            type: 'string',
+            description: 'Priority level (e.g. low, medium, high).',
+          },
+          project: {
+            type: 'string',
+            description: 'Project this task belongs to.',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Tags to attach to the task.',
+          },
+        },
+        required: ['text'],
+      },
+      async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+        const text = params['text'];
+        if (typeof text !== 'string') {
+          return { text: 'Error: "text" parameter must be a string.', details: { error: true } };
+        }
+        const status = typeof params['status'] === 'string' ? params['status'] : 'pending';
+
+        const taskData: Parameters<typeof tasksProvider.create>[0] = { text, status };
+        if (typeof params['priority'] === 'string') taskData.priority = params['priority'];
+        if (typeof params['project'] === 'string') taskData.project = params['project'];
+        if (Array.isArray(params['tags'])) taskData.tags = params['tags'] as string[];
+
+        const task = await tasksProvider.create(taskData);
+
+        return {
+          text: `Task created: [${task.id}] ${task.text}`,
+          details: { id: task.id },
+        };
+      },
+    });
+
+    caps.push({
+      name: 'task_update',
+      description: 'Update an existing task by ID.',
+      category: 'tasks',
+      readOnly: false,
+      version: 1,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Task ID to update.',
+          },
+          status: {
+            type: 'string',
+            description: 'New status.',
+          },
+          text: {
+            type: 'string',
+            description: 'Updated task description.',
+          },
+          priority: {
+            type: 'string',
+            description: 'Updated priority.',
+          },
+          project: {
+            type: 'string',
+            description: 'Updated project.',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Updated tags (replaces existing).',
+          },
+        },
+        required: ['id'],
+      },
+      async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+        const id = params['id'];
+        if (typeof id !== 'string') {
+          return { text: 'Error: "id" parameter must be a string.', details: { error: true } };
+        }
+        const patch: Parameters<typeof tasksProvider.update>[1] = {};
+
+        if (typeof params['status'] === 'string') patch.status = params['status'];
+        if (typeof params['text'] === 'string') patch.text = params['text'];
+        if (typeof params['priority'] === 'string') patch.priority = params['priority'];
+        if (typeof params['project'] === 'string') patch.project = params['project'];
+        if (Array.isArray(params['tags'])) patch.tags = params['tags'] as string[];
+
+        const task = await tasksProvider.update(id, patch);
+
+        return {
+          text: `Task updated: [${task.id}] ${task.text} (status: ${task.status})`,
+          details: { id: task.id },
+        };
+      },
+    });
+  }
 
   // Check for custom capabilities from providers
   for (const provider of Object.values(providers)) {

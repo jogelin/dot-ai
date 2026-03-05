@@ -109,9 +109,11 @@ export class DotAiRuntime {
     const enriched = await enrich(prompt, this._providers!, this.cache!, this.logger, this.hooks);
 
     // Load skill content for matched skills that don't have it yet
-    for (const skill of enriched.skills) {
-      if (!skill.content && skill.name) {
-        skill.content = await this._providers!.skills.load(skill.name) ?? undefined;
+    if (this._providers!.skills) {
+      for (const skill of enriched.skills) {
+        if (!skill.content && skill.name) {
+          skill.content = await this._providers!.skills.load(skill.name) ?? undefined;
+        }
       }
     }
 
