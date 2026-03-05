@@ -8,9 +8,6 @@ importers:
 
   .:
     devDependencies:
-      '@dot-ai/cockpit-tasks':
-        specifier: file:/Users/jgelin/dev/kiwi/packages/cockpit-tasks
-        version: file:../kiwi/packages/cockpit-tasks
       '@nx/js':
         specifier: ^22.5.3
         version: 22.5.3(@babel/traverse@7.29.0)(nx@22.5.3)
@@ -977,9 +974,6 @@ packages:
   '@discordjs/voice@0.19.0':
     resolution: {integrity: sha512-UyX6rGEXzVyPzb1yvjHtPfTlnLvB5jX/stAMdiytHhfoydX+98hfympdOwsnTktzr+IRvphxTbdErgYDJkEsvw==}
     engines: {node: '>=22.12.0'}
-
-  '@dot-ai/cockpit-tasks@file:../kiwi/packages/cockpit-tasks':
-    resolution: {directory: ../kiwi/packages/cockpit-tasks, type: directory}
 
   '@emnapi/core@1.8.1':
     resolution: {integrity: sha512-AvT9QFpxK0Zd8J0jopedNm+w/2fIzvtPKPjqyw9jwvBaReTTqPBk9Hixaz7KbjimP+QNz605/XnjFcDAL2pqBg==}
@@ -6546,8 +6540,6 @@ snapshots:
       - node-opus
       - opusscript
       - utf-8-validate
-
-  '@dot-ai/cockpit-tasks@file:../kiwi/packages/cockpit-tasks': {}
 
   '@emnapi/core@1.8.1':
     dependencies:
