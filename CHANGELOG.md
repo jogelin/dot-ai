@@ -1,3 +1,37 @@
+## 0.6.0 (2026-03-06)
+
+### 🚀 Features
+
+- unified v6 extension system — rename providers to ext-*, remove backward compat ([c2bddbe](https://github.com/jogelin/dot-ai/commit/c2bddbe))
+- **core:** add describe() to MemoryProvider for self-describing memory systems ([50b86f1](https://github.com/jogelin/dot-ai/commit/50b86f1))
+- **core:** inject recent in-progress tasks at boot ([eec5d1a](https://github.com/jogelin/dot-ai/commit/eec5d1a))
+- **core:** capabilities system + token budget + OpenClaw refactor (v4.2 Phase 1) ([224814c](https://github.com/jogelin/dot-ai/commit/224814c))
+- **core:** hooks mechanism + Claude Code MCP server + multi-hook dispatch (v4.2 Phase 2) ([7405b0b](https://github.com/jogelin/dot-ai/commit/7405b0b))
+- **core:** DotAiRuntime + observation fixes + hooks tests (v4.2 Phase 3) ([26158a5](https://github.com/jogelin/dot-ai/commit/26158a5))
+- **core:** link @dot-ai/cockpit-tasks from kiwi workspace ([38f90a7](https://github.com/jogelin/dot-ai/commit/38f90a7))
+- **identity:** selective identity loading — load() root-only, match() for project nodes ([6e89ff9](https://github.com/jogelin/dot-ai/commit/6e89ff9))
+- **infra:** switch to npm Trusted Publishing (OIDC) ([a8c9ba4](https://github.com/jogelin/dot-ai/commit/a8c9ba4))
+- **infra:** add specifier input to release workflow ([ca4bc68](https://github.com/jogelin/dot-ai/commit/ca4bc68))
+- **memory:** implement lifecycle management in SQLite provider ([ba7eb76](https://github.com/jogelin/dot-ai/commit/ba7eb76))
+- **openclaw:** replace memory-core via slot system with dot-ai providers ([09217ed](https://github.com/jogelin/dot-ai/commit/09217ed))
+- **openclaw:** register task_list, task_create, task_update tools ([7c368fa](https://github.com/jogelin/dot-ai/commit/7c368fa))
+
+### 🩹 Fixes
+
+- **ci:** remove local file dep on @dot-ai/cockpit-tasks ([1bc5993](https://github.com/jogelin/dot-ai/commit/1bc5993))
+- **core:** address architecture review — 7 fixes across capabilities, hooks, loader, budget ([548f77e](https://github.com/jogelin/dot-ai/commit/548f77e))
+- **core:** use globalThis for provider registry to survive jiti module duplication ([8806ffc](https://github.com/jogelin/dot-ai/commit/8806ffc))
+- **core:** pass provider factories via RuntimeOptions to bypass registry isolation ([be75091](https://github.com/jogelin/dot-ai/commit/be75091))
+- **openclaw:** add skipIdentities to DotAiRuntime options ([f238d44](https://github.com/jogelin/dot-ai/commit/f238d44))
+- **openclaw:** explicitly register providers to fix jiti resolution ([804e761](https://github.com/jogelin/dot-ai/commit/804e761))
+- **openclaw:** build providers directly in adapter, bypass loader entirely ([28b19fb](https://github.com/jogelin/dot-ai/commit/28b19fb))
+- **sqlite-memory:** make describe() assert exclusive memory system ([85e5535](https://github.com/jogelin/dot-ai/commit/85e5535))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.5.2 (2026-03-04)
 
 ### 🩹 Fixes
