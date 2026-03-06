@@ -1,3 +1,15 @@
+## 0.8.0 (2026-03-06)
+
+### 🩹 Fixes
+
+- **ci:** add NODE_AUTH_TOKEN to release workflow ([73153eb](https://github.com/jogelin/dot-ai/commit/73153eb))
+- **ci:** add publishConfig.access=public to ext-* packages ([a26e05b](https://github.com/jogelin/dot-ai/commit/a26e05b))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.7.0 (2026-03-06)
 
 This was a version bump only, there were no code changes.
