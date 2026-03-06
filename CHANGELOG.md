@@ -1,3 +1,14 @@
+## 0.9.0 (2026-03-06)
+
+### 🩹 Fixes
+
+- **ci:** add repository field to ext-* packages ([189a69c](https://github.com/jogelin/dot-ai/commit/189a69c))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.8.0 (2026-03-06)
 
 ### 🩹 Fixes
