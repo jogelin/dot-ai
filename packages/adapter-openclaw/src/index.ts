@@ -1,32 +1,11 @@
 /**
- * dot-ai OpenClaw plugin v4
+ * dot-ai OpenClaw plugin v6
  *
  * Hooks into before_agent_start to run the full dot-ai pipeline via DotAiRuntime.
+ * Uses the v6 extension-based pipeline — no providers required.
  * Returns enriched context as prependContext for the agent.
  */
-import {
-  registerProvider,
-  DotAiRuntime,
-  loadConfig,
-  discoverNodes,
-  parseScanDirs,
-} from '@dot-ai/core';
-import type { Providers } from '@dot-ai/core';
-import { SqliteMemoryProvider } from '@dot-ai/provider-sqlite-memory';
-import { FileIdentityProvider } from '@dot-ai/provider-file-identity';
-import { FileSkillProvider } from '@dot-ai/provider-file-skills';
-import { RulesRoutingProvider } from '@dot-ai/provider-rules-routing';
-import { FileToolProvider } from '@dot-ai/provider-file-tools';
-
-// Optional: cockpit-tasks provider (workspace-specific)
-let CockpitTaskProviderClass: (new (opts: Record<string, unknown>) => unknown) | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require('@dot-ai/cockpit-tasks');
-  CockpitTaskProviderClass = mod.CockpitTaskProvider ?? null;
-} catch {
-  // Not available — use noop tasks
-}
+import { DotAiRuntime } from '@dot-ai/core';
 
 // Inline OpenClaw plugin API types
 interface OpenClawLogger {
@@ -68,43 +47,6 @@ interface OpenClawTool {
 
 type OpenClawToolFactory = (ctx: Record<string, unknown>) => OpenClawTool | OpenClawTool[] | null;
 
-/**
- * Load custom providers declared in pluginConfig.
- * Workspaces declare custom providers via openclaw.json:
- *   plugins.entries.dot-ai.config.customProviders: [
- *     { type: "cockpit", module: "/abs/path/to/provider.ts" }
- *   ]
- */
-async function loadCustomProviders(
-  config: Record<string, unknown>,
-  logger: OpenClawLogger,
-): Promise<void> {
-  const providers = config.customProviders;
-  if (!Array.isArray(providers)) return;
-
-  for (const entry of providers) {
-    if (!entry || typeof entry !== 'object' || !('type' in entry) || !('module' in entry)) continue;
-
-    const { type, module: modulePath } = entry as { type: string; module: string };
-    try {
-      const mod = await import(modulePath);
-      // Find the exported provider class or factory
-      for (const [name, exported] of Object.entries(mod)) {
-        if (typeof exported === 'function') {
-          if (name.endsWith('Provider')) {
-            const ProviderClass = exported as new (opts: Record<string, unknown>) => unknown;
-            registerProvider(`@custom/${type}`, (opts) => new ProviderClass(opts));
-            logger.info(`[dot-ai] Registered custom provider: ${type} (${name})`);
-            break;
-          }
-        }
-      }
-    } catch (err) {
-      logger.info(`[dot-ai] Failed to load custom provider "${type}" from ${modulePath}: ${err}`);
-    }
-  }
-}
-
 // Session-level cache
 let cachedRuntime: DotAiRuntime | null = null;
 let cachedWorkspace: string | null = null;
@@ -112,53 +54,14 @@ let cachedWorkspace: string | null = null;
 const plugin = {
   id: 'dot-ai',
   name: 'dot-ai — Universal AI Workspace Convention',
-  version: '0.4.0',
+  version: '6.0.0',
   description: 'Deterministic context enrichment for OpenClaw agents',
   kind: 'memory' as const,
 
   register(api: OpenClawPluginApi) {
-    api.logger.info('[dot-ai] Plugin loaded (v4)');
+    api.logger.info('[dot-ai] Plugin loaded (v6)');
 
-    // Load custom providers if configured — capture the promise so before_agent_start can await it
-    let providerPromise: Promise<void> = Promise.resolve();
-    if (api.pluginConfig) {
-      providerPromise = loadCustomProviders(api.pluginConfig, api.logger);
-    }
-
-    // Build providers directly from config + imported constructors.
-    // This bypasses the registry + dynamic import entirely, avoiding jiti module
-    // duplication issues where loader.ts runs in a different module scope.
-    async function buildProviders(workspaceDir: string): Promise<Providers> {
-      const rawConfig = await loadConfig(workspaceDir);
-      const globalScanDirs = parseScanDirs(rawConfig.workspace?.scanDirs ?? 'projects');
-      const nodes = discoverNodes(workspaceDir, globalScanDirs);
-      const baseOpts = { root: workspaceDir, nodes };
-
-      const providers: Providers = {};
-
-      if (rawConfig.memory) {
-        providers.memory = new SqliteMemoryProvider({ ...baseOpts, ...rawConfig.memory.with ?? {} });
-      }
-      if (rawConfig.skills) {
-        providers.skills = new FileSkillProvider({ ...baseOpts, ...rawConfig.skills.with ?? {} });
-      }
-      if (rawConfig.identity) {
-        providers.identity = new FileIdentityProvider({ ...baseOpts, ...rawConfig.identity.with ?? {} });
-      }
-      if (rawConfig.routing) {
-        providers.routing = new RulesRoutingProvider({ ...baseOpts, ...rawConfig.routing.with ?? {} });
-      }
-      if (rawConfig.tasks && CockpitTaskProviderClass) {
-        providers.tasks = new CockpitTaskProviderClass({ ...baseOpts, ...rawConfig.tasks.with ?? {} }) as Providers['tasks'];
-      }
-      if (rawConfig.tools) {
-        providers.tools = new FileToolProvider({ ...baseOpts, ...rawConfig.tools.with ?? {} });
-      }
-
-      return providers;
-    }
-
-    // Register tools from core capabilities (delegates to providers)
+    // Register tools from core capabilities (delegates to extensions)
     api.registerTool(
       (_ctx: Record<string, unknown>) => {
         if (!cachedRuntime?.isBooted) return null;
@@ -187,8 +90,6 @@ const plugin = {
         _event: unknown,
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
-        await providerPromise;
-
         const workspaceDir = ctx.workspaceDir;
         if (!workspaceDir) {
           api.logger.info('[dot-ai] No workspaceDir, skipping');
@@ -203,17 +104,17 @@ const plugin = {
 
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
-            const providers = await buildProviders(workspaceDir);
-            const configured = Object.keys(providers).join(', ') || 'none';
-            api.logger.info(`[dot-ai] Providers built: ${configured}`);
-            cachedRuntime = new DotAiRuntime({
-              workspaceRoot: workspaceDir,
-              skipIdentities: true,
-              providers,
-            });
+            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
-            api.logger.info('[dot-ai] Runtime booted');
+            api.logger.info('[dot-ai] Runtime booted (v6)');
+
+            // Log extension diagnostics
+            const diag = cachedRuntime.diagnostics;
+            api.logger.info(`[dot-ai] v6=${diag.v6}, extensions=${diag.extensions.length}, capabilities=${diag.capabilityCount}`);
+            if (diag.vocabularySize !== undefined) {
+              api.logger.info(`[dot-ai] Vocabulary size: ${diag.vocabularySize}`);
+            }
           }
 
           const prompt = ctx.prompt ?? '';
@@ -230,6 +131,15 @@ const plugin = {
       },
       { priority: 10 },
     );
+
+    // Hook: after_agent_end — feed response back to runtime for learning + extension events
+    api.on('after_agent_end', async (_event, ctx) => {
+      if (!cachedRuntime) return;
+      const response = (ctx as { response?: string }).response ?? '';
+      if (response) {
+        await cachedRuntime.learn(response);
+      }
+    });
 
     // Service registration
     api.registerService({

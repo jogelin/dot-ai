@@ -2,6 +2,7 @@ import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult, Bu
 import type { Logger } from './logger.js';
 import type { ResolvedHook } from './hooks.js';
 import { runAfterFormat } from './hooks.js';
+import type { Capability } from './capabilities.js';
 
 export interface FormatOptions {
   /** Skip identity sections (useful when already injected at session start) */
@@ -16,6 +17,8 @@ export interface FormatOptions {
   onBudgetExceeded?: (warning: BudgetWarning) => void;
   /** Optional logger for tracing */
   logger?: Logger;
+  /** Skill disclosure mode. 'progressive' shows name+description only, 'full' shows entire content */
+  skillDisclosure?: 'full' | 'progressive';
 }
 
 /**
@@ -61,7 +64,7 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
     loadedSkills = loadedSkills.slice(0, options.maxSkills);
   }
   if (loadedSkills.length > 0) {
-    sections.push(formatSkills(loadedSkills, options?.maxSkillLength));
+    sections.push(formatSkills(loadedSkills, options?.maxSkillLength, options?.skillDisclosure));
   }
 
   // Tools section (sorted by name alphabetically for determinism)
@@ -89,7 +92,7 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
       if (current > options.tokenBudget && skillSectionIdx !== -1 && options?.maxSkillLength == null) {
         const longSkills = loadedSkills.filter(s => (s.content?.length ?? 0) > 2000).length;
         if (longSkills > 0) {
-          sections[skillSectionIdx] = formatSkills(loadedSkills, 2000);
+          sections[skillSectionIdx] = formatSkills(loadedSkills, 2000, options?.skillDisclosure);
           actions.push(`truncated ${longSkills} skills to 2000 chars`);
           current = estimate();
         }
@@ -109,7 +112,7 @@ export function formatContext(ctx: EnrichedContext, options?: FormatOptions): st
         while (loadedSkills.length > 1 && current > options.tokenBudget) {
           const dropped = loadedSkills.pop()!;
           actions.push(`dropped skill: ${dropped.name}`);
-          sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength ?? 2000);
+          sections[skillSectionIdx] = formatSkills(loadedSkills, options?.maxSkillLength ?? 2000, options?.skillDisclosure);
           current = estimate();
         }
       }
@@ -208,11 +211,13 @@ function formatTasks(tasks: Task[]): string {
   return lines.join('\n');
 }
 
-function formatSkills(skills: Skill[], maxLength?: number): string {
+function formatSkills(skills: Skill[], maxLength?: number, disclosure?: 'full' | 'progressive'): string {
   const lines = ['## Active Skills\n'];
   for (const s of skills) {
     lines.push(`### ${s.name}`);
-    if (s.content) {
+    if (disclosure === 'progressive') {
+      lines.push(s.description);
+    } else if (s.content) {
       if (maxLength != null && s.content.length > maxLength) {
         lines.push(s.content.slice(0, maxLength) + '\n\n[...truncated]');
       } else {
@@ -228,6 +233,24 @@ function formatTools(tools: Tool[]): string {
   const lines = ['## Available Tools\n'];
   for (const t of tools) {
     lines.push(`- **${t.name}**: ${t.description}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Format tool hints from capabilities that have promptSnippet or promptGuidelines.
+ * Returns empty string if no capabilities have hints.
+ */
+export function formatToolHints(capabilities: Capability[]): string {
+  const withHints = capabilities.filter(c => c.promptSnippet || c.promptGuidelines);
+  if (withHints.length === 0) return '';
+
+  const lines = ['## Tool Hints\n'];
+  for (const cap of withHints) {
+    lines.push(`### ${cap.name}`);
+    if (cap.promptSnippet) lines.push(cap.promptSnippet);
+    if (cap.promptGuidelines) lines.push(`\n> ${cap.promptGuidelines}`);
+    lines.push('');
   }
   return lines.join('\n');
 }

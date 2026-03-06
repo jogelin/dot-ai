@@ -102,6 +102,27 @@ describe('boot', () => {
     expect(cache.vocabulary).toContain('ux');
   });
 
+  it('works with undefined providers (all optional)', async () => {
+    const providers: Providers = {};
+    const cache = await boot(providers);
+    expect(cache.identities).toEqual([]);
+    expect(cache.skills).toEqual([]);
+    expect(cache.vocabulary).toEqual([]);
+  });
+
+  it('works with partial providers (only memory)', async () => {
+    const providers: Providers = {
+      memory: {
+        search: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockResolvedValue(undefined),
+        describe: vi.fn().mockReturnValue('test'),
+      },
+    };
+    const cache = await boot(providers);
+    expect(cache.identities).toEqual([]);
+    expect(cache.skills).toEqual([]);
+  });
+
   it('calls identity, skills, and tools providers in parallel (all called before any awaited)', async () => {
     const callOrder: string[] = [];
     const providers = createMockProviders({
@@ -142,6 +163,54 @@ describe('enrich', () => {
     vocabulary: ['memory', 'routing', 'tasks'],
     skills: [],
   };
+
+  it('works with undefined providers (all optional)', async () => {
+    const providers: Providers = {};
+    const cache = { identities: [], vocabulary: [], skills: [] };
+    const result = await enrich('hello', providers, cache);
+    expect(result.memories).toEqual([]);
+    expect(result.skills).toEqual([]);
+    expect(result.tools).toEqual([]);
+    expect(result.routing).toEqual({ model: 'default', reason: 'no routing provider' });
+  });
+
+  it('includes recentTasks when tasks provider returns in-progress tasks', async () => {
+    const inProgressTasks = [
+      { id: '1', text: 'Fix bug', status: 'in_progress' },
+      { id: '2', text: 'Review PR', status: 'in_progress' },
+    ];
+    const providers = createMockProviders({
+      tasks: {
+        list: vi.fn().mockResolvedValue(inProgressTasks),
+        get: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+    });
+    const cache = { identities: [], vocabulary: [], skills: [] };
+    const result = await enrich('hello', providers, cache);
+    expect(result.recentTasks).toEqual(inProgressTasks);
+  });
+
+  it('recentTasks is undefined when no in-progress tasks', async () => {
+    const providers = createMockProviders();
+    const cache = { identities: [], vocabulary: [], skills: [] };
+    const result = await enrich('hello', providers, cache);
+    expect(result.recentTasks).toBeUndefined();
+  });
+
+  it('includes memoryDescription from memory provider', async () => {
+    const providers = createMockProviders({
+      memory: {
+        search: vi.fn().mockResolvedValue([]),
+        store: vi.fn().mockResolvedValue(undefined),
+        describe: vi.fn().mockReturnValue('SQLite memory with 42 entries'),
+      },
+    });
+    const cache = { identities: [], vocabulary: [], skills: [] };
+    const result = await enrich('hello', providers, cache);
+    expect(result.memoryDescription).toBe('SQLite memory with 42 entries');
+  });
 
   it('returns an EnrichedContext with all required fields', async () => {
     const providers = createMockProviders();
@@ -433,5 +502,32 @@ describe('learn', () => {
     const response = 'The authentication system was refactored to use JWT with refresh tokens. The decision was made to improve security and scalability.';
     await learn(response, providers);
     expect(providers.memory.store).toHaveBeenCalledOnce();
+  });
+
+  it('truncates responses longer than 500 chars', async () => {
+    const providers = createMockProviders();
+    const longResponse = 'A'.repeat(600);
+    await learn(longResponse, providers);
+    expect(providers.memory.store).toHaveBeenCalledOnce();
+    const storedContent = (providers.memory.store as ReturnType<typeof vi.fn>).mock.calls[0][0].content;
+    expect(storedContent.length).toBeLessThanOrEqual(501); // 500 + '…'
+    expect(storedContent.endsWith('…')).toBe(true);
+  });
+
+  it('does not truncate responses exactly 500 chars', async () => {
+    const providers = createMockProviders();
+    // Need a 500-char response that doesn't match conversational prefixes
+    const response = 'Refactored ' + 'x'.repeat(489);
+    await learn(response, providers);
+    expect(providers.memory.store).toHaveBeenCalledOnce();
+    const storedContent = (providers.memory.store as ReturnType<typeof vi.fn>).mock.calls[0][0].content;
+    expect(storedContent).toBe(response);
+  });
+
+  it('skips learning when memory provider is undefined', async () => {
+    const providers = createMockProviders();
+    providers.memory = undefined;
+    // Should not throw
+    await expect(learn('A substantive response about architecture decisions that should be stored in memory.', providers)).resolves.toBeUndefined();
   });
 });

@@ -1,3 +1,9 @@
+/**
+ * @deprecated Provider loader — legacy provider registry.
+ * In v6, extensions are loaded directly by the runtime. Will be removed in v7.
+ * @module
+ */
+
 import type { DotAiConfig, Task } from './types.js';
 import type {
   MemoryProvider,
@@ -57,7 +63,7 @@ export function clearProviders(): void {
  * Call this at startup if you want file-based defaults available.
  */
 export function registerDefaults(): void {
-  // Default providers are now separate packages (@dot-ai/provider-file-memory, etc.)
+  // Default providers are now separate packages (@dot-ai/ext-file-memory, etc.)
   // They are resolved via auto-discovery in resolve() → tryImportProvider()
   // No explicit registration needed — the package names match the config defaults.
 }

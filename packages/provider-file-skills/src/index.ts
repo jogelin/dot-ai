@@ -1,129 +1,111 @@
+/**
+ * @dot-ai/ext-file-skills — File-based skills extension.
+ * Discovers skills from .ai/skills/{name}/SKILL.md
+ */
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { SkillProvider, Skill, Label, Node } from '@dot-ai/core';
+import type { ExtensionAPI } from '@dot-ai/core';
+import { discoverNodes, parseScanDirs } from '@dot-ai/core';
 
-export class FileSkillProvider implements SkillProvider {
-  private skillsDirs: Array<{ dir: string; node: string }>;
-  private cache: Skill[] | null = null;
-  private disabledNames: Set<string>;
+interface Skill {
+  name: string;
+  description: string;
+  labels: string[];
+  triggers?: string[];
+  content?: string;
+  path: string;
+  node?: string;
+  enabled?: boolean;
+}
 
-  constructor(options: Record<string, unknown> = {}) {
-    const root = (options.root as string) ?? process.cwd();
-    const nodes = (options.nodes as Node[]) ?? [{ name: 'root', path: join(root, '.ai'), root: true }];
+export default function extFileSkills(api: ExtensionAPI): void {
+  const nodes = discoverNodes(api.workspaceRoot, parseScanDirs('projects'));
+  const skillsDirs = nodes.map(n => ({ dir: join(n.path, 'skills'), node: n.name }));
+  let cache: Skill[] | null = null;
 
-    // Parse disabled skills list from config
-    const disabled = typeof options.disabled === 'string' ? options.disabled : '';
-    this.disabledNames = new Set(
-      disabled.split(',').map(s => s.trim()).filter(Boolean)
-    );
-
-    this.skillsDirs = nodes.map(n => ({ dir: join(n.path, 'skills'), node: n.name }));
-  }
-
-  async list(): Promise<Skill[]> {
-    if (this.cache) return this.cache;
-
+  async function listSkills(): Promise<Skill[]> {
+    if (cache) return cache;
     const skills: Skill[] = [];
-
-    for (const { dir: skillsDir, node } of this.skillsDirs) {
+    for (const { dir, node } of skillsDirs) {
       let dirs: string[];
-      try {
-        dirs = await readdir(skillsDir);
-      } catch {
-        continue;
-      }
-
-      for (const dir of dirs) {
-        const skillPath = join(skillsDir, dir, 'SKILL.md');
+      try { dirs = await readdir(dir); } catch { continue; }
+      for (const name of dirs) {
+        const skillPath = join(dir, name, 'SKILL.md');
         try {
           const content = await readFile(skillPath, 'utf-8');
-          const skill = parseSkillFrontmatter(content, dir, skillPath);
-          if (skill) {
-            skill.node = node;
-            skills.push(skill);
-          }
-        } catch {
-          // Skip invalid skills
-        }
+          const skill = parseSkillFrontmatter(content, name, skillPath);
+          if (skill) { skill.node = node; skills.push(skill); }
+        } catch { /* skip */ }
       }
     }
-
-    // Filter out disabled skills (frontmatter enabled:false OR config disabled list)
-    this.cache = skills.filter(s =>
-      s.enabled !== false && !this.disabledNames.has(s.name)
-    );
-    return this.cache;
+    cache = skills.filter(s => s.enabled !== false);
+    return cache;
   }
 
-  async match(labels: Label[]): Promise<Skill[]> {
-    const all = await this.list();
-    const labelNames = new Set(labels.map(l => l.name.toLowerCase()));
+  const META = new Set(['always', 'auto', 'manual', 'boot', 'heartbeat', 'pipeline', 'audit']);
 
-    return all.filter(skill => {
-      // Match if any skill label matches any prompt label
+  function matchSkills(skills: Skill[], labelNames: Set<string>): Skill[] {
+    return skills.filter(skill => {
       const labelMatch = skill.labels.some(sl => labelNames.has(sl.toLowerCase()));
-
-      // Match if any trigger keyword matches (excluding meta-triggers)
-      const META = new Set(['always', 'auto', 'manual', 'boot', 'heartbeat', 'pipeline', 'audit']);
-      const triggerKeywordMatch = skill.triggers?.some(
-        t => !META.has(t) && labelNames.has(t.toLowerCase()),
-      ) ?? false;
-
-      // Match if trigger is "always"
+      const triggerMatch = skill.triggers?.some(t => !META.has(t) && labelNames.has(t.toLowerCase())) ?? false;
       const alwaysMatch = skill.triggers?.includes('always') ?? false;
-
-      return labelMatch || triggerKeywordMatch || alwaysMatch;
+      return labelMatch || triggerMatch || alwaysMatch;
     });
   }
 
-  async load(name: string): Promise<string | null> {
-    for (const { dir } of this.skillsDirs) {
-      const skillPath = join(dir, name, 'SKILL.md');
-      try {
-        return await readFile(skillPath, 'utf-8');
-      } catch {
-        continue;
-      }
+  api.on('resources_discover', async () => {
+    const skills = await listSkills();
+    const labels = new Set<string>();
+    for (const s of skills) {
+      for (const l of s.labels) labels.add(l);
+      for (const t of s.triggers ?? []) labels.add(t);
     }
-    return null;
-  }
+    return { labels: Array.from(labels) };
+  });
+
+  api.on('context_enrich', async (event) => {
+    const skills = await listSkills();
+    const labelNames = new Set(event.labels.map((l: { name: string }) => l.name.toLowerCase()));
+    const matched = matchSkills(skills, labelNames);
+    if (matched.length === 0) return;
+    const sections = [];
+    for (const skill of matched.slice(0, 5)) {
+      let content = skill.content;
+      if (!content) {
+        try { content = await readFile(skill.path, 'utf-8'); } catch { continue; }
+      }
+      sections.push({
+        id: `skill:${skill.name}`,
+        title: `Skill: ${skill.name}`,
+        content: content ?? skill.description,
+        priority: 60,
+        source: 'ext-file-skills',
+        trimStrategy: 'drop' as const,
+      });
+    }
+    return { sections };
+  });
 }
 
-/**
- * Parse YAML frontmatter from a SKILL.md file.
- * Expects format:
- * ---
- * description: ...
- * labels: [a, b, c]
- * triggers: [always]
- * ---
- * Content here...
- */
 function parseSkillFrontmatter(content: string, name: string, path: string): Skill | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) {
-    return { name, description: '', labels: [], path, content };
-  }
-
-  const frontmatter = match[1];
-  const description = extractValue(frontmatter, 'description') ?? '';
-  const labels = extractArray(frontmatter, 'labels');
-  const triggers = extractArray(frontmatter, 'triggers');
-  const dependsOn = extractArray(frontmatter, 'dependsOn');
-  const requiresTools = extractArray(frontmatter, 'requiresTools');
-  const enabledStr = extractValue(frontmatter, 'enabled');
+  if (!match) return { name, description: '', labels: [], path, content };
+  const fm = match[1];
+  const description = extractValue(fm, 'description') ?? '';
+  const labels = extractArray(fm, 'labels');
+  const triggers = extractArray(fm, 'triggers');
+  const enabledStr = extractValue(fm, 'enabled');
   const enabled = enabledStr === 'false' ? false : undefined;
-
-  return { name, description, labels, triggers, dependsOn, requiresTools, enabled, path };
+  return { name, description, labels, triggers, enabled, path };
 }
 
 function extractValue(yaml: string, key: string): string | undefined {
-  const match = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-  return match ? match[1].trim().replace(/^["']|["']$/g, '') : undefined;
+  const m = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return m ? m[1].trim().replace(/^["']|["']$/g, '') : undefined;
 }
 
 function extractArray(yaml: string, key: string): string[] {
-  const match = yaml.match(new RegExp(`^${key}:\\s*\\[(.*)\\]$`, 'm'));
-  if (!match) return [];
-  return match[1].split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+  const m = yaml.match(new RegExp(`^${key}:\\s*\\[(.*)\\]$`, 'm'));
+  if (!m) return [];
+  return m[1].split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
 }

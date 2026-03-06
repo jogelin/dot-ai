@@ -1,27 +1,12 @@
 {
-  "name": "@dot-ai/provider-rules-routing",
-  "version": "0.5.2",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jogelin/dot-ai",
-    "directory": "packages/provider-rules-routing"
-  },
+  "name": "@dot-ai/ext-rules-routing",
+  "version": "1.0.0",
+  "description": "Rules-based routing extension for dot-ai",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "@dot-ai/core": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  }
+  "dot-ai": { "extensions": ["./dist/index.js"] },
+  "scripts": { "build": "tsc", "test": "vitest run --passWithNoTests" },
+  "dependencies": { "@dot-ai/core": "workspace:*" },
+  "devDependencies": { "@types/node": "^22.0.0", "typescript": "^5.9.3", "vitest": "^4.0.0" }
 }

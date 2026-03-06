@@ -1,90 +1,70 @@
+/**
+ * @dot-ai/ext-file-identity — File-based identity extension.
+ * Loads AGENTS.md, SOUL.md, USER.md, IDENTITY.md from .ai/
+ */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { IdentityProvider, Identity, Node, Label } from '@dot-ai/core';
+import type { ExtensionAPI } from '@dot-ai/core';
+import { discoverNodes, parseScanDirs } from '@dot-ai/core';
 
-// Root node identity files
-const ROOT_IDENTITY_FILES: Array<{ type: string; file: string; priority: number }> = [
+const ROOT_FILES = [
   { type: 'agents', file: 'AGENTS.md', priority: 100 },
   { type: 'soul', file: 'SOUL.md', priority: 90 },
   { type: 'user', file: 'USER.md', priority: 80 },
   { type: 'identity', file: 'IDENTITY.md', priority: 70 },
 ];
 
-// Sub-node identity files (project-level)
-const NODE_IDENTITY_FILES: Array<{ type: string; file: string; priority: number }> = [
+const PROJECT_FILES = [
   { type: 'agent', file: 'AGENT.md', priority: 50 },
 ];
 
-export class FileIdentityProvider implements IdentityProvider {
-  private rootNodes: Node[];
-  private projectNodes: Node[];
+export default function extFileIdentity(api: ExtensionAPI): void {
+  const nodes = discoverNodes(api.workspaceRoot, parseScanDirs('projects'));
+  const rootNodes = nodes.filter(n => n.root);
+  const projectNodes = nodes.filter(n => !n.root);
 
-  constructor(options: Record<string, unknown> = {}) {
-    const root = (options.root as string) ?? process.cwd();
-    const allNodes = (options.nodes as Node[]) ?? [{ name: 'root', path: join(root, '.ai'), root: true }];
+  api.on('resources_discover', async () => {
+    return { labels: projectNodes.map(n => n.name) };
+  });
 
-    // Separate root vs project nodes
-    this.rootNodes = allNodes.filter((n) => n.root);
-    this.projectNodes = allNodes.filter((n) => !n.root);
-  }
+  api.on('context_enrich', async (event) => {
+    const sections = [];
 
-  /**
-   * Load root identity files only (AGENTS.md, SOUL.md, USER.md, IDENTITY.md).
-   * Project-level AGENT.md files are loaded lazily via match().
-   */
-  async load(): Promise<Identity[]> {
-    const identities: Identity[] = [];
-
-    for (const node of this.rootNodes) {
-      for (const { type, file, priority } of ROOT_IDENTITY_FILES) {
-        const filePath = join(node.path, file);
+    for (const node of rootNodes) {
+      for (const { type, file, priority } of ROOT_FILES) {
         try {
-          const content = await readFile(filePath, 'utf-8');
-          identities.push({
-            type,
+          const content = await readFile(join(node.path, file), 'utf-8');
+          sections.push({
+            id: `identity:${type}:${node.name}`,
+            title: file.replace('.md', ''),
             content,
-            source: 'file-identity',
             priority,
-            node: node.name,
+            source: 'ext-file-identity',
+            trimStrategy: 'never' as const,
           });
-        } catch {
-          // File doesn't exist, skip
-        }
+        } catch { /* skip */ }
       }
     }
 
-    return identities;
-  }
-
-  /**
-   * Lazily load project identities where the node name matches any of the provided labels.
-   * Only loads AGENT.md files from project nodes (non-root nodes).
-   */
-  async match(labels: Label[]): Promise<Identity[]> {
-    const labelNames = new Set(labels.map((l) => l.name));
-    const identities: Identity[] = [];
-
-    for (const node of this.projectNodes) {
-      // Load this project node's AGENT.md if its name matches a label
+    const labelNames = new Set(event.labels.map((l: { name: string }) => l.name));
+    for (const node of projectNodes) {
       if (!labelNames.has(node.name)) continue;
-
-      for (const { type, file, priority } of NODE_IDENTITY_FILES) {
-        const filePath = join(node.path, file);
+      for (const { type, file, priority } of PROJECT_FILES) {
         try {
-          const content = await readFile(filePath, 'utf-8');
-          identities.push({
-            type,
+          const content = await readFile(join(node.path, file), 'utf-8');
+          sections.push({
+            id: `identity:${type}:${node.name}`,
+            title: `${node.name} — ${file.replace('.md', '')}`,
             content,
-            source: 'file-identity',
             priority,
-            node: node.name,
+            source: 'ext-file-identity',
+            trimStrategy: 'drop' as const,
           });
-        } catch {
-          // File doesn't exist, skip
-        }
+        } catch { /* skip */ }
       }
     }
 
-    return identities;
-  }
+    if (sections.length === 0) return;
+    return { sections };
+  });
 }

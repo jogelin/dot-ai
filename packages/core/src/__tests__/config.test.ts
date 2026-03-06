@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, resolveConfig } from '../config.js';
+import { loadConfig, resolveConfig, injectRoot } from '../config.js';
 
 let testDir: string;
 
@@ -25,11 +25,11 @@ describe('loadConfig', () => {
   it('parses a simple memory section', async () => {
     await writeFile(
       join(testDir, '.ai', 'dot-ai.yml'),
-      `memory:\n  use: @dot-ai/provider-file-memory\n`,
+      `memory:\n  use: @dot-ai/ext-file-memory\n`,
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory).toEqual({ use: '@dot-ai/provider-file-memory' });
+    expect(config.memory).toEqual({ use: '@dot-ai/ext-file-memory' });
   });
 
   it('parses multiple provider sections', async () => {
@@ -37,18 +37,18 @@ describe('loadConfig', () => {
       join(testDir, '.ai', 'dot-ai.yml'),
       [
         'memory:',
-        '  use: @dot-ai/provider-file-memory',
+        '  use: @dot-ai/ext-file-memory',
         'skills:',
-        '  use: @dot-ai/provider-file-skills',
+        '  use: @dot-ai/ext-file-skills',
         'routing:',
-        '  use: @dot-ai/provider-rules-routing',
+        '  use: @dot-ai/ext-rules-routing',
       ].join('\n'),
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory?.use).toBe('@dot-ai/provider-file-memory');
-    expect(config.skills?.use).toBe('@dot-ai/provider-file-skills');
-    expect(config.routing?.use).toBe('@dot-ai/provider-rules-routing');
+    expect(config.memory?.use).toBe('@dot-ai/ext-file-memory');
+    expect(config.skills?.use).toBe('@dot-ai/ext-file-skills');
+    expect(config.routing?.use).toBe('@dot-ai/ext-rules-routing');
   });
 
   it('parses nested with block', async () => {
@@ -88,7 +88,7 @@ describe('loadConfig', () => {
       join(testDir, '.ai', 'dot-ai.yml'),
       [
         'memory:',
-        '  use: @dot-ai/provider-file-memory',
+        '  use: @dot-ai/ext-file-memory',
         '    key: ${MISSING_ENV_VAR}',
       ].join('\n'),
       'utf-8',
@@ -104,12 +104,12 @@ describe('loadConfig', () => {
         '# This is a comment',
         'memory:',
         '  # nested comment',
-        '  use: @dot-ai/provider-file-memory',
+        '  use: @dot-ai/ext-file-memory',
       ].join('\n'),
       'utf-8',
     );
     const config = await loadConfig(testDir);
-    expect(config.memory?.use).toBe('@dot-ai/provider-file-memory');
+    expect(config.memory?.use).toBe('@dot-ai/ext-file-memory');
   });
 });
 
@@ -153,5 +153,53 @@ describe('resolveConfig', () => {
     expect(resolved.routing?.use).toBe('rte');
     expect(resolved.tasks?.use).toBe('tsk');
     expect(resolved.tools?.use).toBe('tls');
+  });
+});
+
+describe('injectRoot', () => {
+  it('injects root and nodes into provider sections', () => {
+    const config = {
+      memory: { use: '@dot-ai/ext-sqlite-memory' },
+      skills: { use: '@dot-ai/ext-file-skills' },
+    };
+    const result = injectRoot(config, '/workspace');
+    expect(result.memory?.with?.['root']).toBe('/workspace');
+    expect(result.skills?.with?.['root']).toBe('/workspace');
+    expect(result.memory?.with?.['nodes']).toBeDefined();
+  });
+
+  it('preserves existing with options', () => {
+    const config = {
+      memory: { use: 'test', with: { url: 'sqlite://test.db' } },
+    };
+    const result = injectRoot(config, '/workspace');
+    expect(result.memory?.with?.['url']).toBe('sqlite://test.db');
+    expect(result.memory?.with?.['root']).toBe('/workspace');
+  });
+
+  it('preserves debug, workspace, extensions, prompts sections', () => {
+    const config = {
+      debug: { logPath: '/tmp/log' },
+      workspace: { scanDirs: 'apps' },
+      extensions: { paths: ['.ai/ext'] },
+      prompts: { use: 'test' },
+    };
+    const result = injectRoot(config, '/workspace');
+    expect(result.debug?.logPath).toBe('/tmp/log');
+    expect(result.workspace?.scanDirs).toBe('apps');
+    expect(result.extensions?.paths).toEqual(['.ai/ext']);
+    expect(result.prompts?.use).toBe('test');
+  });
+
+  it('handles empty config', () => {
+    const result = injectRoot({}, '/workspace');
+    expect(result).toEqual({});
+  });
+
+  it('skips unconfigured provider sections', () => {
+    const config = { memory: { use: 'test' } };
+    const result = injectRoot(config, '/workspace');
+    expect(result.skills).toBeUndefined();
+    expect(result.routing).toBeUndefined();
   });
 });

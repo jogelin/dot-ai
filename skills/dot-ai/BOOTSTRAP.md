@@ -8,12 +8,12 @@ dot-ai is a **deterministic context enrichment engine**. It transforms your prom
 
 ## Pipeline (automatic)
 
-1. **Boot** (once per session): load identities, build vocabulary from skill/tool labels, cache
+1. **Boot** (once per session): load identities, build vocabulary from skill/tool labels, load extensions, cache
 2. **Enrich** (per prompt): extract labels from prompt, query providers in parallel (memory, skills, tools, routing)
-3. **Format**: convert enriched context to markdown, inject into agent
+3. **Format**: convert enriched context to markdown, fire `context_inject` extensions, inject into agent
 4. **Learn** (after response): store significant outcomes in memory
 
-## 6 Providers (configured in `.ai/dot-ai.yml`)
+## 7 Providers (configured in `.ai/dot-ai.yml`)
 
 | Provider | Purpose |
 |----------|---------|
@@ -23,6 +23,7 @@ dot-ai is a **deterministic context enrichment engine**. It transforms your prom
 | Routing | decide model tier (haiku/sonnet/opus) |
 | Tasks | CRUD tasks (Cockpit API, files, custom) |
 | Tools | discover external tools |
+| Prompts | reusable prompt templates |
 
 ## Capabilities (interactive tools)
 

@@ -1,3 +1,9 @@
+/**
+ * @deprecated Legacy hooks system — config-driven hook handlers.
+ * In v6, use extension event handlers instead. Will be removed in v7.
+ * @module
+ */
+
 import type { EnrichedContext, HooksConfig } from './types.js';
 import type { BootCache } from './engine.js';
 import type { Logger } from './logger.js';

@@ -4,6 +4,7 @@
  * Dispatches by event type via CLI arg.
  *
  * Usage in hooks.json:
+ *   "SessionStart":     [{ "type": "command", "command": "node hook.js session-start" }]
  *   "UserPromptSubmit": [{ "type": "command", "command": "node hook.js prompt-submit" }]
  *   "PreCompact":       [{ "type": "command", "command": "node hook.js pre-compact" }]
  *   "Stop":             [{ "type": "command", "command": "node hook.js stop" }]
@@ -14,6 +15,7 @@ import {
   NoopLogger,
   JsonFileLogger,
   loadConfig,
+  ADAPTER_CAPABILITIES,
 } from '@dot-ai/core';
 import type { Logger } from '@dot-ai/core';
 
@@ -45,6 +47,31 @@ async function createRuntime(workspaceRoot: string): Promise<DotAiRuntime> {
 
 // ── Event handlers ──
 
+const CLAUDE_SUPPORTED = ADAPTER_CAPABILITIES['claude-code'];
+
+async function handleSessionStart(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
+  const workspaceRoot = (event.cwd as string) ?? process.cwd();
+  const runtime = await createRuntime(workspaceRoot);
+
+  // Log diagnostics
+  const diag = runtime.diagnostics;
+  const mode = diag.v6 ? 'v6' : 'legacy';
+  process.stderr.write(`[dot-ai] Booted (${mode})\n`);
+  if (diag.extensions.length > 0) {
+    process.stderr.write(`[dot-ai] ${diag.extensions.length} extension(s), ${diag.capabilityCount} tool(s)\n`);
+    for (const ext of diag.extensions) {
+      for (const eventName of Object.keys(ext.handlerCounts)) {
+        if (!CLAUDE_SUPPORTED.has(eventName)) {
+          process.stderr.write(
+            `[dot-ai] Warning: Extension ${ext.path} uses '${eventName}' (not supported by Claude Code adapter)\n`,
+          );
+        }
+      }
+    }
+  }
+  return runtime;
+}
+
 async function handlePromptSubmit(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
   const runtime = await createRuntime(workspaceRoot);
@@ -64,12 +91,20 @@ async function handlePreCompact(event: Record<string, unknown>): Promise<DotAiRu
   const runtime = await createRuntime(workspaceRoot);
   try {
     const summary = (event.summary ?? event.content ?? '') as string;
-    if (summary && runtime.providers?.memory) {
-      await runtime.providers.memory.store({
-        content: `[compaction] ${summary.slice(0, 1000)}`,
-        type: 'log',
-        date: new Date().toISOString().slice(0, 10),
-      });
+    if (summary) {
+      // In v6 mode, fire agent_end so memory extensions can store the compaction summary.
+      // In legacy mode, use providers directly.
+      if (runtime.isV6) {
+        await runtime.fire('agent_end', {
+          response: `[compaction] ${summary.slice(0, 1000)}`,
+        });
+      } else if (runtime.providers?.memory) {
+        await runtime.providers.memory.store({
+          content: `[compaction] ${summary.slice(0, 1000)}`,
+          type: 'log',
+          date: new Date().toISOString().slice(0, 10),
+        });
+      }
     }
   } catch (err) {
     process.stderr.write(`[dot-ai] pre-compact error: ${err}\n`);
@@ -91,30 +126,47 @@ async function handleStop(event: Record<string, unknown>): Promise<DotAiRuntime 
   return runtime;
 }
 
-async function handlePreToolUse(event: Record<string, unknown>): Promise<undefined> {
+async function handlePreToolUse(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
+  const workspaceRoot = (event.cwd as string) ?? process.cwd();
   const toolName = (event.tool_name ?? '') as string;
   const input = (event.tool_input ?? {}) as Record<string, unknown>;
 
+  // Boot runtime to check extension-based tool_call blocking
+  const runtime = await createRuntime(workspaceRoot);
+
+  // Fire tool_call to extensions first
+  const extensionResult = await runtime.fireToolCall({ tool: toolName, input });
+  if (extensionResult?.decision === 'block') {
+    process.stdout.write(JSON.stringify({
+      decision: 'block',
+      reason: extensionResult.reason ?? 'Blocked by extension',
+    }));
+    return runtime;
+  }
+
+  // Existing hardcoded memory file blocking (kept as fallback)
   if (toolName === 'Write' || toolName === 'Edit') {
     const filePath = (input.file_path ?? input.path ?? '') as string;
-    if (filePath && /memory\/[^\s]*\.md$/i.test(filePath)) {
+    if (filePath && /\.ai\/memory\/[^\s]*\.md$/i.test(filePath)) {
       process.stdout.write(JSON.stringify({
         decision: 'block',
         reason: 'Memory is managed by dot-ai SQLite provider. Use the memory_store tool instead.',
       }));
-      return;
+      return runtime;
     }
   }
 
   if (toolName === 'Bash') {
     const command = (input.command ?? '') as string;
-    if (/memory\/[^\s]*\.md/i.test(command) && /(?:>|tee|cp|mv|cat\s*<<|echo\s.*>)/i.test(command)) {
+    if (/\.ai\/memory\/[^\s]*\.md/i.test(command) && /(?:>|tee|cp|mv|cat\s*<<|echo\s.*>)/i.test(command)) {
       process.stdout.write(JSON.stringify({
         decision: 'block',
         reason: 'Memory is managed by dot-ai SQLite provider. Use the memory_store tool instead.',
       }));
     }
   }
+
+  return runtime;
 }
 
 // ── Main dispatcher ──
@@ -133,10 +185,11 @@ async function main(): Promise<void> {
   let runtime: DotAiRuntime | undefined;
   try {
     switch (eventType) {
+      case 'session-start': runtime = await handleSessionStart(event); break;
       case 'prompt-submit': runtime = await handlePromptSubmit(event); break;
       case 'pre-compact': runtime = await handlePreCompact(event); break;
       case 'stop': runtime = await handleStop(event); break;
-      case 'pre-tool-use': await handlePreToolUse(event); break;
+      case 'pre-tool-use': runtime = await handlePreToolUse(event); break;
       default: process.stderr.write(`[dot-ai] Unknown event type: ${eventType}\n`);
     }
   } catch (err) {

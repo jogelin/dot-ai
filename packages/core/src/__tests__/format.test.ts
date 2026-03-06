@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { formatContext } from '../format.js';
+import { describe, it, expect, vi } from 'vitest';
+import { formatContext, formatToolHints } from '../format.js';
 import type { EnrichedContext, Identity, MemoryEntry, Skill, Tool } from '../types.js';
+import type { Capability } from '../capabilities.js';
 
 function makeContext(overrides?: Partial<EnrichedContext>): EnrichedContext {
   return {
@@ -14,6 +15,8 @@ function makeContext(overrides?: Partial<EnrichedContext>): EnrichedContext {
     ...overrides,
   };
 }
+
+const makeEmptyContext = makeContext;
 
 function makeIdentity(overrides?: Partial<Identity>): Identity {
   return {
@@ -365,5 +368,85 @@ describe('formatContext', () => {
       // Same priority: 'a-type' before 'z-type' alphabetically
       expect(typeAPos).toBeLessThan(typeZPos);
     });
+  });
+});
+
+describe('formatToolHints', () => {
+  it('returns empty string when no capabilities have hints', () => {
+    expect(formatToolHints([])).toBe('');
+    const cap: Capability = { name: 'test', description: 'x', parameters: {}, execute: vi.fn() };
+    expect(formatToolHints([cap])).toBe('');
+  });
+
+  it('formats promptSnippet', () => {
+    const caps: Capability[] = [{
+      name: 'memory_recall',
+      description: 'Search memory',
+      parameters: {},
+      execute: vi.fn(),
+      promptSnippet: 'Use memory_recall to search stored memories.',
+    }];
+    const result = formatToolHints(caps);
+    expect(result).toContain('## Tool Hints');
+    expect(result).toContain('### memory_recall');
+    expect(result).toContain('Use memory_recall to search stored memories.');
+  });
+
+  it('formats promptGuidelines', () => {
+    const caps: Capability[] = [{
+      name: 'task_list',
+      description: 'List tasks',
+      parameters: {},
+      execute: vi.fn(),
+      promptGuidelines: 'Always check tasks before starting work.',
+    }];
+    const result = formatToolHints(caps);
+    expect(result).toContain('> Always check tasks before starting work.');
+  });
+
+  it('formats both snippet and guidelines', () => {
+    const caps: Capability[] = [{
+      name: 'tool',
+      description: 'd',
+      parameters: {},
+      execute: vi.fn(),
+      promptSnippet: 'snippet text',
+      promptGuidelines: 'guideline text',
+    }];
+    const result = formatToolHints(caps);
+    expect(result).toContain('snippet text');
+    expect(result).toContain('> guideline text');
+  });
+
+  it('only includes capabilities with hints', () => {
+    const caps: Capability[] = [
+      { name: 'no-hints', description: 'd', parameters: {}, execute: vi.fn() },
+      { name: 'with-hint', description: 'd', parameters: {}, execute: vi.fn(), promptSnippet: 'hint' },
+    ];
+    const result = formatToolHints(caps);
+    expect(result).not.toContain('no-hints');
+    expect(result).toContain('with-hint');
+  });
+});
+
+describe('skillDisclosure: progressive', () => {
+  it('shows only description, not content, in progressive mode', () => {
+    const ctx = makeEmptyContext();
+    ctx.skills = [
+      { name: 'my-skill', description: 'Does something useful', labels: [], content: 'Full skill body here' },
+    ];
+    const result = formatContext(ctx, { skillDisclosure: 'progressive' });
+    expect(result).toContain('### my-skill');
+    expect(result).toContain('Does something useful');
+    expect(result).not.toContain('Full skill body here');
+  });
+
+  it('defaults to full disclosure (shows content)', () => {
+    const ctx = makeEmptyContext();
+    ctx.skills = [
+      { name: 'my-skill', description: 'Desc', labels: [], content: 'Full body' },
+    ];
+    const result = formatContext(ctx);
+    expect(result).toContain('Full body');
   });
 });

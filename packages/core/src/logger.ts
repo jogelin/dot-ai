@@ -5,7 +5,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export interface LogEntry {
   timestamp: string;
   level: LogLevel;
-  phase: 'boot' | 'enrich' | 'learn' | 'format';
+  phase: 'boot' | 'enrich' | 'learn' | 'format' | 'runtime';
   event: string;
   data?: Record<string, unknown>;
   durationMs?: number;

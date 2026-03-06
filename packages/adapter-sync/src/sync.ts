@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { EnrichedContext } from '@dot-ai/core';
-import { formatContext } from '@dot-ai/core';
+import type { Capability, EnrichedContext } from '@dot-ai/core';
+import { DotAiRuntime, formatContext, formatToolHints } from '@dot-ai/core';
 
 const START_MARKER = '<!-- dot-ai:start -->';
 const END_MARKER = '<!-- dot-ai:end -->';
@@ -16,10 +16,23 @@ const END_MARKER = '<!-- dot-ai:end -->';
 export async function syncToFile(
   targetPath: string,
   ctx: EnrichedContext,
+  capabilities?: Capability[],
 ): Promise<void> {
-  const formatted = formatContext(ctx);
-  const block = `${START_MARKER}\n${formatted}\n${END_MARKER}`;
+  let formatted = formatContext(ctx);
 
+  // Append tool hints from extension capabilities
+  if (capabilities && capabilities.length > 0) {
+    const hints = formatToolHints(capabilities);
+    if (hints) {
+      formatted += '\n\n---\n\n' + hints;
+    }
+  }
+
+  const block = `${START_MARKER}\n${formatted}\n${END_MARKER}`;
+  await writeBlock(targetPath, block);
+}
+
+async function writeBlock(targetPath: string, block: string): Promise<void> {
   let existing: string;
   try {
     existing = await readFile(targetPath, 'utf-8');
@@ -43,6 +56,44 @@ export async function syncToFile(
     const separator = existing.endsWith('\n') ? '\n' : '\n\n';
     await writeFile(targetPath, existing + separator + block + '\n', 'utf-8');
   }
+}
+
+/**
+ * Sync workspace context to a target file using DotAiRuntime (v6).
+ * Boots the runtime, processes an empty prompt to get full context,
+ * and writes the result with markers.
+ */
+export async function syncWorkspace(
+  workspaceRoot: string,
+  targetPath: string,
+  prompt = '',
+): Promise<void> {
+  const runtime = new DotAiRuntime({ workspaceRoot });
+  await runtime.boot();
+  const result = await runtime.processPrompt(prompt);
+  await syncFormatted(targetPath, result.formatted, result.capabilities);
+  await runtime.flush();
+}
+
+/**
+ * Sync a pre-formatted string to a target file using markers.
+ */
+export async function syncFormatted(
+  targetPath: string,
+  formatted: string,
+  capabilities?: Capability[],
+): Promise<void> {
+  let content = formatted;
+
+  if (capabilities && capabilities.length > 0) {
+    const hints = formatToolHints(capabilities);
+    if (hints) {
+      content += '\n\n---\n\n' + hints;
+    }
+  }
+
+  const block = `${START_MARKER}\n${content}\n${END_MARKER}`;
+  await writeBlock(targetPath, block);
 }
 
 /**

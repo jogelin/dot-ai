@@ -1,4 +1,7 @@
-import type { RoutingProvider, Label, RoutingResult } from '@dot-ai/core';
+/**
+ * @dot-ai/ext-rules-routing — Rules-based model routing extension.
+ */
+import type { ExtensionAPI } from '@dot-ai/core';
 
 interface RoutingRule {
   labels: string[];
@@ -12,24 +15,23 @@ const DEFAULT_RULES: RoutingRule[] = [
   { labels: ['architecture', 'planning', 'complex', 'debug'], model: 'opus', reason: 'complex reasoning' },
 ];
 
-export class RulesRoutingProvider implements RoutingProvider {
-  private rules: RoutingRule[];
-  private defaultModel: string;
+export default function extRulesRouting(api: ExtensionAPI): void {
+  const rules = DEFAULT_RULES;
+  const fallback = 'sonnet';
 
-  constructor(options: Record<string, unknown> = {}) {
-    this.rules = (options.rules as RoutingRule[]) ?? DEFAULT_RULES;
-    this.defaultModel = (options.defaultModel as string) ?? 'sonnet';
-  }
+  api.on('resources_discover', async () => {
+    const labels = new Set<string>();
+    for (const rule of rules) for (const l of rule.labels) labels.add(l);
+    return { labels: Array.from(labels) };
+  });
 
-  async route(labels: Label[], _context?: Record<string, unknown>): Promise<RoutingResult> {
-    const labelNames = new Set(labels.map(l => l.name.toLowerCase()));
-
-    for (const rule of this.rules) {
+  api.on('route', async (event) => {
+    const labelNames = new Set(event.labels.map((l: { name: string }) => l.name.toLowerCase()));
+    for (const rule of rules) {
       if (rule.labels.some(rl => labelNames.has(rl.toLowerCase()))) {
         return { model: rule.model, reason: rule.reason };
       }
     }
-
-    return { model: this.defaultModel, reason: 'default routing' };
-  }
+    return { model: fallback, reason: 'default routing' };
+  });
 }

@@ -11,10 +11,10 @@ describe('clearProviders', () => {
       search: vi.fn().mockResolvedValue([{ content: 'custom', type: 'fact', source: 'test' }]),
       store: vi.fn().mockResolvedValue(undefined),
     });
-    registerProvider('@dot-ai/provider-file-memory', factory);
+    registerProvider('@dot-ai/test-memory-cleared', factory);
     clearProviders();
 
-    const providers = await createProviders({ memory: { use: '@dot-ai/provider-file-memory' } });
+    const providers = await createProviders({ memory: { use: '@dot-ai/test-memory-cleared' } });
     // After clear, factory should not be called — noop provider is used
     expect(factory).not.toHaveBeenCalled();
     const memories = await providers.memory.search('query');
@@ -98,7 +98,7 @@ describe('auto-discovery via dynamic import', () => {
 
 describe('createProviders — noop fallbacks', () => {
   // Use non-existent provider names to ensure noop fallbacks are returned
-  // (auto-discovery would find real packages for default names like @dot-ai/provider-file-memory)
+  // (auto-discovery would find real packages for default names like @dot-ai/ext-file-memory)
   const noopConfig = {
     memory: { use: '@dot-ai/nonexistent-memory' },
     skills: { use: '@dot-ai/nonexistent-skills' },
@@ -187,5 +187,44 @@ describe('createProviders — noop fallbacks', () => {
   it('noop tools.load returns null', async () => {
     const providers = await createProviders(noopConfig);
     expect(await providers.tools.load('any-tool')).toBeNull();
+  });
+});
+
+describe('createProviders — opt-in model', () => {
+  it('returns undefined for unconfigured providers', async () => {
+    const providers = await createProviders({});
+    expect(providers.memory).toBeUndefined();
+    expect(providers.skills).toBeUndefined();
+    expect(providers.identity).toBeUndefined();
+    expect(providers.routing).toBeUndefined();
+    expect(providers.tasks).toBeUndefined();
+    expect(providers.tools).toBeUndefined();
+  });
+
+  it('returns provider for configured sections only', async () => {
+    registerProvider('@dot-ai/test-mem', () => ({
+      search: vi.fn().mockResolvedValue([]),
+      store: vi.fn(),
+      describe: vi.fn().mockReturnValue('test'),
+    }));
+    const providers = await createProviders({ memory: { use: '@dot-ai/test-mem' } });
+    expect(providers.memory).toBeDefined();
+    expect(providers.skills).toBeUndefined();
+    expect(providers.tasks).toBeUndefined();
+  });
+
+  it('mixed: some configured, some not', async () => {
+    registerProvider('@dot-ai/test-id', () => ({ load: vi.fn().mockResolvedValue([]) }));
+    registerProvider('@dot-ai/test-route', () => ({ route: vi.fn().mockResolvedValue({ model: 'test', reason: 'test' }) }));
+    const providers = await createProviders({
+      identity: { use: '@dot-ai/test-id' },
+      routing: { use: '@dot-ai/test-route' },
+    });
+    expect(providers.identity).toBeDefined();
+    expect(providers.routing).toBeDefined();
+    expect(providers.memory).toBeUndefined();
+    expect(providers.skills).toBeUndefined();
+    expect(providers.tasks).toBeUndefined();
+    expect(providers.tools).toBeUndefined();
   });
 });

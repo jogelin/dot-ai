@@ -118,10 +118,12 @@ export interface DotAiConfig {
   debug?: DebugConfig;
   workspace?: WorkspaceConfig;
   hooks?: HooksConfig;
+  extensions?: ExtensionsConfig;
+  prompts?: PromptsConfig;
 }
 
 export interface ProviderConfig {
-  use: string;   // "@dot-ai/provider-file-memory", "@dot-ai/cockpit-memory", etc.
+  use: string;   // "@dot-ai/ext-file-memory", "@dot-ai/cockpit-memory", etc.
   with?: Record<string, unknown>; // provider-specific options
 }
 
@@ -135,6 +137,26 @@ export interface HooksConfig {
   after_enrich?: HookEntryConfig[];
   after_format?: HookEntryConfig[];
   after_learn?: HookEntryConfig[];
+}
+
+/** Prompt template type for PromptProvider */
+export interface PromptTemplate {
+  name: string;
+  content: string;
+  args?: string[];
+  description?: string;
+}
+
+/** Extensions config section in dot-ai.yml */
+export interface ExtensionsConfig {
+  paths?: string[];
+  packages?: string[];
+}
+
+/** Prompts config section in dot-ai.yml */
+export interface PromptsConfig {
+  use?: string;
+  with?: Record<string, unknown>;
 }
 
 /**

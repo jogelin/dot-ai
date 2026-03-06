@@ -1,3 +1,9 @@
+/**
+ * @deprecated Provider contracts — legacy provider-based pipeline.
+ * In v6, use extensions instead. These interfaces will be removed in v7.
+ * @module
+ */
+
 import type {
   MemoryEntry,
   Skill,
@@ -7,6 +13,7 @@ import type {
   TaskFilter,
   RoutingResult,
   Label,
+  PromptTemplate,
 } from './types.js';
 
 /**
@@ -69,6 +76,14 @@ export interface ToolProvider {
   list(): Promise<Tool[]>;
   match(labels: Label[]): Promise<Tool[]>;
   load(name: string): Promise<Tool | null>;
+}
+
+/**
+ * Prompt provider — discover and load prompt templates.
+ */
+export interface PromptProvider {
+  list(): Promise<PromptTemplate[]>;
+  load(name: string): Promise<string | null>;
 }
 
 /**

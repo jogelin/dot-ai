@@ -1,3 +1,10 @@
+/**
+ * @deprecated Legacy engine — provider-based boot/enrich/learn pipeline.
+ * In v6, the DotAiRuntime handles the event-driven pipeline directly.
+ * Will be removed in v7.
+ * @module
+ */
+
 import type {
   MemoryProvider,
   SkillProvider,

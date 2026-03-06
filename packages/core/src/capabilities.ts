@@ -1,4 +1,5 @@
 import type { Providers } from './engine.js';
+import type { ToolDefinition } from './extension-types.js';
 
 /**
  * The result returned by a capability execution.
@@ -25,13 +26,35 @@ export interface Capability {
   confirmationRequired?: boolean;
   /** Capability version — incremented when parameter schema changes */
   version?: number;
+  /** Injected into system prompt when tool is active */
+  promptSnippet?: string;
+  /** Guidelines for the LLM when using this tool */
+  promptGuidelines?: string;
+}
+
+/**
+ * Convert an extension ToolDefinition into a Capability.
+ */
+export function toolDefinitionToCapability(tool: ToolDefinition): Capability {
+  return {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    promptSnippet: tool.promptSnippet,
+    promptGuidelines: tool.promptGuidelines,
+    async execute(params: Record<string, unknown>): Promise<CapabilityResult> {
+      const result = await tool.execute(params);
+      return { text: result.content, details: result.details as Record<string, unknown> | undefined };
+    },
+  };
 }
 
 /**
  * Build the list of capabilities from active providers.
  * Only generates capabilities for providers that are configured (non-undefined).
+ * Optionally merges extension tools as capabilities.
  */
-export function buildCapabilities(providers: Providers): Capability[] {
+export function buildCapabilities(providers: Providers, extensionTools?: ToolDefinition[]): Capability[] {
   const caps: Capability[] = [];
 
   // --- Memory capabilities (only if memory provider is configured) ---
@@ -301,6 +324,13 @@ export function buildCapabilities(providers: Providers): Capability[] {
       } catch {
         // Skip if custom capabilities fail
       }
+    }
+  }
+
+  // Add extension tools as capabilities
+  if (extensionTools) {
+    for (const tool of extensionTools) {
+      caps.push(toolDefinitionToCapability(tool));
     }
   }
 

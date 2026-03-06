@@ -1,27 +1,30 @@
 # dot-ai — Universal AI Workspace Convention
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.2-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-5.0.0-green.svg)](package.json)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-compatible-purple.svg)](https://github.com/openclaw/openclaw)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-blue.svg)](https://claude.ai/claude-code)
+[![Pi](https://img.shields.io/badge/Pi-compatible-orange.svg)](https://github.com/jogelin/dot-ai)
 
-> **A standardized `.ai/` workspace structure for AI assistants — dual plugin for OpenClaw and Claude Code.**
+> **A standardized `.ai/` workspace structure for AI assistants — with a pluggable extension system for Claude Code, OpenClaw, Pi, Cursor, and Copilot.**
 
-The dot-ai convention provides a universal workspace structure that helps AI assistants understand your project context, manage tasks, route between projects, and maintain consistency across sessions.
+The dot-ai convention provides a universal workspace structure that helps AI assistants understand your project context, manage tasks, route between projects, and maintain consistency across sessions. v5 introduces a powerful **extension system** for tool gating, context injection, and custom behaviors.
 
 ---
 
 ## ✨ Features
 
 - 🏗️ **Workspace Structure** — Standardized `.ai/` directory with boot sequence and project routing
+- 🧩 **Extension System** — User-authored TypeScript extensions for tool gating, context injection, and custom tools
 - ✅ **Task Management** — TaskProvider pattern (Cockpit API, file-based, or custom) that replaces built-in todos
 - 🎯 **Model Selection** — Smart routing between Haiku/Sonnet/Opus to optimize costs
 - 📊 **Token Budget** — Auto-trims skills/memories to fit context window with BudgetWarning diagnostics
 - 🔧 **Capabilities** — Interactive tools (memory_recall, task_list, etc.) defined once in core, mapped by adapters
-- 🪝 **Hooks** — 4 pipeline extension points (after_boot, after_enrich, after_format, after_learn)
-- 🔍 **Health Monitoring** — Built-in diagnostics and troubleshooting (doctor skill)
-- 🚀 **DotAiRuntime** — Single class encapsulating the full pipeline (boot, enrich, format, learn)
+- 🧱 **7 Provider Contracts** — Memory, Skills, Identity, Routing, Tasks, Tools, and Prompts
+- 🔍 **Health Monitoring** — Built-in diagnostics for extensions, providers, and troubleshooting
+- 🚀 **DotAiRuntime** — Single class encapsulating boot, processPrompt, fireToolCall, learn, shutdown, and diagnostics
 - 🔄 **Progressive Loading** — Overview at startup, skill content loaded on-demand
+- 📡 **Two-Tier Events** — Universal events (all adapters) and rich events (full-featured adapters only)
 
 ---
 
@@ -42,7 +45,24 @@ For programmatic use or custom adapters:
 npm install @dot-ai/core @dot-ai/adapter-claude
 ```
 
-Available packages: `@dot-ai/core`, `@dot-ai/adapter-claude`, `@dot-ai/file-memory`, `@dot-ai/file-skills`, `@dot-ai/file-identity`, `@dot-ai/file-tools`, `@dot-ai/file-tasks`, `@dot-ai/rules-routing`, `@dot-ai/sqlite-memory`, `@dot-ai/cli`
+Available packages:
+
+| Package | Description |
+|---------|-------------|
+| `@dot-ai/core` | Runtime engine, extension loader, provider contracts |
+| `@dot-ai/adapter-claude` | Claude Code adapter |
+| `@dot-ai/pi` | Pi adapter (full event support) |
+| `@dot-ai/adapter-sync` | Cursor / Copilot / Windsurf sync adapter |
+| `@dot-ai/adapter-openclaw` | OpenClaw adapter |
+| `@dot-ai/provider-sqlite-memory` | SQLite-backed memory provider |
+| `@dot-ai/provider-file-memory` | File-backed memory provider |
+| `@dot-ai/provider-file-skills` | File-based skills provider |
+| `@dot-ai/provider-file-identity` | File-based identity provider |
+| `@dot-ai/provider-file-tools` | File-based tools provider |
+| `@dot-ai/provider-file-tasks` | File-based tasks provider |
+| `@dot-ai/provider-file-prompts` | File-based prompts provider |
+| `@dot-ai/provider-rules-routing` | Rules-based routing provider |
+| `@dot-ai/cli` | CLI for workspace management |
 
 ### OpenClaw
 
@@ -51,7 +71,7 @@ openclaw plugins install dot-ai
 openclaw gateway restart
 ```
 
-### Other AI Tools (Windsurf, Cursor, Continue.dev, Codex)
+### Other AI Tools (Windsurf, Cursor, Copilot, Continue.dev)
 
 Use the adapter-sync package to generate agent-specific configuration:
 
@@ -100,11 +120,64 @@ This workspace follows the dot-ai convention.
 
 The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 - ✅ Loads workspace context at session start
+- ✅ Loads and activates extensions from `.ai/extensions/`
 - ✅ Enforces task management conventions
 - ✅ Optimizes model selection for sub-agents
-- ✅ Provides access to all skills
+- ✅ Provides access to all skills and capabilities
 
 **No local installation needed** — the plugin provides skills globally!
+
+---
+
+## 🧩 Extension System
+
+Extensions let you customize dot-ai behavior without modifying core code. Place TypeScript files in `.ai/extensions/` and they are loaded automatically at boot.
+
+### Writing an Extension
+
+```typescript
+// .ai/extensions/security-gate.ts
+import type { DotAiExtensionAPI } from '@dot-ai/core';
+
+export default function(api: DotAiExtensionAPI) {
+  api.on('tool_call', async (event) => {
+    if (event.tool === 'Write' && event.input.file_path?.toString().endsWith('.env')) {
+      return { decision: 'block', reason: 'Cannot write to .env files' };
+    }
+  });
+
+  api.on('context_inject', async () => {
+    return { inject: '> Always write tests for new features.' };
+  });
+}
+```
+
+### Extension Events
+
+Events are split into two tiers based on adapter capability:
+
+| Event | Tier | Description |
+|-------|------|-------------|
+| `context_inject` | Universal (Tier 1) | Inject text into prompt context |
+| `tool_call` | Universal (Tier 1) | Gate or modify tool calls before execution |
+| `agent_end` | Universal (Tier 1) | React when an agent completes |
+| `context_modify` | Rich (Tier 2) | Modify assembled context before sending |
+| `tool_result` | Rich (Tier 2) | Intercept or transform tool results |
+
+Extensions can also register **custom tools** that appear alongside built-in capabilities.
+
+### Adapter Capability Matrix
+
+Not all adapters support every event. The matrix below shows what each adapter can fire:
+
+| Adapter | context_inject | tool_call | agent_end | context_modify | tool_result |
+|---------|:-:|:-:|:-:|:-:|:-:|
+| **Pi** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Claude Code** | ✅ | ✅ | ✅ | — | — |
+| **OpenClaw** | ✅ | — | ✅ | — | — |
+| **Cursor/Copilot (sync)** | ✅ | — | — | — | — |
+
+See [docs/extensions.md](docs/extensions.md) for the full extension authoring guide.
 
 ---
 
@@ -147,8 +220,6 @@ The plugin automatically detects any workspace with `.ai/AGENTS.md` and:
 | **dot-ai-security** | Security rules and verification | `always` |
 | **dot-ai-self-improve** | Learning loop and pattern extraction | manual |
 
-**See `openclaw.plugin.json` for the full skill list.**
-
 ---
 
 ## 🏗️ Workspace Structure
@@ -161,6 +232,9 @@ my-project/
 │   ├── USER.md                 # Optional — User preferences
 │   ├── IDENTITY.md             # Optional — Project identity
 │   ├── TOOLS.md                # Optional — Tool configuration
+│   │
+│   ├── extensions/             # User-authored extensions (v5)
+│   │   └── *.ts                # Loaded automatically at boot
 │   │
 │   ├── memory/                 # Session memory and tasks
 │   │   ├── YYYY-MM-DD.md       # Daily session notes
@@ -191,9 +265,9 @@ my-project/
 
 - **Root `.ai/`** — Workspace-wide context
 - **Project `.ai/`** — Project-specific context
+- **Extensions** — `.ai/extensions/` loaded at boot, gated by adapter capabilities
 - **Data Separation** — `.ai/data/` = structured only, no research/drafts
 - **Memory Organization** — Daily notes, tasks, research separated
-- **Auto-Generation** — Files between `<!-- dot-ai-{skill} start/end -->` markers managed automatically
 
 ---
 
@@ -205,7 +279,7 @@ my-project/
 
 Tasks are managed through the **TaskProvider** contract. The provider can be backed by:
 - **Cockpit API** (`@dot-ai/cockpit-tasks`) — REST API at `http://localhost:3010`
-- **File-based** (`@dot-ai/file-tasks`) — JSON files in `.ai/memory/tasks/`
+- **File-based** (`@dot-ai/provider-file-tasks`) — JSON files in `.ai/memory/tasks/`
 - **Custom** — Any implementation of the `TaskProvider` interface
 
 Configure in `.ai/dot-ai.yml`:
@@ -267,64 +341,52 @@ Overall Health: 85/100 (Good)
 ✅ Passed (5):
   - Structure validation
   - Required files
-  - Symlinks valid
+  - Extension loading
+  - Provider connectivity
   - Cache fresh (<7 days)
-  - Disk space OK
 
 ⚠️ Warnings (2):
   - 3 orphan tasks without backlog refs
-  - 5 untracked files in .ai/
+  - 1 extension failed to load (syntax error)
 
 💊 Suggested Fixes:
   1. Run backlog-sync to add orphan tasks
-  2. Run `git add .ai/` to track files
-```
-
-### Project Initialization
-
-Create a new project with proper structure:
-
-```
-"create project backend" or "init project backend"
-```
-
-Generates:
-```
-projects/backend/
-└── .ai/
-    ├── AGENT.md (with auto-generated sections)
-    └── memory/
-        ├── BACKLOG.md
-        └── tasks/
+  2. Check .ai/extensions/ for syntax errors
 ```
 
 ---
 
 ## 🏛️ Architecture
 
-### Engine Architecture (v4.2)
+### Engine Architecture (v5)
 
 ```
-Agent (Claude Code / OpenClaw / Custom)
+Agent (Claude Code / OpenClaw / Pi / Cursor / Copilot)
   └── Adapter (hooks into native events)
         └── DotAiRuntime (@dot-ai/core)
-              ├── boot()           → cache identities + vocabulary
-              ├── processPrompt()  → enrich + format + hooks
-              ├── learn()          → store in memory
-              └── flush()          → flush logger
+              ├── boot()           → cache + load extensions + session_start
+              ├── processPrompt()  → enrich + format + context_inject
+              ├── fireToolCall()   → extension-based tool gating
+              ├── learn()          → memory + agent_end
+              ├── shutdown()       → session_end + flush
+              └── diagnostics      → extension + provider status
 
-  Providers (pluggable):        Capabilities (tools):
-  ├── Memory (sqlite, file)     ├── memory_recall
-  ├── Skills (file)             ├── memory_store
-  ├── Identity (file)           ├── task_list
-  ├── Routing (rules)           ├── task_create
-  ├── Tasks (cockpit, file)     └── task_update
-  └── Tools (file)
+  Providers (pluggable):        Extensions (.ai/extensions/):
+  ├── Memory (sqlite, file)     ├── context_inject (tier 1)
+  ├── Skills (file)             ├── tool_call (tier 1)
+  ├── Identity (file)           ├── agent_end (tier 1)
+  ├── Routing (rules)           ├── context_modify (tier 2)
+  ├── Tasks (cockpit, file)     ├── tool_result (tier 2)
+  ├── Tools (file)              └── Custom tools
+  └── Prompts (file)
 
-  Hooks: after_boot → after_enrich → after_format → after_learn
+  Capabilities (tools):
+  ├── memory_recall / memory_store
+  ├── task_list / task_create / task_update
+  └── + extension-registered tools
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical reference.
+See [docs/architecture.md](docs/architecture.md) for the full technical reference.
 
 ### INDEX/SKILL Pattern
 
@@ -368,9 +430,29 @@ All large skills (>100 lines) use INDEX/SKILL separation:
 
 ## 🔧 Configuration
 
-### OpenClaw Configuration
+### dot-ai.yml
 
-The plugin respects OpenClaw's plugin configuration:
+The central configuration file at `.ai/dot-ai.yml`:
+
+```yaml
+# Provider configuration
+tasks:
+  use: '@dot-ai/provider-file-tasks'
+
+memory:
+  use: '@dot-ai/provider-sqlite-memory'
+
+# Prompts provider (v5)
+prompts:
+  use: '@dot-ai/provider-file-prompts'
+
+# Extensions (v5)
+extensions:
+  enabled: true
+  path: '.ai/extensions'
+```
+
+### OpenClaw Configuration
 
 ```json
 {
@@ -395,9 +477,9 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
 
 ## 📖 Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Full v4.2 architecture (engine, providers, capabilities, hooks, token budget)
+- **[docs/architecture.md](docs/architecture.md)** — Full v5 architecture (engine, providers, extensions, capabilities, events)
+- **[docs/extensions.md](docs/extensions.md)** — Extension authoring guide (events, custom tools, best practices)
 - **[BOOTSTRAP.md](skills/dot-ai/BOOTSTRAP.md)** — Lightweight startup context (what agent sees at boot)
-- **[dot-ai-architecture skill](skills/dot-ai-architecture/)** — Architecture comprehension skill for AI agents
 - **[SKILL.md](skills/dot-ai/SKILL.md)** — Full dot-ai convention documentation
 - **[CONVENTIONS.md](skills/dot-ai/CONVENTIONS.md)** — Shared conventions across all skills
 
@@ -415,6 +497,13 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
    - `.claude-plugin/plugin.json` → `skills` array
 5. Update plugin injection in `index.ts` if needed
 
+### Writing Extensions
+
+1. Create a `.ts` file in `.ai/extensions/`
+2. Export a default function that receives `DotAiExtensionAPI`
+3. Register handlers for events (`context_inject`, `tool_call`, `agent_end`, etc.)
+4. Extensions are loaded automatically at boot — no registration needed
+
 ### Skill Development Guidelines
 
 - Follow INDEX/SKILL pattern for skills >100 lines
@@ -423,12 +512,6 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
 - Include frontmatter with name, description, triggers
 - Add cross-references to related skills
 - Write clear examples and use cases
-
-### Template Usage
-
-Use existing templates for consistency:
-- Project docs → AGENT.template.md
-- New skills → SKILL.template.md
 
 ---
 
@@ -460,15 +543,22 @@ If missing, create it or run:
 "init project {name}"
 ```
 
-### Health Check Failed
+### Extension Not Loading
 
-Run diagnostics:
+Check the diagnostics output:
 
 ```
 "doctor" or "health check"
 ```
 
-Follow suggested fixes from the output.
+Common issues:
+- Syntax error in `.ts` file
+- Missing default export
+- Listening to events not supported by current adapter
+
+### Health Check Failed
+
+Run diagnostics and follow suggested fixes from the output.
 
 ### Skills Not Available
 
@@ -495,7 +585,7 @@ The plugin provides skills globally. If skills aren't working:
 - Agent maintains 100% awareness with 61% fewer tokens
 
 **Impact:**
-- ✅ Faster OpenClaw startup
+- ✅ Faster startup across all adapters
 - ✅ More context budget for actual work
 - ✅ Same functionality, better performance
 
@@ -521,13 +611,14 @@ MIT License — See [LICENSE](LICENSE) for details.
 **dot-ai** provides a universal workspace convention for AI assistants:
 
 - ✅ Standardized `.ai/` structure with multi-project support
-- ✅ 6 provider contracts (memory, skills, identity, routing, tasks, tools)
-- ✅ DotAiRuntime for easy adapter integration
-- ✅ 5 interactive capabilities (memory_recall/store, task_list/create/update)
-- ✅ 4 pipeline hooks for extensibility
+- ✅ 7 provider contracts (memory, skills, identity, routing, tasks, tools, prompts)
+- ✅ Extension system for tool gating, context injection, and custom tools
+- ✅ DotAiRuntime with boot, processPrompt, fireToolCall, learn, shutdown, and diagnostics
+- ✅ Two-tier event model (universal + rich) for adapter flexibility
+- ✅ 5+ interactive capabilities (memory, tasks, and extension-registered tools)
 - ✅ Token budget with auto-trimming
 - ✅ Deterministic label-based matching (no LLM in pipeline)
-- ✅ Works with Claude Code, OpenClaw, Cursor, Copilot
+- ✅ Works with Claude Code, OpenClaw, Pi, Cursor, Copilot
 
 **Get started:** Create `.ai/AGENTS.md` in your project root and let the plugin handle the rest!
 
@@ -535,4 +626,4 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **Made with ❤️ by the dot-ai community**
 
-*Version 0.5.2 — Last updated: 2026-03-05*
+*Version 5.0.0 — Last updated: 2026-03-05*
