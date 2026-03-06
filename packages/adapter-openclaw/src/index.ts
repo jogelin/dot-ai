@@ -111,7 +111,7 @@ const plugin = {
 
             // Log extension diagnostics
             const diag = cachedRuntime.diagnostics;
-            api.logger.info(`[dot-ai] v6=${diag.v6}, extensions=${diag.extensions.length}, capabilities=${diag.capabilityCount}`);
+            api.logger.info(`[dot-ai] extensions=${diag.extensions.length}, capabilities=${diag.capabilityCount}`);
             if (diag.vocabularySize !== undefined) {
               api.logger.info(`[dot-ai] Vocabulary size: ${diag.vocabularySize}`);
             }

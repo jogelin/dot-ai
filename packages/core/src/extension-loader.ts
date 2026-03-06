@@ -1,12 +1,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import type { Logger } from './logger.js';
-import type { DotAiExtensionAPI, ExtensionAPI } from './extension-api.js';
+import type { ExtensionAPI } from './extension-api.js';
 import type { LoadedExtension, ToolDefinition, CommandDefinition, ExtensionTier } from './extension-types.js';
 import { EVENT_TIERS } from './extension-types.js';
-import type { ExtensionsConfig, MemoryEntry, Label, Task, TaskFilter } from './types.js';
-import type { Providers } from './engine.js';
+import type { ExtensionsConfig } from './types.js';
 
 /**
  * Discover extension file paths from configured locations.
@@ -82,71 +80,8 @@ export async function discoverExtensions(
 }
 
 /**
- * Create a DotAiExtensionAPI instance that collects registrations into a LoadedExtension.
- */
-function createCollectorAPI(
-  extensionPath: string,
-  providers?: Providers,
-  eventBus?: { on: (event: string, handler: (...args: unknown[]) => void) => void; emit: (event: string, ...args: unknown[]) => void },
-): { api: DotAiExtensionAPI; extension: LoadedExtension } {
-  const extension: LoadedExtension = {
-    path: extensionPath,
-    handlers: new Map(),
-    tools: new Map(),
-    commands: new Map(),
-    tiers: new Set(),
-  };
-
-  const api: DotAiExtensionAPI = {
-    on(event: string, handler: Function) {
-      if (!extension.handlers.has(event)) {
-        extension.handlers.set(event, []);
-      }
-      extension.handlers.get(event)!.push(handler);
-
-      // Track tier
-      const tier: ExtensionTier | undefined = EVENT_TIERS[event];
-      if (tier) {
-        extension.tiers.add(tier);
-      }
-    },
-    registerTool(tool: ToolDefinition) {
-      extension.tools.set(tool.name, tool);
-    },
-    registerCommand(command: CommandDefinition) {
-      extension.commands.set(command.name, command);
-    },
-    providers: {
-      memory: providers?.memory ? {
-        search: (query: string, labels?: string[]) => providers.memory!.search(query, labels),
-        store: (entry: Omit<MemoryEntry, 'source'>) => providers.memory!.store(entry),
-      } : undefined,
-      skills: providers?.skills ? {
-        match: (labels: Label[]) => providers.skills!.match(labels),
-        load: (name: string) => providers.skills!.load(name),
-      } : undefined,
-      routing: providers?.routing ? {
-        route: (labels: Label[]) => providers.routing!.route(labels),
-      } : undefined,
-      tasks: providers?.tasks ? {
-        list: (filter?: TaskFilter) => providers.tasks!.list(filter),
-        get: (id: string) => providers.tasks!.get(id),
-        create: (task: Omit<Task, 'id'>) => providers.tasks!.create(task),
-        update: (id: string, patch: Partial<Task>) => providers.tasks!.update(id, patch),
-      } : undefined,
-    },
-    events: eventBus ?? {
-      on: () => {},
-      emit: () => {},
-    },
-  } as unknown as DotAiExtensionAPI;
-
-  return { api, extension };
-}
-
-/**
  * Create a v6 ExtensionAPI instance that collects registrations into a LoadedExtension.
- * Does NOT expose providers — extensions communicate via events only.
+ * Extensions communicate via events only — no provider access.
  */
 export function createV6CollectorAPI(
   extensionPath: string,
@@ -189,89 +124,4 @@ export function createV6CollectorAPI(
   } as unknown as ExtensionAPI;
 
   return { api, extension };
-}
-
-/**
- * Load extensions from discovered paths using jiti.
- */
-export async function loadExtensions(
-  extensionPaths: string[],
-  providers?: Providers,
-  eventBus?: { on: (event: string, handler: (...args: unknown[]) => void) => void; emit: (event: string, ...args: unknown[]) => void },
-  logger?: Logger,
-): Promise<LoadedExtension[]> {
-  if (extensionPaths.length === 0) return [];
-
-  let jitiImport: ((id: string) => unknown) | undefined;
-  try {
-    const { createJiti } = await import('jiti');
-    jitiImport = createJiti(import.meta.url, { interopDefault: true });
-  } catch {
-    logger?.log({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      phase: 'boot',
-      event: 'jiti_not_available',
-      data: { message: 'jiti not installed, falling back to dynamic import' },
-    });
-  }
-
-  const loaded: LoadedExtension[] = [];
-
-  for (const extPath of extensionPaths) {
-    try {
-      let mod: Record<string, unknown>;
-      if (jitiImport) {
-        mod = jitiImport(extPath) as Record<string, unknown>;
-      } else {
-        mod = await import(extPath) as Record<string, unknown>;
-      }
-
-      const factory = (typeof mod.default === 'function' ? mod.default : mod) as
-        ((api: DotAiExtensionAPI) => void | Promise<void>) | undefined;
-
-      if (typeof factory !== 'function') {
-        logger?.log({
-          timestamp: new Date().toISOString(),
-          level: 'warn',
-          phase: 'boot',
-          event: 'extension_no_factory',
-          data: { path: extPath },
-        });
-        continue;
-      }
-
-      const { api, extension } = createCollectorAPI(extPath, providers, eventBus);
-      await factory(api);
-      loaded.push(extension);
-
-      logger?.log({
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        phase: 'boot',
-        event: 'extension_loaded',
-        data: {
-          path: extPath,
-          handlers: Object.fromEntries(
-            Array.from(extension.handlers.entries()).map(([k, v]) => [k, v.length]),
-          ),
-          tools: Array.from(extension.tools.keys()),
-          tiers: Array.from(extension.tiers),
-        },
-      });
-    } catch (err) {
-      logger?.log({
-        timestamp: new Date().toISOString(),
-        level: 'warn',
-        phase: 'boot',
-        event: 'extension_load_error',
-        data: {
-          path: extPath,
-          error: err instanceof Error ? err.message : String(err),
-        },
-      });
-    }
-  }
-
-  return loaded;
 }

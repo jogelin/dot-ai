@@ -4,7 +4,7 @@
  */
 export interface Label {
   name: string;
-  source: string; // which provider/step produced this
+  source: string; // which extension/step produced this
 }
 
 /**
@@ -31,7 +31,7 @@ export interface Skill {
   description: string;
   labels: string[];
   triggers?: string[];      // "always", "auto", pattern strings
-  path?: string;            // provider decides if this exists
+  path?: string;            // extension decides if this exists
   content?: string;         // lazy loaded
   dependsOn?: string[];
   requiresTools?: string[];
@@ -42,7 +42,7 @@ export interface Skill {
 export interface Identity {
   type: string;           // "agents", "soul", "user", "identity"
   content: string;
-  source: string;         // provider name
+  source: string;         // extension name
   priority: number;       // for ordering in prompt
   node?: string;          // which context node (null = root)
 }
@@ -73,7 +73,7 @@ export interface RoutingResult {
 }
 
 /**
- * The output of the enrich() call.
+ * The output of the enrich pipeline.
  * This is what adapters consume to inject into the agent.
  */
 export interface EnrichedContext {
@@ -98,7 +98,7 @@ export interface TaskFilter {
 }
 
 /**
- * Configuration from dot-ai.yml
+ * Configuration types
  */
 export interface DebugConfig {
   logPath?: string;
@@ -109,37 +109,13 @@ export interface WorkspaceConfig {
 }
 
 export interface DotAiConfig {
-  memory?: ProviderConfig;
-  skills?: ProviderConfig;
-  identity?: ProviderConfig;
-  routing?: ProviderConfig;
-  tasks?: ProviderConfig;
-  tools?: ProviderConfig;
   debug?: DebugConfig;
   workspace?: WorkspaceConfig;
-  hooks?: HooksConfig;
   extensions?: ExtensionsConfig;
   prompts?: PromptsConfig;
 }
 
-export interface ProviderConfig {
-  use: string;   // "@dot-ai/ext-file-memory", "@dot-ai/cockpit-memory", etc.
-  with?: Record<string, unknown>; // provider-specific options
-}
-
-export interface HookEntryConfig {
-  use: string;
-  with?: Record<string, unknown>;
-}
-
-export interface HooksConfig {
-  after_boot?: HookEntryConfig[];
-  after_enrich?: HookEntryConfig[];
-  after_format?: HookEntryConfig[];
-  after_learn?: HookEntryConfig[];
-}
-
-/** Prompt template type for PromptProvider */
+/** Prompt template type */
 export interface PromptTemplate {
   name: string;
   content: string;
@@ -147,25 +123,23 @@ export interface PromptTemplate {
   description?: string;
 }
 
-/** Extensions config section in dot-ai.yml */
+/** Extensions config section */
 export interface ExtensionsConfig {
   paths?: string[];
   packages?: string[];
 }
 
-/** Prompts config section in dot-ai.yml */
+/** Prompts config section */
 export interface PromptsConfig {
   use?: string;
   with?: Record<string, unknown>;
 }
 
 /**
- * Warning emitted when formatContext() exceeds the token budget.
- * Diagnostic signal that labeling/matching may be too broad.
+ * Warning emitted when context exceeds the token budget.
  */
 export interface BudgetWarning {
   budget: number;
   actual: number;
-  actions: string[];  // e.g. "dropped 3 skills", "truncated 2 skills to 2000 chars"
+  actions: string[];
 }
-

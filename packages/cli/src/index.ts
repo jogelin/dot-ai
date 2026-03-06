@@ -4,11 +4,6 @@ import { mkdir, writeFile, access, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
   DotAiRuntime,
-  loadConfig,
-  injectRoot,
-  registerDefaults,
-  clearProviders,
-  createProviders,
   clearBootCache,
 } from '@dot-ai/core';
 
@@ -25,9 +20,6 @@ async function main(): Promise<void> {
       break;
     case 'trace':
       await cmdTrace(args.slice(1));
-      break;
-    case 'consolidate':
-      await cmdConsolidate();
       break;
     case 'cache':
       await cmdCache(args.slice(1));
@@ -66,7 +58,6 @@ function printHelp(): void {
   console.log('  commands                      List registered commands from extensions');
   console.log('  cache clear                   Clear boot cache');
   console.log('  cache status                  Show cache status');
-  console.log('  consolidate                   Clean up low-value memories');
   console.log('  migrate                       Migrate dot-ai.yml to settings.json');
   console.log('');
   console.log('Tool execution:');
@@ -82,13 +73,11 @@ function printHelp(): void {
 // ── Workspace Detection ──
 
 async function resolveWorkspace(): Promise<string> {
-  // Check --workspace flag
   const wsIdx = args.indexOf('--workspace');
   if (wsIdx !== -1 && args[wsIdx + 1]) {
     return resolve(args[wsIdx + 1]);
   }
 
-  // Walk up from cwd to find .ai/ directory
   let dir = cwd();
   const root = resolve('/');
 
@@ -104,7 +93,7 @@ async function resolveWorkspace(): Promise<string> {
   return cwd();
 }
 
-// ── Boot Runtime (v6) ──
+// ── Boot Runtime ──
 
 async function bootRuntime(workspaceRoot?: string): Promise<DotAiRuntime> {
   const ws = workspaceRoot ?? await resolveWorkspace();
@@ -118,14 +107,10 @@ async function bootRuntime(workspaceRoot?: string): Promise<DotAiRuntime> {
 async function cmdExecTool(rawArgs: string[]): Promise<void> {
   const jsonMode = rawArgs.includes('--json');
   const cleanArgs = rawArgs.filter(a => a !== '--json' && a !== '--workspace').filter((_, i, arr) => {
-    // Also remove the value after --workspace
     if (i > 0 && arr[i - 1] === '--workspace') return false;
     return true;
   });
 
-  // Parse domain + action → tool name
-  // dot-ai memory recall "query" → tool_name = memory_recall, input = { query: "query" }
-  // dot-ai tasks list --status=pending → tool_name = task_list, input = { status: "pending" }
   const domain = cleanArgs[0];
   const action = cleanArgs[1];
 
@@ -151,7 +136,6 @@ async function cmdExecTool(rawArgs: string[]): Promise<void> {
     exit(1);
   }
 
-  // Parse tool arguments
   const input = parseToolArgs(toolArgs, tool.parameters);
 
   try {
@@ -169,12 +153,6 @@ async function cmdExecTool(rawArgs: string[]): Promise<void> {
   }
 }
 
-/**
- * Parse CLI args into tool input based on JSON Schema parameters.
- * Supports:
- *   positional: first unnamed arg becomes first required param
- *   --key=value and --key value flags
- */
 function parseToolArgs(rawArgs: string[], schema: Record<string, unknown>): Record<string, unknown> {
   const input: Record<string, unknown> = {};
   const props = (schema as { properties?: Record<string, { type?: string }> }).properties ?? {};
@@ -188,7 +166,6 @@ function parseToolArgs(rawArgs: string[], schema: Record<string, unknown>): Reco
     const arg = rawArgs[i];
 
     if (arg.startsWith('--')) {
-      // Flag: --key=value or --key value
       const eqIdx = arg.indexOf('=');
       if (eqIdx !== -1) {
         const key = arg.slice(2, eqIdx);
@@ -205,7 +182,6 @@ function parseToolArgs(rawArgs: string[], schema: Record<string, unknown>): Reco
         }
       }
     } else {
-      // Positional: assign to first unfilled required param, then unrequired
       const targetKey = required[positionalIdx] ?? propNames.find(p => !(p in input));
       if (targetKey) {
         input[targetKey] = coerceValue(arg, props[targetKey]?.type);
@@ -312,21 +288,12 @@ async function cmdCache(rawArgs: string[]): Promise<void> {
   }
 }
 
-// ── Existing Commands (kept for backward compat) ──
+// ── Init ──
 
 async function cmdInit(): Promise<void> {
   const root = cwd();
   const aiDir = join(root, '.ai');
 
-  try {
-    await access(join(aiDir, 'dot-ai.yml'));
-    console.log('.ai/dot-ai.yml already exists. Nothing to do.');
-    return;
-  } catch {
-    // Doesn't exist, create it
-  }
-
-  // Also check for settings.json (v6 format)
   try {
     await access(join(aiDir, 'settings.json'));
     console.log('.ai/settings.json already exists. Nothing to do.');
@@ -337,21 +304,10 @@ async function cmdInit(): Promise<void> {
 
   await mkdir(aiDir, { recursive: true });
 
-  await writeFile(join(aiDir, 'dot-ai.yml'), [
-    '# dot-ai configuration',
-    '# Uncomment and customize providers as needed.',
-    '# Default: file-based providers reading from .ai/ directory.',
-    '#',
-    '# memory:',
-    '#   use: "@dot-ai/ext-file-memory"',
-    '#',
-    '# skills:',
-    '#   use: "@dot-ai/ext-file-skills"',
-    '#',
-    '# routing:',
-    '#   use: "@dot-ai/ext-rules-routing"',
-    '',
-  ].join('\n'));
+  await writeFile(join(aiDir, 'settings.json'), JSON.stringify({
+    extensions: [],
+    packages: [],
+  }, null, 2) + '\n');
 
   await writeFile(join(aiDir, 'AGENTS.md'), [
     '# AGENTS.md',
@@ -365,36 +321,33 @@ async function cmdInit(): Promise<void> {
   ].join('\n'));
 
   console.log('Created:');
-  console.log('  .ai/dot-ai.yml    (config)');
-  console.log('  .ai/AGENTS.md     (template)');
-  console.log('\nNext: add SOUL.md, USER.md, skills/, memory/ as needed.');
+  console.log('  .ai/settings.json  (config)');
+  console.log('  .ai/AGENTS.md      (template)');
+  console.log('\nNext: add SOUL.md, USER.md, skills/, extensions/ as needed.');
 }
+
+// ── Boot ──
 
 async function cmdBoot(): Promise<void> {
   const root = await resolveWorkspace();
   const start = performance.now();
 
-  // Try v6 first
   const runtime = new DotAiRuntime({ workspaceRoot: root });
   await runtime.boot();
   const duration = Math.round(performance.now() - start);
   const diag = runtime.diagnostics;
 
   console.log(`dot-ai boot — ${root}\n`);
-  console.log(`Mode: ${diag.v6 ? 'v6 (extensions)' : 'legacy (providers)'}`);
   console.log(`Extensions: ${diag.extensions.length}`);
-  if (diag.v6) {
-    console.log(`Vocabulary: ${diag.vocabularySize ?? 0} labels`);
-  } else {
-    const active = Object.entries(diag.providerStatus).filter(([, v]) => v).map(([k]) => k);
-    console.log(`Providers: ${active.join(', ') || 'none'}`);
-  }
+  console.log(`Vocabulary: ${diag.vocabularySize} labels`);
   console.log(`Tools: ${diag.capabilityCount}`);
   console.log(`Tiers: ${diag.usedTiers.join(', ') || 'none'}`);
   console.log(`\nBoot complete in ${duration}ms`);
 
   await runtime.flush();
 }
+
+// ── Trace ──
 
 async function cmdTrace(rawArgs: string[]): Promise<void> {
   const flags = new Set(rawArgs.filter(a => a.startsWith('--')));
@@ -410,7 +363,6 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   const root = await resolveWorkspace();
   const start = performance.now();
 
-  // Use v6 runtime for trace
   const runtime = new DotAiRuntime({ workspaceRoot: root });
   await runtime.boot();
   const result = await runtime.processPrompt(prompt);
@@ -419,9 +371,8 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   if (jsonMode) {
     const output = {
       prompt,
-      mode: runtime.isV6 ? 'v6' : 'legacy',
-      labels: result.labels?.map(l => l.name) ?? result.enriched.labels.map(l => l.name),
-      routing: result.routing ?? result.enriched.routing,
+      labels: result.labels?.map(l => l.name),
+      routing: result.routing,
       sections: result.sections?.map(s => ({
         id: s.id,
         title: s.title,
@@ -437,7 +388,6 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
     console.log(JSON.stringify(output, null, 2));
   } else {
     console.log(`dot-ai trace — "${prompt}"\n`);
-    console.log(`Mode: ${runtime.isV6 ? 'v6 (extensions)' : 'legacy (providers)'}`);
 
     const labels = result.labels ?? result.enriched.labels;
     console.log(`Labels: [${labels.map(l => l.name).join(', ')}]`);
@@ -465,31 +415,7 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   await runtime.flush();
 }
 
-async function cmdConsolidate(): Promise<void> {
-  const root = await resolveWorkspace();
-
-  clearProviders();
-  registerDefaults();
-
-  const rawConfig = await loadConfig(root);
-  const config = injectRoot(rawConfig, root);
-  const providers = await createProviders(config);
-
-  if (!providers.memory) {
-    console.log('No memory provider configured.');
-    return;
-  }
-
-  if (!providers.memory.consolidate) {
-    console.log('Memory provider does not support consolidation.');
-    return;
-  }
-
-  const report = await providers.memory.consolidate();
-  console.log(`dot-ai consolidate — ${root}\n`);
-  console.log(`Archived: ${report.archived}`);
-  console.log(`Deleted:  ${report.deleted}`);
-}
+// ── Migrate ──
 
 async function cmdMigrate(): Promise<void> {
   const ws = await resolveWorkspace();

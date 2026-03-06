@@ -90,14 +90,12 @@ async function handlePromptSubmit(
 
 async function handlePreCompact(
   event: Record<string, unknown>,
-  runtime: Pick<DotAiRuntime, 'providers'>,
+  runtime: Pick<DotAiRuntime, 'fire'>,
 ): Promise<void> {
   const summary = (event.summary ?? event.content ?? '') as string;
-  if (summary && runtime.providers?.memory) {
-    await runtime.providers.memory.store({
-      content: `[compaction] ${summary.slice(0, 1000)}`,
-      type: 'log',
-      date: new Date().toISOString().slice(0, 10),
+  if (summary) {
+    await runtime.fire('agent_end', {
+      response: `[compaction] ${summary.slice(0, 1000)}`,
     });
   }
 }
@@ -113,13 +111,12 @@ async function handleStop(
 }
 
 function handleSessionStart(
-  event: Record<string, unknown>,
+  _event: Record<string, unknown>,
   runtime: Pick<DotAiRuntime, 'diagnostics'>,
   errOut: string[] = [],
 ): void {
   const diag = runtime.diagnostics;
-  const mode = diag.v6 ? 'v6' : 'legacy';
-  errOut.push(`[dot-ai] Booted (${mode})\n`);
+  errOut.push(`[dot-ai] Booted\n`);
   if (diag.extensions.length > 0) {
     errOut.push(`[dot-ai] ${diag.extensions.length} extension(s), ${diag.capabilityCount} tool(s)\n`);
     for (const ext of diag.extensions) {
@@ -141,15 +138,13 @@ function makeRuntime(): DotAiRuntime {
     fireToolCall: vi.fn().mockResolvedValue(null),
     processPrompt: vi.fn().mockResolvedValue({ formatted: '', enriched: {}, capabilities: [] }),
     learn: vi.fn().mockResolvedValue(undefined),
-    providers: null,
-    diagnostics: { extensions: [], usedTiers: [], providerStatus: {}, capabilityCount: 0, v6: false },
+    fire: vi.fn().mockResolvedValue([]),
+    diagnostics: { extensions: [], usedTiers: [], capabilityCount: 0, vocabularySize: 0 },
     flush: vi.fn().mockResolvedValue(undefined),
     boot: vi.fn().mockResolvedValue(undefined),
-    fire: vi.fn().mockResolvedValue([]),
     shutdown: vi.fn().mockResolvedValue(undefined),
     capabilities: [],
     isBooted: true,
-    isV6: false,
     runner: null,
   } as unknown as DotAiRuntime;
 }
@@ -182,8 +177,6 @@ describe('MEMORY_FILE_RE', () => {
   });
 
   it('does not match when filename has space before .md', () => {
-    // The pattern [^\s]* stops at whitespace — "memory/foo .md" won't match
-    // because the space breaks the non-space class
     expect(MEMORY_FILE_RE.test('memory/foo .md')).toBe(false);
   });
 });
@@ -266,7 +259,6 @@ describe('handlePreToolUse', () => {
     });
 
     it('runs extension check BEFORE hardcoded memory check', async () => {
-      // Extension blocks — hardcoded check never runs (extension reason differs)
       vi.mocked(runtime.fireToolCall).mockResolvedValue({ decision: 'block', reason: 'Custom extension block' });
 
       const result = await handlePreToolUse(
@@ -458,7 +450,6 @@ describe('handlePreToolUse', () => {
         out,
       );
 
-      // Read is not Write/Edit/Bash — no hardcoded block
       expect(result).toBeNull();
     });
   });
@@ -525,67 +516,46 @@ describe('handlePromptSubmit', () => {
 });
 
 describe('handlePreCompact', () => {
-  it('stores compaction summary when memory provider exists', async () => {
-    const store = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      ...makeRuntime(),
-      providers: { memory: { store } } as unknown as DotAiRuntime['providers'],
-    };
+  it('fires agent_end with compaction summary', async () => {
+    const fire = vi.fn().mockResolvedValue([]);
+    const runtime = { fire } as unknown as DotAiRuntime;
 
     await handlePreCompact({ summary: 'session wrapped up nicely' }, runtime);
 
-    expect(store).toHaveBeenCalledOnce();
-    const call = store.mock.calls[0][0];
-    expect(call.content).toContain('[compaction] session wrapped up nicely');
-    expect(call.type).toBe('log');
-    expect(call.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(fire).toHaveBeenCalledWith('agent_end', {
+      response: '[compaction] session wrapped up nicely',
+    });
   });
 
   it('truncates summary to 1000 characters', async () => {
-    const store = vi.fn().mockResolvedValue(undefined);
+    const fire = vi.fn().mockResolvedValue([]);
+    const runtime = { fire } as unknown as DotAiRuntime;
     const longSummary = 'x'.repeat(2000);
-    const runtime = {
-      ...makeRuntime(),
-      providers: { memory: { store } } as unknown as DotAiRuntime['providers'],
-    };
 
     await handlePreCompact({ summary: longSummary }, runtime);
 
-    const call = store.mock.calls[0][0];
-    // "[compaction] " prefix (13 chars) + 1000 chars of content
-    expect(call.content.length).toBe('[compaction] '.length + 1000);
+    const call = fire.mock.calls[0][1];
+    expect(call.response.length).toBe('[compaction] '.length + 1000);
   });
 
   it('reads from content field when summary is absent', async () => {
-    const store = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      ...makeRuntime(),
-      providers: { memory: { store } } as unknown as DotAiRuntime['providers'],
-    };
+    const fire = vi.fn().mockResolvedValue([]);
+    const runtime = { fire } as unknown as DotAiRuntime;
 
     await handlePreCompact({ content: 'fallback summary' }, runtime);
 
-    expect(store).toHaveBeenCalledOnce();
-    expect(store.mock.calls[0][0].content).toContain('fallback summary');
-  });
-
-  it('does nothing when no memory provider', async () => {
-    const runtime = { ...makeRuntime(), providers: null };
-
-    // Should not throw
-    await expect(handlePreCompact({ summary: 'hello' }, runtime)).resolves.toBeUndefined();
+    expect(fire).toHaveBeenCalledWith('agent_end', {
+      response: '[compaction] fallback summary',
+    });
   });
 
   it('does nothing when summary is empty', async () => {
-    const store = vi.fn();
-    const runtime = {
-      ...makeRuntime(),
-      providers: { memory: { store } } as unknown as DotAiRuntime['providers'],
-    };
+    const fire = vi.fn().mockResolvedValue([]);
+    const runtime = { fire } as unknown as DotAiRuntime;
 
     await handlePreCompact({ summary: '' }, runtime);
 
-    expect(store).not.toHaveBeenCalled();
+    expect(fire).not.toHaveBeenCalled();
   });
 });
 
@@ -631,8 +601,8 @@ describe('handleSessionStart', () => {
           { path: '/ext/my-ext.js', handlerCounts: { prompt_submit: 1 }, toolNames: [], commandNames: [], tiers: [] },
         ],
         usedTiers: [],
-        providerStatus: {},
-        capabilityCount: 0, v6: false,
+        capabilityCount: 0,
+        vocabularySize: 0,
       },
     };
 
@@ -651,8 +621,8 @@ describe('handleSessionStart', () => {
           { path: '/ext/my-ext.js', handlerCounts: { [unsupportedEvent]: 1 }, toolNames: [], commandNames: [], tiers: [] },
         ],
         usedTiers: [],
-        providerStatus: {},
-        capabilityCount: 0, v6: false,
+        capabilityCount: 0,
+        vocabularySize: 0,
       },
     };
 
@@ -666,7 +636,6 @@ describe('handleSessionStart', () => {
 
   it('does not warn for events that ARE supported', () => {
     const errOut: string[] = [];
-    // Pick the first supported event from ADAPTER_CAPABILITIES
     const supportedEvent = [...ADAPTER_CAPABILITIES['claude-code']][0];
     const runtime = {
       ...makeRuntime(),
@@ -675,8 +644,8 @@ describe('handleSessionStart', () => {
           { path: '/ext/my-ext.js', handlerCounts: { [supportedEvent]: 1 }, toolNames: [], commandNames: [], tiers: [] },
         ],
         usedTiers: [],
-        providerStatus: {},
-        capabilityCount: 0, v6: false,
+        capabilityCount: 0,
+        vocabularySize: 0,
       },
     };
 
@@ -686,12 +655,11 @@ describe('handleSessionStart', () => {
     expect(warnings).toHaveLength(0);
   });
 
-  it('logs boot mode when no extensions are loaded', () => {
+  it('logs boot message when no extensions are loaded', () => {
     const errOut: string[] = [];
     handleSessionStart({}, makeRuntime(), errOut);
 
     expect(errOut.some(l => l.includes('Booted'))).toBe(true);
-    // No extension-related messages beyond the boot line
     expect(errOut.filter(l => l.includes('extension')).length).toBe(0);
   });
 });
@@ -703,7 +671,6 @@ describe('ADAPTER_CAPABILITIES claude-code set', () => {
 
   it('contains expected event names', () => {
     const set = ADAPTER_CAPABILITIES['claude-code'];
-    // These are the events wired in hook.ts
     expect(set.size).toBeGreaterThan(0);
   });
 });

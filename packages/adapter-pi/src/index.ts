@@ -88,8 +88,8 @@ export default function dotAiPiExtension(pi: PiExtensionAPI): void {
     const prompt = lastMessage?.content ?? '';
     const result = await runtime.processPrompt(prompt);
     const response: { systemPrompt: string; model?: string } = { systemPrompt: result.formatted };
-    // If v6 routing suggests a model change, propagate it to Pi
-    if (runtime.isV6 && result.routing?.model && result.routing.model !== 'default') {
+    // If routing suggests a model change, propagate it to Pi
+    if (result.routing?.model && result.routing.model !== 'default') {
       response.model = result.routing.model;
     }
     return response;

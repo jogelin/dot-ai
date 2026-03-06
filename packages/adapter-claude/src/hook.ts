@@ -55,8 +55,7 @@ async function handleSessionStart(event: Record<string, unknown>): Promise<DotAi
 
   // Log diagnostics
   const diag = runtime.diagnostics;
-  const mode = diag.v6 ? 'v6' : 'legacy';
-  process.stderr.write(`[dot-ai] Booted (${mode})\n`);
+  process.stderr.write(`[dot-ai] Booted\n`);
   if (diag.extensions.length > 0) {
     process.stderr.write(`[dot-ai] ${diag.extensions.length} extension(s), ${diag.capabilityCount} tool(s)\n`);
     for (const ext of diag.extensions) {
@@ -92,19 +91,9 @@ async function handlePreCompact(event: Record<string, unknown>): Promise<DotAiRu
   try {
     const summary = (event.summary ?? event.content ?? '') as string;
     if (summary) {
-      // In v6 mode, fire agent_end so memory extensions can store the compaction summary.
-      // In legacy mode, use providers directly.
-      if (runtime.isV6) {
-        await runtime.fire('agent_end', {
-          response: `[compaction] ${summary.slice(0, 1000)}`,
-        });
-      } else if (runtime.providers?.memory) {
-        await runtime.providers.memory.store({
-          content: `[compaction] ${summary.slice(0, 1000)}`,
-          type: 'log',
-          date: new Date().toISOString().slice(0, 10),
-        });
-      }
+      await runtime.fire('agent_end', {
+        response: `[compaction] ${summary.slice(0, 1000)}`,
+      });
     }
   } catch (err) {
     process.stderr.write(`[dot-ai] pre-compact error: ${err}\n`);

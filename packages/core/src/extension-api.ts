@@ -6,7 +6,6 @@ import type {
   AgentEndEvent,
   ToolDefinition,
   ExtensionContext,
-  // v6 types
   ResourcesDiscoverResult,
   LabelExtractEvent,
   ContextEnrichEvent, ContextEnrichResult,
@@ -14,16 +13,11 @@ import type {
   InputEvent, InputResult,
   CommandDefinition,
 } from './extension-types.js';
-import type { MemoryEntry, Skill, Label, RoutingResult, Task, TaskFilter } from './types.js';
-
-// ══════════════════════════════════════════════════════════════════════════════
-// v6 Extension API
-// ══════════════════════════════════════════════════════════════════════════════
+import type { Label } from './types.js';
 
 /**
  * v6 Extension Context — passed as second argument to every event handler.
  * Extends the base ExtensionContext with labels and optional agent capabilities.
- * No providers property — extensions communicate via events.
  */
 export interface ExtensionContextV6 extends ExtensionContext {
   /** Current prompt labels (available after label_extract) */
@@ -39,9 +33,8 @@ export interface ExtensionContextV6 extends ExtensionContext {
 }
 
 /**
- * v6 Extension API — passed to extension factory functions.
+ * Extension API — passed to extension factory functions.
  * Pi-compatible: same on(event) + registerTool() + registerCommand() pattern.
- * No providers property — extensions access data via events.
  */
 export interface ExtensionAPI {
   // ── Event subscription ──
@@ -70,7 +63,7 @@ export interface ExtensionAPI {
   on(event: 'turn_start', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'turn_end', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
 
-  // ── Legacy events (deprecated, kept for v5 compatibility) ──
+  // ── Legacy events (kept for transition) ──
 
   /** @deprecated Use context_enrich instead */
   on(event: 'context_inject', handler: (e: ContextInjectEvent, ctx: ExtensionContextV6) => Promise<ContextInjectResult | void>): void;
@@ -103,64 +96,4 @@ export interface ExtensionAPI {
 
   /** Workspace root directory (contains .ai/) */
   workspaceRoot: string;
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Deprecated v5 API (kept for Phase 1 coexistence)
-// ══════════════════════════════════════════════════════════════════════════════
-
-/**
- * @deprecated Use ExtensionContextV6 instead. Will be removed in v7.
- */
-export interface DotAiExtensionContext extends ExtensionContext {
-  providers: {
-    memory?: {
-      search(query: string, labels?: string[]): Promise<MemoryEntry[]>;
-      store(entry: Omit<MemoryEntry, 'source'>): Promise<void>;
-    };
-    skills?: {
-      match(labels: Label[]): Promise<Skill[]>;
-      load(name: string): Promise<string | null>;
-    };
-    routing?: {
-      route(labels: Label[]): Promise<RoutingResult>;
-    };
-    tasks?: {
-      list(filter?: TaskFilter): Promise<Task[]>;
-      get(id: string): Promise<Task | null>;
-      create(task: Omit<Task, 'id'>): Promise<Task>;
-      update(id: string, patch: Partial<Task>): Promise<Task>;
-    };
-  };
-}
-
-/**
- * @deprecated Use ExtensionAPI instead. Will be removed in v7.
- */
-export interface DotAiExtensionAPI {
-  // Tier 1 Events (universal)
-  on(event: 'context_inject', handler: (e: ContextInjectEvent, ctx: DotAiExtensionContext) => Promise<ContextInjectResult | void>): void;
-  on(event: 'tool_call', handler: (e: ToolCallEvent, ctx: DotAiExtensionContext) => Promise<ToolCallResult | void>): void;
-  on(event: 'agent_end', handler: (e: AgentEndEvent, ctx: DotAiExtensionContext) => Promise<void>): void;
-  on(event: 'session_start', handler: (e: undefined, ctx: DotAiExtensionContext) => Promise<void>): void;
-  on(event: 'session_end', handler: (e: undefined, ctx: DotAiExtensionContext) => Promise<void>): void;
-
-  // Tier 2 Events (rich agents)
-  on(event: 'context_modify', handler: (e: ContextModifyEvent, ctx: DotAiExtensionContext) => Promise<ContextModifyResult | void>): void;
-  on(event: 'tool_result', handler: (e: ToolResultEvent, ctx: DotAiExtensionContext) => Promise<void>): void;
-  on(event: 'turn_start', handler: (e: undefined, ctx: DotAiExtensionContext) => Promise<void>): void;
-  on(event: 'turn_end', handler: (e: undefined, ctx: DotAiExtensionContext) => Promise<void>): void;
-
-  // Tools
-  registerTool(tool: ToolDefinition): void;
-
-  // dot-ai Providers (also available via ctx.providers in handlers)
-  providers: DotAiExtensionContext['providers'];
-
-  // Inter-extension EventBus (also available via ctx.events in handlers)
-  events: {
-    on(event: string, handler: (...args: unknown[]) => void): void;
-    off(event: string, handler: (...args: unknown[]) => void): void;
-    emit(event: string, ...args: unknown[]): void;
-  };
 }

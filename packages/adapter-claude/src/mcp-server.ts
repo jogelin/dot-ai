@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * dot-ai MCP server for Claude Code.
- * Exposes buildCapabilities() as MCP tools via stdio transport.
+ * Exposes extension tools as MCP tools via stdio transport.
  * Zero dependencies — speaks JSON-RPC 2.0 directly.
  *
  * Usage in .claude/settings.json:
@@ -12,15 +12,7 @@
  *     }
  *   }
  */
-import {
-  loadConfig,
-  registerDefaults,
-  createProviders,
-  boot,
-  injectRoot,
-  buildCapabilities,
-  type Providers,
-} from '@dot-ai/core';
+import { DotAiRuntime } from '@dot-ai/core';
 import type { Capability } from '@dot-ai/core';
 
 // ── JSON-RPC types ──
@@ -42,7 +34,7 @@ interface JsonRpcResponse {
 // ── MCP Protocol constants ──
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'dot-ai';
-const SERVER_VERSION = '0.5.0';
+const SERVER_VERSION = '0.6.0';
 
 // ── State ──
 let capabilities: Capability[] = [];
@@ -57,18 +49,15 @@ async function ensureInit(): Promise<void> {
   return initPromise;
 }
 
-// ── Initialize providers ──
+// ── Initialize runtime ──
 async function initCapabilities(): Promise<void> {
   if (initialized) return;
 
   try {
     const workspaceRoot = process.cwd();
-    registerDefaults();
-    const rawConfig = await loadConfig(workspaceRoot);
-    const config = injectRoot(rawConfig, workspaceRoot);
-    const providers: Providers = await createProviders(config);
-    await boot(providers);
-    capabilities = buildCapabilities(providers);
+    const runtime = new DotAiRuntime({ workspaceRoot });
+    await runtime.boot();
+    capabilities = runtime.capabilities;
     initialized = true;
   } catch (err) {
     process.stderr.write(`[dot-ai-mcp] Init error: ${err}\n`);

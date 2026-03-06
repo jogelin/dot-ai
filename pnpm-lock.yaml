@@ -129,7 +129,7 @@ importers:
         specifier: ^2.0.0
         version: 2.6.1
 
-  packages/provider-file-identity:
+  packages/ext-file-identity:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -145,7 +145,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-file-memory:
+  packages/ext-file-memory:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -161,7 +161,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-file-prompts:
+  packages/ext-file-prompts:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -177,7 +177,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-file-skills:
+  packages/ext-file-skills:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -193,7 +193,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-file-tasks:
+  packages/ext-file-tasks:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -209,7 +209,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-file-tools:
+  packages/ext-file-tools:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -225,7 +225,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-rules-routing:
+  packages/ext-rules-routing:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*
@@ -241,7 +241,7 @@ importers:
         specifier: ^4.0.0
         version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/provider-sqlite-memory:
+  packages/ext-sqlite-memory:
     dependencies:
       '@dot-ai/core':
         specifier: workspace:*

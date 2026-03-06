@@ -2,16 +2,18 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
-    { "path": "packages/provider-file-memory" },
-    { "path": "packages/provider-file-skills" },
-    { "path": "packages/provider-file-identity" },
-    { "path": "packages/provider-file-tasks" },
-    { "path": "packages/provider-file-tools" },
-    { "path": "packages/provider-rules-routing" },
-    { "path": "packages/adapter-openclaw" },
+    { "path": "packages/ext-file-identity" },
+    { "path": "packages/ext-file-memory" },
+    { "path": "packages/ext-file-prompts" },
+    { "path": "packages/ext-file-skills" },
+    { "path": "packages/ext-file-tasks" },
+    { "path": "packages/ext-file-tools" },
+    { "path": "packages/ext-rules-routing" },
+    { "path": "packages/ext-sqlite-memory" },
     { "path": "packages/adapter-claude" },
-    { "path": "packages/cli" },
-    { "path": "packages/provider-sqlite-memory" },
-    { "path": "packages/adapter-sync" }
+    { "path": "packages/adapter-openclaw" },
+    { "path": "packages/adapter-pi" },
+    { "path": "packages/adapter-sync" },
+    { "path": "packages/cli" }
   ]
 }

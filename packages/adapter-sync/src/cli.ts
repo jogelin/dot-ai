@@ -9,15 +9,7 @@
  */
 import { argv, cwd, exit } from 'node:process';
 import { join } from 'node:path';
-import {
-  loadConfig,
-  injectRoot,
-  registerDefaults,
-  clearProviders,
-  createProviders,
-  boot,
-  enrich,
-} from '@dot-ai/core';
+import { DotAiRuntime } from '@dot-ai/core';
 import { syncToFile, unsyncFromFile } from './sync.js';
 
 const args = argv.slice(2);
@@ -49,31 +41,18 @@ async function main(): Promise<void> {
     return;
   }
 
-  clearProviders();
-  registerDefaults();
-
-  const rawConfig = await loadConfig(root);
-  const config = injectRoot(rawConfig, root);
-  const providers = await createProviders(config);
-  const cache = await boot(providers);
+  const runtime = new DotAiRuntime({ workspaceRoot: root });
+  await runtime.boot();
 
   // For sync, we enrich with an empty prompt (just boot context)
-  const ctx = await enrich('', providers, cache);
+  const result = await runtime.processPrompt('');
 
-  // Load skill content
-  if (providers.skills) {
-    for (const skill of ctx.skills) {
-      if (!skill.content && skill.name) {
-        skill.content = await providers.skills.load(skill.name) ?? undefined;
-      }
-    }
-  }
-
-  await syncToFile(targetPath, ctx);
+  await syncToFile(targetPath, result.enriched);
   console.log(`Synced dot-ai context to ${targetFile}`);
-  console.log(`  Identities: ${ctx.identities.length}`);
-  console.log(`  Skills: ${ctx.skills.length}`);
-  console.log(`  Tools: ${ctx.tools.length}`);
+  console.log(`  Sections: ${result.sections?.length ?? 0}`);
+  console.log(`  Tools: ${result.capabilities.length}`);
+
+  await runtime.flush();
 }
 
 main().catch((err) => {

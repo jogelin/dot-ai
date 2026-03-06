@@ -1,14 +1,15 @@
 {
-  "name": "@dot-ai/pi",
+  "name": "@dot-ai/ext-file-prompts",
   "version": "0.6.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jogelin/dot-ai",
-    "directory": "packages/adapter-pi"
-  },
+  "description": "File-based prompt template extension for dot-ai",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "dot-ai": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
@@ -20,8 +21,5 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
