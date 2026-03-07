@@ -1,3 +1,14 @@
+## 0.11.3 (2026-03-07)
+
+### 🩹 Fixes
+
+- **adapter-openclaw:** plugin config goes under entries.dot-ai.config ([f3b22a2](https://github.com/jogelin/dot-ai/commit/f3b22a2))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.2 (2026-03-07)
 
 ### 🚀 Features
