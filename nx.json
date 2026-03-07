@@ -28,7 +28,7 @@
     "projectsRelationship": "fixed",
     "releaseTagPattern": "v{version}",
     "version": {
-      "conventionalCommits": true,
+      "specifierSource": "conventional-commits",
       "currentVersionResolver": "git-tag",
       "git": {
         "commit": false,
