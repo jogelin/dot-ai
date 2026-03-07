@@ -1,7 +1,7 @@
 # dot-ai — Universal AI Workspace Convention
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.0-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-latest-green.svg)](package.json)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-compatible-purple.svg)](https://github.com/openclaw/openclaw)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-blue.svg)](https://claude.ai/claude-code)
 [![Pi](https://img.shields.io/badge/Pi-compatible-orange.svg)](https://github.com/jogelin/dot-ai)
@@ -309,11 +309,14 @@ Tasks are managed through the task extension. The extension can be backed by:
 - **File-based** (`@dot-ai/ext-file-tasks`) — JSON files in `.ai/memory/tasks/`
 - **Custom** — Any extension implementing the task pattern
 
-Configure in `.ai/dot-ai.yml`:
+Configure in `.ai/settings.json`:
 
-```yaml
-extensions:
-  - use: '@dot-ai/ext-file-tasks'
+```json
+{
+  "packages": [
+    "@dot-ai/ext-file-tasks"
+  ]
+}
 ```
 
 Tasks support standard fields: `id`, `text`, `status`, `priority`, `project`, `tags`.
@@ -450,22 +453,27 @@ All large skills (>100 lines) use INDEX/SKILL separation:
 
 ## 🔧 Configuration
 
-### dot-ai.yml
+### settings.json
 
-The central configuration file at `.ai/dot-ai.yml`:
+The central configuration file at `.ai/settings.json`:
 
-```yaml
-# Extension configuration (v7)
-extensions:
-  enabled: true
-  path: '.ai/extensions'
-  packages:
-    - '@dot-ai/ext-file-identity'
-    - '@dot-ai/ext-file-memory'
-    - '@dot-ai/ext-file-skills'
-    - '@dot-ai/ext-rules-routing'
-    - '@dot-ai/ext-file-tasks'
-    - '@dot-ai/ext-file-tools'
+```json
+{
+  "packages": [
+    "@dot-ai/ext-file-identity",
+    "@dot-ai/ext-file-memory",
+    "@dot-ai/ext-file-skills",
+    "@dot-ai/ext-rules-routing",
+    "@dot-ai/ext-file-tasks",
+    "@dot-ai/ext-file-tools"
+  ],
+  "extensions": [
+    ".ai/extensions/custom.ts"
+  ],
+  "debug": {
+    "logPath": ".ai/debug.log"
+  }
+}
 ```
 
 ### OpenClaw Configuration
@@ -656,4 +664,4 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 **Made with ❤️ by the dot-ai community**
 
-*Version 0.8.0 — Last updated: 2026-03-07*
+*Last updated: 2026-03-07*

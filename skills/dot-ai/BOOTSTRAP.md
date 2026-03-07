@@ -13,17 +13,17 @@ dot-ai is a **deterministic context enrichment engine**. It transforms your prom
 3. **Format**: convert enriched context to markdown, fire `context_inject` extensions, inject into agent
 4. **Learn** (after response): store significant outcomes in memory
 
-## 7 Providers (configured in `.ai/dot-ai.yml`)
+## Extensions (configured in `.ai/settings.json`)
 
-| Provider | Purpose |
-|----------|---------|
-| Memory | search + store memories (SQLite, files, custom) |
-| Skills | match skills to prompt labels, lazy-load content |
-| Identity | load AGENTS.md, SOUL.md, USER.md, IDENTITY.md |
-| Routing | decide model tier (haiku/sonnet/opus) |
-| Tasks | CRUD tasks (Cockpit API, files, custom) |
-| Tools | discover external tools |
-| Prompts | reusable prompt templates |
+| Extension | Purpose |
+|-----------|---------|
+| `@dot-ai/ext-file-identity` | Identity — load AGENTS.md, SOUL.md, USER.md, IDENTITY.md |
+| `@dot-ai/ext-file-memory` / `@dot-ai/ext-sqlite-memory` | Memory — search + store memories (files or SQLite) |
+| `@dot-ai/ext-file-skills` | Skills — match skills to prompt labels, lazy-load content |
+| `@dot-ai/ext-rules-routing` | Routing — decide model tier (haiku/sonnet/opus) |
+| `@dot-ai/ext-file-tasks` | Tasks — CRUD tasks (files, custom) |
+| `@dot-ai/ext-file-tools` | Tools — discover external tools |
+| `@dot-ai/ext-file-prompts` | Prompts — reusable prompt templates |
 
 ## Capabilities (interactive tools)
 

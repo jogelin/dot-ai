@@ -136,7 +136,7 @@ Each has a JSON Schema for parameters and an `execute()` function. Adapters tran
 
 ## Hooks
 
-4 pipeline extension points, configured in `dot-ai.yml`, executed sequentially.
+4 pipeline extension points, configured in `settings.json`, executed sequentially.
 
 | Event | Transforming? | Signature |
 |-------|---------------|-----------|
@@ -172,31 +172,38 @@ interface Node { name: string; path: string; root: boolean; }
 
 Root node always included. Sub-nodes discovered in configured scan directories (default: `projects`). Nodes injected into all providers via `injectRoot()` so file-based providers scan all `.ai/` dirs.
 
-## Configuration (dot-ai.yml)
+## Configuration (settings.json)
 
-Located at `.ai/dot-ai.yml`. Each domain declares `use` (package name) and optional `with` (options).
+Located at `.ai/settings.json`. Each extension declares its package name and optional options.
 
-```yaml
-memory:
-  use: '@dot-ai/provider-sqlite-memory'
-  with: { dbPath: '.ai/memory.db' }
-skills:
-  use: '@dot-ai/provider-file-skills'
-workspace:
-  scanDirs: 'projects'
-debug:
-  logPath: '.ai/trace.jsonl'
+```json
+{
+  "extensions": [
+    { "use": "@dot-ai/ext-sqlite-memory", "with": { "dbPath": ".ai/memory.db" } },
+    { "use": "@dot-ai/ext-file-skills" },
+    { "use": "@dot-ai/ext-file-identity" },
+    { "use": "@dot-ai/ext-rules-routing" },
+    { "use": "@dot-ai/ext-file-tools" },
+    { "use": "@dot-ai/ext-file-prompts" }
+  ],
+  "workspace": {
+    "scanDirs": "projects"
+  },
+  "debug": {
+    "logPath": ".ai/trace.jsonl"
+  }
+}
 ```
 
-- `${VAR_NAME}` resolved from environment at load time
-- Missing sections default to file-based providers
-- Minimal hand-written YAML parser (no dependency)
+- Environment variable interpolation supported in values
+- Missing extensions default to file-based implementations
+- Standard JSON format (no custom parser)
 
 ## Creating a Custom Provider
 
 1. Implement the contract interface
 2. Export as `create{Role}Provider` function, `{Role}Provider` class, or default export
-3. Declare in `dot-ai.yml` with `use: '@my/package'`
+3. Declare in `settings.json` with `"use": "@my/package"`
 
 The loader dynamically imports the package and instantiates with `with` options. For pre-registration: `registerProvider('@my/pkg:memory', factory)`.
 

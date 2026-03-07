@@ -38,14 +38,15 @@ DotAiRuntime
 
 ## Configuration
 
-`dot-ai.yml` in the `.ai/` directory:
+`settings.json` in the `.ai/` directory:
 
-```yaml
-extensions:
-  paths:
-    - ./custom-extensions
-  packages:
-    - my-dot-ai-extension
+```json
+{
+  "extensions": {
+    "paths": ["./custom-extensions"],
+    "packages": ["my-dot-ai-extension"]
+  }
+}
 ```
 
 ## DotAiRuntime
@@ -162,7 +163,7 @@ Adapters call `formatSections(sections)` to produce the final markdown string in
 
 ```
 runtime.boot()
-  -> loadConfig(.ai/dot-ai.yml)
+  -> loadConfig(.ai/settings.json)
   -> discoverExtensions()
   -> loadExtensions()
        each factory calls registerSkill / registerIdentity / contributeLabels / registerTool

@@ -411,12 +411,14 @@ Add a `dot-ai` field to your `package.json`:
 }
 ```
 
-Then register the package in your project's `dot-ai.yml`:
+Then register the package in your project's `settings.json`:
 
-```yaml
-extensions:
-  packages:
-    - my-dot-ai-extension
+```json
+{
+  "extensions": {
+    "packages": ["my-dot-ai-extension"]
+  }
+}
 ```
 
 Install: `dot-ai install my-dot-ai-extension`
@@ -425,12 +427,14 @@ Install: `dot-ai install my-dot-ai-extension`
 
 Place `.ts` or `.js` files in `.ai/extensions/` (project-level) or `~/.ai/extensions/` (global).
 
-You can also specify additional paths in `dot-ai.yml`:
+You can also specify additional paths in `settings.json`:
 
-```yaml
-extensions:
-  paths:
-    - ./custom/extensions
+```json
+{
+  "extensions": {
+    "paths": ["./custom/extensions"]
+  }
+}
 ```
 
 ### Discovery order
@@ -470,13 +474,14 @@ Extensions never crash the runtime.
 
 ## Configuration Reference
 
-```yaml
-# dot-ai.yml
-extensions:
-  paths:
-    - ./my-extensions       # Additional discovery paths (resolved relative to workspace root)
-  packages:
-    - my-dot-ai-extension   # npm packages with dot-ai.extensions field
+```json
+// .ai/settings.json
+{
+  "extensions": {
+    "paths": ["./my-extensions"],
+    "packages": ["my-dot-ai-extension"]
+  }
+}
 ```
 
 Extensions can access their own configuration via `api.config`, which is populated from extension-specific config files or environment variables.

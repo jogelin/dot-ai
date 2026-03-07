@@ -6,7 +6,7 @@ OpenClaw adapter for dot-ai — universal context enrichment across AI agents.
 
 AI agents (OpenClaw, Claude Code, Cursor, etc.) each implement their own memory, skills, and context systems. They're all solving the same problem differently, with hardcoded backends and no portability.
 
-**dot-ai generalizes this.** One configuration (`dot-ai.yml`), pluggable providers, multiple adapters. Switch your memory backend without touching agent config. Use the same memory across OpenClaw and Claude Code.
+**dot-ai generalizes this.** One configuration (`settings.json`), pluggable providers, multiple adapters. Switch your memory backend without touching agent config. Use the same memory across OpenClaw and Claude Code.
 
 ## Comparison: How agents handle memory
 
@@ -46,7 +46,7 @@ Auto-memory system
 ### dot-ai (provider-based)
 
 ```
-dot-ai.yml (user config)
+settings.json (user config)
 │
 ├── MemoryProvider interface
 │   ├── search(query, labels) → MemoryEntry[]
@@ -63,7 +63,7 @@ dot-ai.yml (user config)
     └── @dot-ai/adapter-claude   → UserPromptSubmit hook
 ```
 
-- **One config** (`dot-ai.yml`) controls the backend for all agents
+- **One config** (`settings.json`) controls the backend for all agents
 - **Provider swap** = one line change, no code modification
 - **Self-describing** = `describe()` tells the LLM exactly what system is active
 - **Same memory** shared across OpenClaw and Claude Code sessions
@@ -185,7 +185,7 @@ When OpenClaw adds new kinds, this adapter can declare them for native slot inte
 ## Architecture
 
 ```
-dot-ai.yml
+settings.json
     │
     ▼
 @dot-ai/core ─── contracts (6 interfaces) + engine (boot/enrich/learn)

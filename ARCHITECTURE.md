@@ -81,7 +81,7 @@ await runtime.boot();
 ```
 
 What happens:
-1. Load config from `.ai/dot-ai.yml`
+1. Load config from `.ai/settings.json`
 2. Discover extensions (`.ai/extensions/*.ts` + installed packages)
 3. Run extension factories — each calls `registerSkill()`, `registerIdentity()`, `contributeLabels()`, `registerTool()`, `registerCommand()`, and subscribes to events
 4. Build vocabulary from all contributed labels

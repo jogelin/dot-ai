@@ -181,7 +181,7 @@ Skills check this file to avoid running too frequently.
 
 dot-ai v4 handles boot programmatically via the adapter hook:
 
-1. **Load config**: Read `.ai/dot-ai.yml` for provider configuration
+1. **Load config**: Read `.ai/settings.json` for extension configuration
 2. **Discover nodes**: Scan `projects/*/` for `.ai/` directories (configurable via `workspace.scanDirs`)
 3. **Boot providers**: Load identities, skills, build vocabulary
 4. **Ready**: Vocabulary-based label matching routes prompts to relevant skills
