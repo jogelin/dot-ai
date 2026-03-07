@@ -1,3 +1,15 @@
+## 0.11.5 (2026-03-07)
+
+### 🩹 Fixes
+
+- **adapter-openclaw:** show workspace path in service start log ([70b0b36](https://github.com/jogelin/dot-ai/commit/70b0b36))
+- **core:** rename jitiImport variable to avoid collision with jiti's internal scope injection ([ca9ccf2](https://github.com/jogelin/dot-ai/commit/ca9ccf2))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.4 (2026-03-07)
 
 ### 🚀 Features
