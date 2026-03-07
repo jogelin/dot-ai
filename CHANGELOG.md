@@ -1,3 +1,19 @@
+## 0.11.2 (2026-03-07)
+
+### 🚀 Features
+
+- **adapter-openclaw:** read workspaceRoot from plugin config ([953a5d7](https://github.com/jogelin/dot-ai/commit/953a5d7))
+
+### 🩹 Fixes
+
+- **adapter-openclaw:** workspace resolution order cwd > config > fallback ([f3f57a9](https://github.com/jogelin/dot-ai/commit/f3f57a9))
+- **adapter-openclaw:** check cwd directly instead of walking up parents ([e244f6b](https://github.com/jogelin/dot-ai/commit/e244f6b))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.1 (2026-03-07)
 
 ### 🚀 Features
