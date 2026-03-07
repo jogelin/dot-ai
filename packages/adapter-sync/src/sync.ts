@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import type { Capability, EnrichedContext } from '@dot-ai/core';
-import { DotAiRuntime, formatContext, formatToolHints } from '@dot-ai/core';
+import type { Capability, Section } from '@dot-ai/core';
+import { DotAiRuntime, formatSections, formatToolHints } from '@dot-ai/core';
 
 const START_MARKER = '<!-- dot-ai:start -->';
 const END_MARKER = '<!-- dot-ai:end -->';
@@ -15,10 +15,10 @@ const END_MARKER = '<!-- dot-ai:end -->';
  */
 export async function syncToFile(
   targetPath: string,
-  ctx: EnrichedContext,
+  sections: Section[],
   capabilities?: Capability[],
 ): Promise<void> {
-  let formatted = formatContext(ctx);
+  let formatted = formatSections(sections);
 
   // Append tool hints from extension capabilities
   if (capabilities && capabilities.length > 0) {
@@ -59,7 +59,7 @@ async function writeBlock(targetPath: string, block: string): Promise<void> {
 }
 
 /**
- * Sync workspace context to a target file using DotAiRuntime (v6).
+ * Sync workspace context to a target file using DotAiRuntime.
  * Boots the runtime, processes an empty prompt to get full context,
  * and writes the result with markers.
  */
@@ -71,7 +71,8 @@ export async function syncWorkspace(
   const runtime = new DotAiRuntime({ workspaceRoot });
   await runtime.boot();
   const result = await runtime.processPrompt(prompt);
-  await syncFormatted(targetPath, result.formatted, result.capabilities);
+  const formatted = formatSections(result.sections);
+  await syncFormatted(targetPath, formatted, runtime.capabilities);
   await runtime.flush();
 }
 

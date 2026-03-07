@@ -14,7 +14,7 @@ interface ToolMeta {
   node?: string;
 }
 
-export default function extFileTools(api: ExtensionAPI): void {
+export default async function extFileTools(api: ExtensionAPI): Promise<void> {
   const nodes = discoverNodes(api.workspaceRoot, parseScanDirs('projects'));
   const toolsDirs = nodes.map(n => ({ dir: join(n.path, 'tools'), node: n.name }));
   let cache: ToolMeta[] | null = null;
@@ -37,12 +37,11 @@ export default function extFileTools(api: ExtensionAPI): void {
     return tools;
   }
 
-  api.on('resources_discover', async () => {
-    const tools = await listTools();
-    const labels = new Set<string>();
-    for (const t of tools) for (const l of t.labels) labels.add(l);
-    return { labels: Array.from(labels) };
-  });
+  // Eagerly discover tools and contribute labels at boot
+  const bootTools = await listTools();
+  const allLabels = new Set<string>();
+  for (const t of bootTools) for (const l of t.labels) allLabels.add(l);
+  api.contributeLabels(Array.from(allLabels));
 
   api.on('context_enrich', async (event) => {
     const tools = await listTools();

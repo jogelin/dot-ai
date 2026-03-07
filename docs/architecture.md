@@ -1,80 +1,46 @@
-# dot-ai v5 Architecture
+# dot-ai v7 Architecture
 
 ## Overview
 
-dot-ai v5 = providers + engine + extensions + adapters
+dot-ai v7 = extensions + runtime + adapters
+
+Everything is an extension. There are no providers, no hooks, no tiers.
 
 ```
 Adapter (Claude Code / Pi / OpenClaw / Sync)
   |
   v
 DotAiRuntime
-  +-- Providers (memory, skills, identity, routing, tasks, tools, prompts)
-  +-- Engine (boot -> enrich -> format -> learn)
-  +-- Extensions
+  +-- Extensions (the ONLY way to contribute context)
   |     +-- ExtensionLoader (discover + load via jiti)
   |     +-- ExtensionRunner (fire events, collect results)
-  +-- Capabilities (memory_recall, memory_store, task_*, extension tools)
+  +-- Vocabulary (labels from skills, identities, extensions)
+  +-- Capabilities (tools from extensions)
 ```
 
-## Core Packages
+## Packages
 
 | Package | Purpose |
 |---------|---------|
-| `@dot-ai/core` | Types, contracts, engine, runtime, extensions, capabilities |
-| `@dot-ai/adapter-claude` | Claude Code integration (hooks-based) |
+| `@dot-ai/core` | Runtime, extension loader/runner, format utilities, types |
+| `@dot-ai/adapter-claude` | Claude Code hooks integration |
 | `@dot-ai/adapter-openclaw` | OpenClaw plugin |
-| `@dot-ai/adapter-pi` | Pi coding agent extension |
-| `@dot-ai/adapter-sync` | Sync to `.cursorrules` / `copilot-instructions.md` |
-| `@dot-ai/provider-file-memory` | File-based memory provider |
-| `@dot-ai/provider-sqlite-memory` | SQLite-backed memory provider |
-| `@dot-ai/provider-file-skills` | File-based skill provider |
-| `@dot-ai/provider-file-identity` | File-based identity provider |
-| `@dot-ai/provider-file-tools` | File-based tool provider |
-| `@dot-ai/provider-file-tasks` | File-based task provider |
-| `@dot-ai/provider-file-prompts` | File-based prompt provider |
-| `@dot-ai/provider-rules-routing` | Rules-based routing provider |
-| `@dot-ai/cli` | CLI commands (install, sync, etc.) |
-
-## Provider Contracts
-
-Each provider implements a contract defined in `@dot-ai/core/contracts`:
-
-| Contract | Key Methods | Purpose |
-|----------|-------------|---------|
-| `MemoryProvider` | `search()`, `store()`, `describe()`, `consolidate?()` | Store and recall memories |
-| `SkillProvider` | `list()`, `match()`, `load()` | Discover and load skills |
-| `IdentityProvider` | `load()`, `match?()` | Load identity documents (soul, agents, user) |
-| `RoutingProvider` | `route()` | Decide which model to use based on labels |
-| `TaskProvider` | `list()`, `get()`, `create()`, `update()` | CRUD for tasks |
-| `ToolProvider` | `list()`, `match()`, `load()` | Discover and match MCP tools |
-| `PromptProvider` | `list()`, `load()` | Discover and load prompt templates |
-
-All providers are optional. Unconfigured providers are simply skipped -- the engine handles any combination gracefully.
+| `@dot-ai/adapter-pi` | Pi coding agent |
+| `@dot-ai/adapter-sync` | Sync to `.cursorrules`, `copilot-instructions.md` |
+| `@dot-ai/ext-file-memory` | File-based memory extension |
+| `@dot-ai/ext-sqlite-memory` | SQLite memory extension |
+| `@dot-ai/ext-file-skills` | File-based skills extension |
+| `@dot-ai/ext-file-identity` | File-based identity extension |
+| `@dot-ai/ext-file-tools` | File-based tools extension |
+| `@dot-ai/ext-file-prompts` | File-based prompts extension |
+| `@dot-ai/ext-rules-routing` | Rules-based routing extension |
+| `@dot-ai/cli` | CLI (`init`, `boot`, `trace`, `tools`, `commands`) |
 
 ## Configuration
 
 `dot-ai.yml` in the `.ai/` directory:
 
 ```yaml
-memory:
-  use: "@dot-ai/provider-file-memory"
-  with:
-    root: ".ai"
-
-skills:
-  use: "@dot-ai/provider-file-skills"
-  with:
-    root: ".ai"
-
-identity:
-  use: "@dot-ai/provider-file-identity"
-  with:
-    root: ".ai"
-
-routing:
-  use: "@dot-ai/provider-rules-routing"
-
 extensions:
   paths:
     - ./custom-extensions
@@ -84,7 +50,7 @@ extensions:
 
 ## DotAiRuntime
 
-`DotAiRuntime` is the main entry point for adapters. It encapsulates the full pipeline lifecycle.
+`DotAiRuntime` is the main entry point for adapters. It orchestrates the full lifecycle: boot, processPrompt, fireToolCall, shutdown.
 
 ```typescript
 const runtime = new DotAiRuntime({
@@ -96,10 +62,12 @@ const runtime = new DotAiRuntime({
 await runtime.boot();
 
 // Process each prompt
-const { formatted, enriched, capabilities } = await runtime.processPrompt(userPrompt);
+const { sections, labels, routing } = await runtime.processPrompt(userPrompt);
+const formatted = formatSections(sections);
+// inject formatted into agent context
 
-// After agent responds
-await runtime.learn(agentResponse);
+// On agent response
+await runtime.fire('agent_end', { response });
 
 // End of session
 await runtime.shutdown();
@@ -111,13 +79,82 @@ await runtime.shutdown();
 |--------|------|-------------|
 | `workspaceRoot` | string | Root directory containing `.ai/` |
 | `logger` | Logger | Optional structured logger |
-| `skipIdentities` | boolean | Skip identity sections in output |
-| `maxSkills` | number | Maximum skills in formatted output |
-| `maxSkillLength` | number | Max characters per skill |
 | `tokenBudget` | number | Token budget for formatted output |
-| `providerFactories` | Record | Explicit provider factory overrides |
-| `providers` | Providers | Pre-built providers (bypasses config) |
-| `extensions` | ExtensionsConfig | Extension configuration |
+
+## Extension System
+
+Extensions are the only mechanism for contributing context, tools, labels, and behavior. Each extension is a factory function that receives an `ExtensionAPI` and registers resources at boot time and event handlers for runtime events.
+
+### Extension API
+
+```typescript
+export default async function(api: ExtensionAPI) {
+  // Boot-time registration
+  api.registerSkill(skill);          // auto-contributes labels
+  api.registerIdentity(identity);
+  api.contributeLabels(['label1']);
+  api.registerTool(toolDef);
+  api.registerCommand(cmdDef);
+
+  // Event handlers
+  api.on('context_enrich', async (event) => {
+    return { sections: [...] };
+  });
+  api.on('tool_call', async (event) => { ... });
+  api.on('agent_end', async (event) => { ... });
+  api.on('route', async (event) => { ... });
+  api.on('label_extract', async (event) => { ... });
+}
+```
+
+### Loading Flow
+
+1. `discoverExtensions()` scans `.ai/extensions/` directories, config paths, and npm packages
+2. `loadExtensions()` imports each file via jiti (or native import fallback), calls the default export with a collector API
+3. The factory registers event handlers, tools, skills, identities, and labels on the collector API
+4. The collector builds a `LoadedExtension` with handler maps and tool maps
+5. `ExtensionRunner` wraps all loaded extensions for event dispatch
+6. The runtime fires events through the runner during each pipeline phase
+
+## Event System
+
+Five emission patterns, each with distinct semantics:
+
+| Pattern | Method | Used For |
+|---------|--------|----------|
+| fire | `fire()` | Broadcast: `session_start`, `session_end`, `agent_start`, `agent_end`, `session_compact` |
+| fireCollectSections | `fireCollectSections()` | `context_enrich` -- collects `Section[]` from all handlers |
+| fireFirstResult | `fireFirstResult()` | `route` -- first handler wins |
+| fireChainTransform | `fireChainTransform()` | `label_extract`, `input`, `tool_result` -- each handler transforms the data |
+| fireUntilBlocked | `fireUntilBlocked()` | `tool_call` -- stops at first block |
+
+## Sections
+
+Sections are the universal unit of context. Every piece of information injected into the agent prompt is a section.
+
+```typescript
+interface Section {
+  id: string;
+  title: string;
+  content: string;
+  priority: number;
+  source: string;
+  trimStrategy?: 'never' | 'truncate' | 'drop';
+}
+```
+
+Priority conventions:
+
+| Priority | Usage |
+|----------|-------|
+| 100 | Identity |
+| 95 | System (core `dot-ai:system` section) |
+| 80 | Memory |
+| 60 | Skills |
+| 50 | Tasks |
+| 40 | Tools |
+
+Adapters call `formatSections(sections)` to produce the final markdown string injected into the agent context.
 
 ## Pipeline Flow
 
@@ -125,132 +162,79 @@ await runtime.shutdown();
 
 ```
 runtime.boot()
-  +-- loadConfig(workspaceRoot)
-  +-- loadHooks(config.hooks)
-  +-- createProviders(config)         // or use pre-built providers
-  +-- boot(providers)
-  |     +-- Load identities (parallel)
-  |     +-- List skills (parallel)
-  |     +-- List tools (parallel)
-  |     +-- Build label vocabulary
-  |     +-- Run after_boot hooks
-  +-- discoverExtensions(workspaceRoot, config.extensions)
-  +-- loadExtensions(paths, providers, eventBus)
-  +-- buildCapabilities(providers, extensionTools)
-  +-- Fire session_start event
+  -> loadConfig(.ai/dot-ai.yml)
+  -> discoverExtensions()
+  -> loadExtensions()
+       each factory calls registerSkill / registerIdentity / contributeLabels / registerTool
+  -> buildVocabulary from runner.vocabularyLabels
+  -> buildCapabilities from runner.tools
+  -> fire('session_start')
 ```
 
 ### Prompt Phase (per prompt)
 
 ```
 runtime.processPrompt(prompt)
-  +-- enrich(prompt, providers, cache)
-  |     +-- extractLabels(prompt, vocabulary)
-  |     +-- Search memory (parallel)
-  |     +-- Match skills (parallel)
-  |     +-- Match tools (parallel)
-  |     +-- Route model (parallel)
-  |     +-- List recent tasks (parallel)
-  |     +-- Match project identities
-  |     +-- Run after_enrich hooks
-  +-- Load skill content (lazy)
-  +-- formatContext(enriched)
-  +-- applyFormatHooks(formatted)
-  +-- Fire context_inject -> append injected text
-  +-- Return { formatted, enriched, capabilities }
+  -> fireChainTransform('label_extract', { prompt, vocabulary, labels: [] })
+  -> fireCollectSections('context_enrich', { prompt, labels })
+  -> add core system section (id: 'dot-ai:system', priority: 95)
+  -> fireFirstResult('route', { prompt, labels })
+  -> return { sections, labels, routing }
 ```
 
 ### Tool Call Phase (adapter-driven)
 
 ```
 runtime.fireToolCall({ tool, input })
-  +-- ExtensionRunner.fireUntilBlocked('tool_call', event)
-        +-- Iterate extensions in load order
-        +-- First handler returning { decision: 'block' } stops iteration
-        +-- Return blocking result, or null if all allow
+  -> ExtensionRunner.fireUntilBlocked('tool_call', event)
+       iterate extensions in load order
+       first handler returning { decision: 'block' } stops iteration
+       return blocking result, or null if all allow
 ```
 
-### Learn Phase (after agent response)
+### Agent Response Phase
 
 ```
-runtime.learn(response)
-  +-- Store in memory (if provider configured, response is substantial)
-  +-- Run after_learn hooks
-  +-- Fire agent_end event
+await runtime.fire('agent_end', { response })
+  -> broadcasts to all extensions
+  -> memory extensions store the response
 ```
 
 ### Shutdown Phase
 
 ```
 runtime.shutdown()
-  +-- Fire session_end event
-  +-- Flush logger buffers
+  -> fire('session_end')
+  -> flush logger buffers
 ```
 
-## Extension System
+## Adapter Pattern
 
-### Two-Tier Event System
+Adapters wire the runtime into a specific AI agent. The pattern is the same across all adapters:
 
-**Tier 1 (Universal):** Events that all adapters can support -- text injection, tool gating, lifecycle hooks. These are: `context_inject`, `tool_call`, `agent_end`, `session_start`, `session_end`.
+```typescript
+const runtime = new DotAiRuntime({ workspaceRoot });
+await runtime.boot();
 
-**Tier 2 (Rich):** Events that require deep agent integration -- message modification, per-tool result access, turn boundaries. These are: `context_modify`, `tool_result`, `turn_start`, `turn_end`. Currently only supported by the Pi adapter.
+// On each prompt
+const { sections, labels, routing } = await runtime.processPrompt(prompt);
+const formatted = formatSections(sections);
+// inject `formatted` into agent system prompt
 
-Adapters silently skip tier 2 events they don't support. Extensions receive warnings in logs but continue to function.
+// On agent response
+await runtime.fire('agent_end', { response });
 
-### Loading Flow
-
-1. `discoverExtensions()` scans `.ai/extensions/` directories, config paths, and npm packages
-2. `loadExtensions()` imports each file via jiti (or native import fallback), calls the default export with a collector API
-3. The factory registers event handlers and tools on the collector API
-4. The collector builds a `LoadedExtension` with handler maps, tool maps, and tier metadata
-5. `ExtensionRunner` wraps all loaded extensions for event dispatch
-6. The runtime fires events through the runner during each pipeline phase
-
-### Event Dispatch
-
-- `fire<T>(event, data)` -- broadcasts to all handlers across all extensions, collects results, catches errors per handler
-- `fireUntilBlocked(event, data)` -- stops at the first handler returning `{ decision: 'block' }` (used for `tool_call`)
-
-### Extension Tools as Capabilities
-
-Extension tools registered via `api.registerTool()` are converted to `Capability` objects via `toolDefinitionToCapability()` and merged with the built-in provider capabilities (memory_recall, memory_store, task_list, task_create, task_update). Adapters register all capabilities as native tools in the agent.
-
-## Provider -> Extension -> Adapter Data Flow
-
-```
-Providers (data sources)
-  |
-  +---> Engine enriches context (enrich phase)
-  |       |
-  |       +---> Extensions inject/modify
-  |       |     (context_inject appends text to formatted output)
-  |       |     (context_modify can alter messages -- tier 2 only)
-  |       |
-  |       +---> Formatted output string
-  |
-  +---> Extensions access providers directly
-  |     (api.providers.memory.search(), api.providers.tasks.list(), etc.)
-  |
-  +---> Capabilities (tools exposed to agent)
-  |     (built-in from providers + extension-registered tools)
-  |
-  +---> Adapter translates to agent-native format
-        (system prompt injection, tool registration, hook wiring)
+// On session end
+await runtime.shutdown();
 ```
 
 ## Labels
 
-Labels are boolean tags extracted from the prompt against a known vocabulary. They drive skill matching, tool matching, routing decisions, and project identity loading. Labels have a `name` and a `source` (which step produced them).
+Labels are boolean tags extracted from the prompt against a known vocabulary. They drive skill matching, tool matching, routing decisions, and identity loading.
 
-The vocabulary is built at boot from skill labels, skill triggers, tool labels, and project node names.
+The vocabulary is built at boot from skills (via `registerSkill()`), identities (via `registerIdentity()`), and explicit contributions (via `contributeLabels()`).
 
-## Hooks
-
-Hooks are lifecycle interceptors configured in `dot-ai.yml` under the `hooks` section. They run at four points: `after_boot`, `after_enrich`, `after_format`, `after_learn`. Unlike extensions, hooks are loaded from npm packages and configured per-project rather than discovered from directories.
-
-## Nodes
-
-Nodes represent directories containing `.ai/` context. The root node is always included. Sub-nodes are discovered via `scanDirs` configuration and enable per-project identities and skills in monorepo setups.
+Labels have a `name` and a `source` indicating which extension produced them.
 
 ## Diagnostics
 
@@ -258,9 +242,10 @@ Nodes represent directories containing `.ai/` context. The root node is always i
 
 ```typescript
 {
-  extensions: ExtensionDiagnostic[],  // per-extension handler counts, tool names, tiers
-  usedTiers: string[],               // which tiers are in use
-  providerStatus: Record<string, boolean>,  // which providers are configured
-  capabilityCount: number,           // total capabilities registered
+  extensions: ExtensionDiagnostic[],
+  vocabularySize: number,
+  capabilityCount: number,
+  skillCount: number,
+  identityCount: number,
 }
 ```

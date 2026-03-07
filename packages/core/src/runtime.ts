@@ -1,19 +1,16 @@
 import { loadConfig } from './config.js';
-import { computeChecksum, loadBootCache, writeBootCache } from './boot-cache.js';
-import type { FormatOptions } from './format.js';
 import { toolDefinitionToCapability } from './capabilities.js';
 import type { Capability } from './capabilities.js';
 import { discoverExtensions, createV6CollectorAPI } from './extension-loader.js';
 import { ExtensionRunner, EventBus } from './extension-runner.js';
 import type {
   ToolCallEvent, ToolCallResult, ExtensionDiagnostic,
-  ContextInjectEvent, ContextInjectResult,
-  Section, ResourcesDiscoverResult, ContextEnrichEvent,
+  Section, ContextEnrichEvent,
   RouteEvent, RouteResult,
-  CommandDefinition,
+  CommandDefinition, ToolDefinition,
 } from './extension-types.js';
 import type { ExtensionContextV6 } from './extension-api.js';
-import type { EnrichedContext, ExtensionsConfig, Label, BudgetWarning } from './types.js';
+import type { Label, Skill, Identity, ExtensionsConfig } from './types.js';
 import type { Logger } from './logger.js';
 import { NoopLogger } from './logger.js';
 import { extractLabels } from './labels.js';
@@ -23,38 +20,31 @@ export interface RuntimeOptions {
   workspaceRoot: string;
   /** Optional logger */
   logger?: Logger;
-  /** Skip identity sections in formatted output (useful when adapter injects them separately) */
-  skipIdentities?: boolean;
-  /** Max skills in formatted output */
-  maxSkills?: number;
-  /** Max chars per skill */
-  maxSkillLength?: number;
   /** Token budget for formatted output */
   tokenBudget?: number;
   /** Extension configuration */
   extensions?: ExtensionsConfig;
 }
 
+/**
+ * v7 ProcessResult — structured data only.
+ * Adapters handle formatting via formatSections() utility.
+ */
 export interface ProcessResult {
-  /** The formatted context string ready for injection */
-  formatted: string;
-  /** The enriched context (for adapters that need raw data) */
-  enriched: EnrichedContext;
-  /** Interactive capabilities built from extensions */
-  capabilities: Capability[];
-  /** Routing result from route event */
-  routing?: RouteResult | null;
+  /** Sections collected from extensions, sorted by priority DESC */
+  sections: Section[];
   /** Matched labels */
-  labels?: Label[];
-  /** Sections collected from extensions */
-  sections?: Section[];
+  labels: Label[];
+  /** Routing result from route event */
+  routing: RouteResult | null;
 }
 
 export interface RuntimeDiagnostics {
   extensions: ExtensionDiagnostic[];
-  usedTiers: string[];
   capabilityCount: number;
   vocabularySize: number;
+  skillCount: number;
+  identityCount: number;
 }
 
 /**
@@ -90,7 +80,7 @@ export class DotAiRuntime {
   // ══════════════════════════════════════════════════════════════════════════════
 
   /**
-   * Boot the runtime — loads config, discovers extensions, fires lifecycle events.
+   * Boot the runtime — loads config, discovers extensions, builds vocabulary from registrations.
    * Call once per session. Safe to call multiple times (idempotent).
    */
   async boot(): Promise<void> {
@@ -106,54 +96,14 @@ export class DotAiRuntime {
     const extConfig = this.options.extensions ?? rawConfig.extensions;
     const extPaths = await discoverExtensions(this.options.workspaceRoot, extConfig);
 
-    // Compute checksum for cache invalidation
-    const checksum = await computeChecksum(this.options.workspaceRoot, extPaths);
-
-    // Try loading from cache
-    const cached = await loadBootCache(this.options.workspaceRoot, checksum);
-
-    // Load extensions via v6 collector API (always needed for handlers)
+    // Load extensions via collector API
+    // Extension factories run here — they call registerSkill(), registerIdentity(),
+    // contributeLabels(), registerTool(), registerCommand(), and subscribe to events.
     const loaded = await this.loadExtensions(extPaths);
     this._runner = new ExtensionRunner(loaded, this.logger);
 
-    if (cached) {
-      // Cache hit — use cached vocabulary, skip resources_discover
-      this.vocabulary = cached.vocabulary;
-      this.logger.log({
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        phase: 'boot',
-        event: 'boot_cache_hit',
-        data: { checksum, vocabularySize: cached.vocabulary.length },
-      });
-    } else {
-      // Cache miss — fire resources_discover → build vocabulary
-      const ctx = this.buildCtx();
-      const discoverResults = await this._runner.fire<ResourcesDiscoverResult>(
-        'resources_discover', undefined, ctx,
-      );
-
-      // Build vocabulary from all extension-contributed labels
-      const allLabels = new Set<string>();
-      for (const result of discoverResults) {
-        if (result.labels && Array.isArray(result.labels)) {
-          for (const label of result.labels) {
-            allLabels.add(label);
-          }
-        }
-      }
-      this.vocabulary = Array.from(allLabels);
-
-      // Write cache
-      await writeBootCache(this.options.workspaceRoot, {
-        version: 1,
-        checksum,
-        vocabulary: this.vocabulary,
-        extensionPaths: extPaths,
-        tools: this._runner.tools.map(t => ({ name: t.name, description: t.description ?? '' })),
-        createdAt: new Date().toISOString(),
-      });
-    }
+    // Build vocabulary from registered resources (replaces resources_discover)
+    this.vocabulary = this._runner.vocabularyLabels;
 
     // Build capabilities from extension-registered tools
     this.caps = this._runner.tools.map(toolDefinitionToCapability);
@@ -168,12 +118,13 @@ export class DotAiRuntime {
         vocabularySize: this.vocabulary.length,
         toolCount: this._runner.tools.length,
         commandCount: this._runner.commands.length,
-        cacheHit: !!cached,
+        skillCount: this._runner.skills.length,
+        identityCount: this._runner.identities.length,
       },
       durationMs: Math.round(performance.now() - start),
     });
 
-    // Fire session_start (always, regardless of cache)
+    // Fire session_start (always)
     const ctx = this.buildCtx();
     await this._runner.fire('session_start', undefined, ctx);
 
@@ -244,6 +195,8 @@ export class DotAiRuntime {
             ),
             tools: Array.from(extension.tools.keys()),
             commands: Array.from(extension.commands.keys()),
+            skills: Array.from(extension.skills.keys()),
+            identities: Array.from(extension.identities.keys()),
           },
         });
       } catch (err) {
@@ -271,11 +224,12 @@ export class DotAiRuntime {
    * Process a prompt through the pipeline:
    * 1. Extract labels (core regex + label_extract chain-transform)
    * 2. Route (first-result)
-   * 3. Context enrich (collect-sections)
-   * 4. Assemble sections by priority
-   * 5. Apply token budget trimming
+   * 3. Context enrich (collect-sections) + core system section
+   * 4. Sort sections by priority DESC
+   *
+   * Returns structured data. Adapters call formatSections() to get markdown.
    */
-  async processPrompt(prompt: string, formatOverrides?: Partial<FormatOptions>): Promise<ProcessResult> {
+  async processPrompt(prompt: string): Promise<ProcessResult> {
     if (!this.booted) {
       await this.boot();
     }
@@ -320,77 +274,57 @@ export class DotAiRuntime {
       const ctx = this.buildCtx(labels);
       const collected = await this._runner.fireCollectSections('context_enrich', enrichEvent, ctx);
       sections = collected.sections;
+    }
 
-      // Also fire legacy context_inject for backward compat
-      const injectEvent: ContextInjectEvent = { prompt, labels };
-      const injectResults = await this._runner.fire<ContextInjectResult>(
-        'context_inject', injectEvent, ctx,
-      );
-      for (const result of injectResults) {
-        if (result.inject) {
-          sections.push({
-            id: `legacy-inject-${sections.length}`,
-            title: 'Extension Context',
-            content: result.inject,
-            priority: 20,
-            source: 'legacy',
-          });
-        }
-      }
+    // Add core system section
+    if (this._runner) {
+      const skillNames = this._runner.skills.map(s => s.name);
+      const toolNames = this._runner.tools.map(t => t.name);
+      const parts = ['dot-ai workspace active.'];
+      if (skillNames.length > 0) parts.push(`Skills: ${skillNames.join(', ')}.`);
+      if (toolNames.length > 0) parts.push(`Tools: ${toolNames.join(', ')}.`);
+
+      sections.push({
+        id: 'dot-ai:system',
+        title: 'dot-ai',
+        content: parts.join(' '),
+        priority: 95,
+        source: 'core',
+        trimStrategy: 'never',
+      });
     }
 
     // 4. Sort sections by priority DESC
     sections.sort((a, b) => b.priority - a.priority);
 
-    // 5. Apply token budget trimming
-    const tokenBudget = formatOverrides?.tokenBudget ?? this.options.tokenBudget;
-    if (tokenBudget) {
-      sections = this.trimSections(sections, tokenBudget);
-    }
-
-    // 6. Assemble sections into formatted markdown
-    const formatted = this.assembleSections(sections);
-
     this.logger.log({
       timestamp: new Date().toISOString(),
       level: 'info',
-      phase: 'format',
-      event: 'format_complete',
+      phase: 'enrich',
+      event: 'prompt_processed',
       data: {
         sectionCount: sections.length,
-        outputChars: formatted.length,
-        estimatedTokens: Math.round(formatted.length / 4),
         routing: routing?.model ?? 'default',
         labels: labels.map(l => l.name),
       },
       durationMs: Math.round(performance.now() - start),
     });
 
-    // Build enriched context for adapters that need it
-    const enriched = this.buildEnrichedFromSections(prompt, labels, sections, routing);
-
-    return {
-      formatted,
-      enriched,
-      capabilities: this.caps,
-      routing,
-      labels,
-      sections,
-    };
+    return { sections, labels, routing };
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // Learn
+  // Tool Execution
   // ══════════════════════════════════════════════════════════════════════════════
 
   /**
-   * Learn from agent response — fires agent_end event.
-   * Memory extensions handle storage in their handlers.
+   * Execute a registered tool by name.
    */
-  async learn(response: string): Promise<void> {
-    if (this._runner) {
-      await this._runner.fire('agent_end', { response }, this.buildCtx());
-    }
+  async executeTool(name: string, input: Record<string, unknown>): Promise<{ content: string; details?: unknown; isError?: boolean }> {
+    if (!this._runner) throw new Error('Runtime not booted');
+    const tool = this._runner.tools.find(t => t.name === name);
+    if (!tool) throw new Error(`Tool not found: ${name}`);
+    return tool.execute(input, this.buildCtx());
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
@@ -452,111 +386,29 @@ export class DotAiRuntime {
     return this._runner?.commands ?? [];
   }
 
+  /** Get registered skills from extensions */
+  get skills(): Skill[] {
+    return this._runner?.skills ?? [];
+  }
+
+  /** Get registered identities from extensions */
+  get identities(): Identity[] {
+    return this._runner?.identities ?? [];
+  }
+
+  /** Get registered tools from extensions */
+  get tools(): ToolDefinition[] {
+    return this._runner?.tools ?? [];
+  }
+
   /** Get diagnostics including extensions */
   get diagnostics(): RuntimeDiagnostics {
     return {
       extensions: this._runner?.diagnostics ?? [],
-      usedTiers: this._runner ? Array.from(this._runner.usedTiers) : [],
       capabilityCount: this.caps.length,
       vocabularySize: this.vocabulary.length,
-    };
-  }
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // Helpers
-  // ══════════════════════════════════════════════════════════════════════════════
-
-  /**
-   * Assemble sorted sections into a single markdown string.
-   */
-  private assembleSections(sections: Section[]): string {
-    if (sections.length === 0) return '';
-
-    return sections
-      .map(s => {
-        if (s.title) {
-          return `## ${s.title}\n\n${s.content}`;
-        }
-        return s.content;
-      })
-      .join('\n\n---\n\n');
-  }
-
-  /**
-   * Trim sections to fit within a token budget.
-   * Respects trimStrategy: 'never' sections are never removed.
-   */
-  private trimSections(sections: Section[], budget: number): Section[] {
-    const estimateTokens = (secs: Section[]) =>
-      Math.round(secs.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n').length / 4);
-
-    let current = estimateTokens(sections);
-    if (current <= budget) return sections;
-
-    const result = [...sections];
-    const actions: string[] = [];
-
-    // Strategy 1: Truncate 'truncate' sections
-    for (let i = result.length - 1; i >= 0; i--) {
-      if (current <= budget) break;
-      const s = result[i];
-      if (s.trimStrategy === 'truncate' && s.content.length > 2000) {
-        result[i] = { ...s, content: s.content.slice(0, 2000) + '\n\n[...truncated]' };
-        actions.push(`truncated section: ${s.id}`);
-        current = estimateTokens(result);
-      }
-    }
-
-    // Strategy 2: Drop non-'never' sections (lowest priority first)
-    for (let i = result.length - 1; i >= 0; i--) {
-      if (current <= budget) break;
-      const s = result[i];
-      if (s.trimStrategy !== 'never') {
-        actions.push(`dropped section: ${s.id} (priority ${s.priority})`);
-        result.splice(i, 1);
-        current = estimateTokens(result);
-      }
-    }
-
-    if (actions.length > 0) {
-      const warning: BudgetWarning = { budget, actual: current, actions };
-      this.logger.log({
-        timestamp: new Date().toISOString(),
-        level: current > budget ? 'warn' : 'info',
-        phase: 'format',
-        event: 'budget_trimmed',
-        data: warning as unknown as Record<string, unknown>,
-      });
-    }
-
-    return result;
-  }
-
-  /**
-   * Build a backward-compatible EnrichedContext from pipeline output.
-   * Adapters that log enriched fields still work.
-   */
-  private buildEnrichedFromSections(
-    prompt: string,
-    labels: Label[],
-    sections: Section[],
-    routing: RouteResult | null,
-  ): EnrichedContext {
-    return {
-      prompt,
-      labels,
-      identities: sections
-        .filter(s => s.source === 'identity' || s.priority >= 80)
-        .map(s => ({
-          type: s.id ?? s.source,
-          content: s.content,
-          source: s.source,
-          priority: s.priority,
-        })),
-      memories: [],
-      skills: [],
-      tools: [],
-      routing: routing ?? { model: 'default', reason: 'no routing extensions' },
+      skillCount: this._runner?.skills.length ?? 0,
+      identityCount: this._runner?.identities.length ?? 0,
     };
   }
 }

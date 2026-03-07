@@ -2,7 +2,6 @@ import type { Logger } from './logger.js';
 import type {
   LoadedExtension,
   ToolDefinition,
-  ExtensionTier,
   ToolCallEvent,
   ToolCallResult,
   ExtensionDiagnostic,
@@ -13,6 +12,7 @@ import type {
   CommandDefinition,
   InputResult,
 } from './extension-types.js';
+import type { Skill, Identity } from './types.js';
 
 /**
  * Simple event bus for inter-extension communication.
@@ -111,7 +111,7 @@ export class ExtensionRunner {
     return null;
   }
 
-  // ── v6 Emission Patterns ──
+  // ── Emission Patterns ──
 
   /**
    * Fire an event and collect sections from all handlers.
@@ -184,7 +184,7 @@ export class ExtensionRunner {
 
   /**
    * Fire an event as a transform chain — each handler receives the previous handler's output.
-   * Used for `label_extract`, `input`, `context_modify`.
+   * Used for `label_extract`, `input`, `tool_result`.
    *
    * - Initial value is `data`.
    * - If a handler returns undefined/null, the previous value is kept (no-op).
@@ -255,6 +255,45 @@ export class ExtensionRunner {
     return Array.from(cmdMap.values());
   }
 
+  /** Get all registered skills across extensions (last-wins for overrides) */
+  get skills(): Skill[] {
+    const skillMap = new Map<string, Skill>();
+
+    for (const ext of this.extensions) {
+      for (const [name, skill] of ext.skills) {
+        skillMap.set(name, skill);
+      }
+    }
+
+    return Array.from(skillMap.values());
+  }
+
+  /** Get all registered identities across extensions */
+  get identities(): Identity[] {
+    const identityMap = new Map<string, Identity>();
+
+    for (const ext of this.extensions) {
+      for (const [key, identity] of ext.identities) {
+        identityMap.set(key, identity);
+      }
+    }
+
+    return Array.from(identityMap.values());
+  }
+
+  /** Get all vocabulary labels contributed by extensions */
+  get vocabularyLabels(): string[] {
+    const labels = new Set<string>();
+
+    for (const ext of this.extensions) {
+      for (const label of ext.labels) {
+        labels.add(label);
+      }
+    }
+
+    return Array.from(labels);
+  }
+
   /** Get diagnostic info */
   get diagnostics(): ExtensionDiagnostic[] {
     return this.extensions.map(ext => ({
@@ -264,19 +303,9 @@ export class ExtensionRunner {
       ),
       toolNames: Array.from(ext.tools.keys()),
       commandNames: ext.commands ? Array.from(ext.commands.keys()) : [],
-      tiers: Array.from(ext.tiers),
+      skillNames: Array.from(ext.skills.keys()),
+      identityNames: Array.from(ext.identities.keys()),
     }));
-  }
-
-  /** Which tiers are used by loaded extensions */
-  get usedTiers(): Set<ExtensionTier> {
-    const tiers = new Set<ExtensionTier>();
-    for (const ext of this.extensions) {
-      for (const tier of ext.tiers) {
-        tiers.add(tier);
-      }
-    }
-    return tiers;
   }
 
   // ── Private Helpers ──

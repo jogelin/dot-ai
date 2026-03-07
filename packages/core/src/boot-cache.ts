@@ -11,7 +11,7 @@ export interface BootCacheData {
   version: 1;
   /** Checksum of inputs that produced this cache */
   checksum: string;
-  /** Label vocabulary from resources_discover */
+  /** Label vocabulary from registered resources */
   vocabulary: string[];
   /** Extension paths that were loaded */
   extensionPaths: string[];

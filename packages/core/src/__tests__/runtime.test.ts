@@ -26,23 +26,24 @@ describe('DotAiRuntime', () => {
   });
 
   describe('processPrompt', () => {
-    it('returns sections, labels, formatted, enriched, capabilities', async () => {
+    it('returns sections, labels, routing', async () => {
       const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
       await runtime.boot();
       const result = await runtime.processPrompt('hello world');
-      expect(result.formatted).toBeDefined();
-      expect(result.enriched).toBeDefined();
-      expect(result.capabilities).toBeDefined();
       expect(result.labels).toBeDefined();
       expect(result.sections).toBeDefined();
+      expect(Array.isArray(result.sections)).toBe(true);
+      expect(result.routing).toBeDefined();
     });
-  });
 
-  describe('learn', () => {
-    it('fires agent_end without throwing', async () => {
+    it('includes core system section', async () => {
       const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
       await runtime.boot();
-      await runtime.learn('test response');
+      const result = await runtime.processPrompt('hello');
+      const systemSection = result.sections.find(s => s.id === 'dot-ai:system');
+      expect(systemSection).toBeDefined();
+      expect(systemSection!.priority).toBe(95);
+      expect(systemSection!.source).toBe('core');
     });
   });
 
@@ -71,6 +72,19 @@ describe('DotAiRuntime', () => {
       await runtime.boot();
       const result = await runtime.fireToolCall({ tool: 'test', input: {} });
       expect(result).toBeNull();
+    });
+  });
+
+  describe('executeTool', () => {
+    it('throws when not booted', async () => {
+      const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
+      await expect(runtime.executeTool('test', {})).rejects.toThrow('Runtime not booted');
+    });
+
+    it('throws for unknown tool', async () => {
+      const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
+      await runtime.boot();
+      await expect(runtime.executeTool('nonexistent', {})).rejects.toThrow('Tool not found');
     });
   });
 
@@ -122,12 +136,26 @@ describe('DotAiRuntime', () => {
       expect(runtime.commands).toEqual([]);
     });
 
-    it('diagnostics include vocabulary size', async () => {
+    it('skills returns empty array when no extensions', async () => {
+      const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
+      await runtime.boot();
+      expect(runtime.skills).toEqual([]);
+    });
+
+    it('identities returns empty array when no extensions', async () => {
+      const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
+      await runtime.boot();
+      expect(runtime.identities).toEqual([]);
+    });
+
+    it('diagnostics include vocabulary size and counts', async () => {
       const runtime = new DotAiRuntime({ workspaceRoot: '/tmp/nonexistent' });
       await runtime.boot();
       const diag = runtime.diagnostics;
       expect(diag.vocabularySize).toBeDefined();
-      expect(diag.capabilityCount).toBe(0); // no extensions = no tools
+      expect(diag.capabilityCount).toBe(0);
+      expect(diag.skillCount).toBe(0);
+      expect(diag.identityCount).toBe(0);
       expect(diag.extensions).toEqual([]);
     });
 

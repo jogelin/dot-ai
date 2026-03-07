@@ -1,5 +1,5 @@
 /**
- * @dot-ai/core v6 — Headless Agent framework.
+ * @dot-ai/core v7 — Headless Agent framework.
  *
  * dot-ai = extensions (event-driven plugins) + adapters (agent integration).
  * Everything is an extension. Core orchestrates events, adapters map to agent runtimes.
@@ -29,8 +29,6 @@ export type {
 // ── Extension Types ──
 export type {
   Section,
-  ResourceEntry,
-  ResourcesDiscoverResult,
   LabelExtractEvent,
   ContextEnrichEvent,
   ContextEnrichResult,
@@ -45,18 +43,12 @@ export type {
   ToolDefinition,
   ExtensionContext,
   ExtensionEvent,
-  ExtensionTier,
-  ExtensionEventName,
   LoadedExtension,
   ExtensionDiagnostic,
   ToolCallEvent, ToolCallResult,
   ToolResultEvent,
   AgentEndEvent,
-  Message,
-  ContextInjectEvent, ContextInjectResult,
-  ContextModifyEvent, ContextModifyResult,
 } from './extension-types.js';
-export { EVENT_TIERS, ADAPTER_CAPABILITIES, TOOL_STRATEGY } from './extension-types.js';
 
 // ── Extension Runner ──
 export { ExtensionRunner, EventBus } from './extension-runner.js';
@@ -78,8 +70,8 @@ export { extractLabels, buildVocabulary } from './labels.js';
 export { discoverNodes, parseScanDirs } from './nodes.js';
 
 // ── Format ──
-export { formatContext, formatToolHints } from './format.js';
-export type { FormatOptions } from './format.js';
+export { formatContext, formatToolHints, formatSections, assembleSections, trimSections } from './format.js';
+export type { FormatOptions, FormatSectionsOptions } from './format.js';
 
 // ── Capabilities ──
 export { toolDefinitionToCapability } from './capabilities.js';

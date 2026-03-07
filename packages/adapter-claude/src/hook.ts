@@ -15,7 +15,7 @@ import {
   NoopLogger,
   JsonFileLogger,
   loadConfig,
-  ADAPTER_CAPABILITIES,
+  formatSections,
 } from '@dot-ai/core';
 import type { Logger } from '@dot-ai/core';
 
@@ -37,17 +37,12 @@ async function createRuntime(workspaceRoot: string): Promise<DotAiRuntime> {
   const runtime = new DotAiRuntime({
     workspaceRoot,
     logger,
-    skipIdentities: true,
-    maxSkillLength: 3000,
-    maxSkills: 5,
   });
   await runtime.boot();
   return runtime;
 }
 
 // ── Event handlers ──
-
-const CLAUDE_SUPPORTED = ADAPTER_CAPABILITIES['claude-code'];
 
 async function handleSessionStart(event: Record<string, unknown>): Promise<DotAiRuntime | undefined> {
   const workspaceRoot = (event.cwd as string) ?? process.cwd();
@@ -58,15 +53,6 @@ async function handleSessionStart(event: Record<string, unknown>): Promise<DotAi
   process.stderr.write(`[dot-ai] Booted\n`);
   if (diag.extensions.length > 0) {
     process.stderr.write(`[dot-ai] ${diag.extensions.length} extension(s), ${diag.capabilityCount} tool(s)\n`);
-    for (const ext of diag.extensions) {
-      for (const eventName of Object.keys(ext.handlerCounts)) {
-        if (!CLAUDE_SUPPORTED.has(eventName)) {
-          process.stderr.write(
-            `[dot-ai] Warning: Extension ${ext.path} uses '${eventName}' (not supported by Claude Code adapter)\n`,
-          );
-        }
-      }
-    }
   }
   return runtime;
 }
@@ -78,7 +64,8 @@ async function handlePromptSubmit(event: Record<string, unknown>): Promise<DotAi
   const prompt = (event.prompt ?? event.content ?? '') as string;
   if (!prompt) return runtime;
 
-  const { formatted } = await runtime.processPrompt(prompt);
+  const { sections } = await runtime.processPrompt(prompt);
+  const formatted = formatSections(sections);
   if (formatted) {
     process.stdout.write(JSON.stringify({ result: formatted }));
   }
@@ -91,8 +78,8 @@ async function handlePreCompact(event: Record<string, unknown>): Promise<DotAiRu
   try {
     const summary = (event.summary ?? event.content ?? '') as string;
     if (summary) {
-      await runtime.fire('agent_end', {
-        response: `[compaction] ${summary.slice(0, 1000)}`,
+      await runtime.fire('session_compact', {
+        summary: summary.slice(0, 1000),
       });
     }
   } catch (err) {
@@ -107,7 +94,7 @@ async function handleStop(event: Record<string, unknown>): Promise<DotAiRuntime 
   try {
     const response = (event.response ?? event.content ?? '') as string;
     if (response) {
-      await runtime.learn(response);
+      await runtime.fire('agent_end', { response });
     }
   } catch (err) {
     process.stderr.write(`[dot-ai] stop error: ${err}\n`);

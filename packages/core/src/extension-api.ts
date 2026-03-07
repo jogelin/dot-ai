@@ -1,22 +1,19 @@
 import type {
-  ContextInjectEvent, ContextInjectResult,
-  ContextModifyEvent, ContextModifyResult,
   ToolCallEvent, ToolCallResult,
   ToolResultEvent,
   AgentEndEvent,
   ToolDefinition,
   ExtensionContext,
-  ResourcesDiscoverResult,
   LabelExtractEvent,
   ContextEnrichEvent, ContextEnrichResult,
   RouteEvent, RouteResult,
   InputEvent, InputResult,
   CommandDefinition,
 } from './extension-types.js';
-import type { Label } from './types.js';
+import type { Label, Skill, Identity } from './types.js';
 
 /**
- * v6 Extension Context — passed as second argument to every event handler.
+ * v7 Extension Context — passed as second argument to every event handler.
  * Extends the base ExtensionContext with labels and optional agent capabilities.
  */
 export interface ExtensionContextV6 extends ExtensionContext {
@@ -39,8 +36,6 @@ export interface ExtensionContextV6 extends ExtensionContext {
 export interface ExtensionAPI {
   // ── Event subscription ──
 
-  /** Resource discovery: extensions declare resources and contribute labels */
-  on(event: 'resources_discover', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<ResourcesDiscoverResult | void>): void;
   /** Label extraction: extensions can add custom labels (chain-transform) */
   on(event: 'label_extract', handler: (e: LabelExtractEvent, ctx: ExtensionContextV6) => Promise<Label[] | void>): void;
   /** Context enrichment: extensions return sections for context injection */
@@ -58,28 +53,28 @@ export interface ExtensionAPI {
 
   on(event: 'session_start', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'session_end', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
+  on(event: 'session_compact', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'agent_start', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'agent_end', handler: (e: AgentEndEvent, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'turn_start', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
   on(event: 'turn_end', handler: (e: undefined, ctx: ExtensionContextV6) => Promise<void>): void;
 
-  // ── Legacy events (kept for transition) ──
-
-  /** @deprecated Use context_enrich instead */
-  on(event: 'context_inject', handler: (e: ContextInjectEvent, ctx: ExtensionContextV6) => Promise<ContextInjectResult | void>): void;
-  /** @deprecated Use context_enrich instead */
-  on(event: 'context_modify', handler: (e: ContextModifyEvent, ctx: ExtensionContextV6) => Promise<ContextModifyResult | void>): void;
-
   // ── Catch-all for custom/Pi-specific events ──
 
   on(event: string, handler: (e: any, ctx: ExtensionContextV6) => Promise<any>): void;
 
-  // ── Capability registration ──
+  // ── Resource registration ──
 
   /** Register a tool that the agent can invoke */
   registerTool(tool: ToolDefinition): void;
   /** Register a command (slash command, etc.) */
   registerCommand(command: CommandDefinition): void;
+  /** Register a skill for context enrichment and discovery */
+  registerSkill(skill: Skill): void;
+  /** Register an identity document */
+  registerIdentity(identity: Identity): void;
+  /** Contribute labels to the global vocabulary (for label matching) */
+  contributeLabels(labels: string[]): void;
 
   // ── Inter-extension communication ──
 

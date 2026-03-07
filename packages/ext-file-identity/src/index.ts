@@ -18,14 +18,22 @@ const PROJECT_FILES = [
   { type: 'agent', file: 'AGENT.md', priority: 50 },
 ];
 
-export default function extFileIdentity(api: ExtensionAPI): void {
+export default async function extFileIdentity(api: ExtensionAPI): Promise<void> {
   const nodes = discoverNodes(api.workspaceRoot, parseScanDirs('projects'));
   const rootNodes = nodes.filter(n => n.root);
   const projectNodes = nodes.filter(n => !n.root);
 
-  api.on('resources_discover', async () => {
-    return { labels: projectNodes.map(n => n.name) };
-  });
+  api.contributeLabels(projectNodes.map(n => n.name));
+
+  // Register identities at boot for runtime.identities accessor
+  for (const node of rootNodes) {
+    for (const { type, file, priority } of ROOT_FILES) {
+      try {
+        const content = await readFile(join(node.path, file), 'utf-8');
+        api.registerIdentity({ type, content, source: 'ext-file-identity', priority, node: node.name });
+      } catch { /* skip */ }
+    }
+  }
 
   api.on('context_enrich', async (event) => {
     const sections = [];

@@ -2,9 +2,8 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { ExtensionAPI } from './extension-api.js';
-import type { LoadedExtension, ToolDefinition, CommandDefinition, ExtensionTier } from './extension-types.js';
-import { EVENT_TIERS } from './extension-types.js';
-import type { ExtensionsConfig } from './types.js';
+import type { LoadedExtension, ToolDefinition, CommandDefinition } from './extension-types.js';
+import type { ExtensionsConfig, Skill, Identity } from './types.js';
 
 /**
  * Discover extension file paths from configured locations.
@@ -80,7 +79,7 @@ export async function discoverExtensions(
 }
 
 /**
- * Create a v6 ExtensionAPI instance that collects registrations into a LoadedExtension.
+ * Create an ExtensionAPI instance that collects registrations into a LoadedExtension.
  * Extensions communicate via events only — no provider access.
  */
 export function createV6CollectorAPI(
@@ -94,7 +93,9 @@ export function createV6CollectorAPI(
     handlers: new Map(),
     tools: new Map(),
     commands: new Map(),
-    tiers: new Set(),
+    skills: new Map(),
+    identities: new Map(),
+    labels: new Set(),
   };
 
   const api: ExtensionAPI = {
@@ -103,17 +104,25 @@ export function createV6CollectorAPI(
         extension.handlers.set(event, []);
       }
       extension.handlers.get(event)!.push(handler);
-
-      const tier: ExtensionTier | undefined = EVENT_TIERS[event];
-      if (tier) {
-        extension.tiers.add(tier);
-      }
     },
     registerTool(tool: ToolDefinition) {
       extension.tools.set(tool.name, tool);
     },
     registerCommand(command: CommandDefinition) {
       extension.commands.set(command.name, command);
+    },
+    registerSkill(skill: Skill) {
+      extension.skills.set(skill.name, skill);
+      // Skills contribute their labels and triggers to vocabulary
+      for (const label of skill.labels) extension.labels.add(label);
+      for (const trigger of skill.triggers ?? []) extension.labels.add(trigger);
+    },
+    registerIdentity(identity: Identity) {
+      const key = `${identity.type}:${identity.node ?? 'root'}`;
+      extension.identities.set(key, identity);
+    },
+    contributeLabels(labels: string[]) {
+      for (const label of labels) extension.labels.add(label);
     },
     events: eventBus ?? {
       on: () => {},

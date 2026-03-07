@@ -47,10 +47,10 @@ async function main(): Promise<void> {
   // For sync, we enrich with an empty prompt (just boot context)
   const result = await runtime.processPrompt('');
 
-  await syncToFile(targetPath, result.enriched);
+  await syncToFile(targetPath, result.sections, runtime.capabilities);
   console.log(`Synced dot-ai context to ${targetFile}`);
-  console.log(`  Sections: ${result.sections?.length ?? 0}`);
-  console.log(`  Tools: ${result.capabilities.length}`);
+  console.log(`  Sections: ${result.sections.length}`);
+  console.log(`  Tools: ${runtime.capabilities.length}`);
 
   await runtime.flush();
 }

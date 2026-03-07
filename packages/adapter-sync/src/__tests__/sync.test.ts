@@ -3,22 +3,20 @@ import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { syncToFile, unsyncFromFile } from '../sync.js';
-import type { EnrichedContext } from '@dot-ai/core';
+import type { Section } from '@dot-ai/core';
 
 const START_MARKER = '<!-- dot-ai:start -->';
 const END_MARKER = '<!-- dot-ai:end -->';
 
-function makeCtx(overrides: Partial<EnrichedContext> = {}): EnrichedContext {
-  return {
-    prompt: '',
-    labels: [],
-    identities: [],
-    memories: [],
-    skills: [],
-    tools: [],
-    routing: { model: 'default', reason: 'no routing' },
-    ...overrides,
-  };
+function makeSections(overrides: Partial<Section>[] = []): Section[] {
+  return overrides.map((o, i) => ({
+    id: o.id ?? `test:section-${i}`,
+    title: o.title ?? `Section ${i}`,
+    content: o.content ?? '',
+    priority: o.priority ?? 50,
+    source: o.source ?? 'test',
+    trimStrategy: o.trimStrategy ?? 'drop',
+  }));
 }
 
 let tmpDir: string;
@@ -40,13 +38,11 @@ afterEach(async () => {
 
 describe('syncToFile', () => {
   it('creates file with markers when file does not exist', async () => {
-    const ctx = makeCtx({
-      identities: [
-        { type: 'agents', content: 'Be helpful', source: 'file', priority: 10 },
-      ],
-    });
+    const sections = makeSections([
+      { title: 'Identity', content: 'Be helpful' },
+    ]);
 
-    await syncToFile(tmpFile, ctx);
+    await syncToFile(tmpFile, sections);
 
     const content = await readFile(tmpFile, 'utf-8');
     expect(content).toContain(START_MARKER);
@@ -58,13 +54,11 @@ describe('syncToFile', () => {
     const initial = `# My Rules\n\n${START_MARKER}\nOld content\n${END_MARKER}\n\nMore content\n`;
     await writeFile(tmpFile, initial, 'utf-8');
 
-    const ctx = makeCtx({
-      identities: [
-        { type: 'agents', content: 'New content', source: 'file', priority: 10 },
-      ],
-    });
+    const sections = makeSections([
+      { title: 'Identity', content: 'New content' },
+    ]);
 
-    await syncToFile(tmpFile, ctx);
+    await syncToFile(tmpFile, sections);
 
     const content = await readFile(tmpFile, 'utf-8');
     expect(content).toContain('# My Rules');
@@ -77,13 +71,11 @@ describe('syncToFile', () => {
     const initial = '# Existing Rules\n\nSome content here.\n';
     await writeFile(tmpFile, initial, 'utf-8');
 
-    const ctx = makeCtx({
-      identities: [
-        { type: 'soul', content: 'Appended content', source: 'file', priority: 5 },
-      ],
-    });
+    const sections = makeSections([
+      { title: 'Soul', content: 'Appended content' },
+    ]);
 
-    await syncToFile(tmpFile, ctx);
+    await syncToFile(tmpFile, sections);
 
     const content = await readFile(tmpFile, 'utf-8');
     expect(content).toContain('# Existing Rules');
@@ -103,13 +95,11 @@ describe('syncToFile', () => {
     const initial = `${before}${START_MARKER}\nOld\n${END_MARKER}${after}`;
     await writeFile(tmpFile, initial, 'utf-8');
 
-    const ctx = makeCtx({
-      identities: [
-        { type: 'agents', content: 'Updated', source: 'file', priority: 10 },
-      ],
-    });
+    const sections = makeSections([
+      { title: 'Updated', content: 'Updated' },
+    ]);
 
-    await syncToFile(tmpFile, ctx);
+    await syncToFile(tmpFile, sections);
 
     const content = await readFile(tmpFile, 'utf-8');
     expect(content).toContain('# Top Content');
@@ -121,25 +111,13 @@ describe('syncToFile', () => {
   });
 
   it('is idempotent — multiple syncs update correctly', async () => {
-    const ctx1 = makeCtx({
-      identities: [
-        { type: 'agents', content: 'First sync', source: 'file', priority: 10 },
-      ],
-    });
-    const ctx2 = makeCtx({
-      identities: [
-        { type: 'agents', content: 'Second sync', source: 'file', priority: 10 },
-      ],
-    });
-    const ctx3 = makeCtx({
-      identities: [
-        { type: 'agents', content: 'Third sync', source: 'file', priority: 10 },
-      ],
-    });
+    const s1 = makeSections([{ content: 'First sync' }]);
+    const s2 = makeSections([{ content: 'Second sync' }]);
+    const s3 = makeSections([{ content: 'Third sync' }]);
 
-    await syncToFile(tmpFile, ctx1);
-    await syncToFile(tmpFile, ctx2);
-    await syncToFile(tmpFile, ctx3);
+    await syncToFile(tmpFile, s1);
+    await syncToFile(tmpFile, s2);
+    await syncToFile(tmpFile, s3);
 
     const content = await readFile(tmpFile, 'utf-8');
     expect(content).toContain('Third sync');
@@ -157,7 +135,7 @@ describe('syncToFile', () => {
     const initial = '# Rules\n';
     await writeFile(tmpFile, initial, 'utf-8');
 
-    await syncToFile(tmpFile, makeCtx());
+    await syncToFile(tmpFile, makeSections());
 
     const content = await readFile(tmpFile, 'utf-8');
     // Should not have 3+ consecutive newlines

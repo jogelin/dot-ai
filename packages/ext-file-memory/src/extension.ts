@@ -7,18 +7,20 @@ export default function(api: ExtensionAPI) {
   api.on('context_enrich', async (event) => {
     const labelNames = event.labels.map(l => l.name);
     const memories = await provider.search(event.prompt, labelNames);
-    if (memories.length === 0) return;
 
-    const lines = memories.slice(0, 10).map(m => {
-      const date = m.date ? ` (${m.date})` : '';
-      return `- ${m.content}${date}`;
-    });
+    const description = provider.describe();
+    const content = memories.length > 0
+      ? `> ${description}\n\n${memories.slice(0, 10).map(m => {
+          const date = m.date ? ` (${m.date})` : '';
+          return `- ${m.content}${date}`;
+        }).join('\n')}`
+      : `> ${description}\n\nNo relevant memories found for this prompt.`;
 
     return {
       sections: [{
         id: 'memory:recall',
-        title: 'Relevant Memory',
-        content: `> ${provider.describe()}\n\n${lines.join('\n')}`,
+        title: 'Memory',
+        content,
         priority: 80,
         source: 'ext-file-memory',
         trimStrategy: 'truncate' as const,

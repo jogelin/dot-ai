@@ -1,11 +1,15 @@
 /**
- * dot-ai OpenClaw plugin v6
+ * dot-ai OpenClaw plugin v7
  *
  * Hooks into before_agent_start to run the full dot-ai pipeline via DotAiRuntime.
- * Uses the v6 extension-based pipeline — no providers required.
+ * Uses the v7 extension-based pipeline — no providers required.
  * Returns enriched context as prependContext for the agent.
  */
-import { DotAiRuntime } from '@dot-ai/core';
+import { createRequire } from 'node:module';
+import { DotAiRuntime, formatSections } from '@dot-ai/core';
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../package.json') as { version: string };
 
 // Inline OpenClaw plugin API types
 interface OpenClawLogger {
@@ -54,12 +58,12 @@ let cachedWorkspace: string | null = null;
 const plugin = {
   id: 'dot-ai',
   name: 'dot-ai — Universal AI Workspace Convention',
-  version: '6.0.0',
+  version: PKG_VERSION,
   description: 'Deterministic context enrichment for OpenClaw agents',
   kind: 'memory' as const,
 
   register(api: OpenClawPluginApi) {
-    api.logger.info('[dot-ai] Plugin loaded (v6)');
+    api.logger.info(`[dot-ai] Plugin loaded (v${PKG_VERSION})`);
 
     // Register tools from core capabilities (delegates to extensions)
     api.registerTool(
@@ -107,7 +111,7 @@ const plugin = {
             cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
-            api.logger.info('[dot-ai] Runtime booted (v6)');
+            api.logger.info(`[dot-ai] Runtime booted (v${PKG_VERSION})`);
 
             // Log extension diagnostics
             const diag = cachedRuntime.diagnostics;
@@ -118,10 +122,11 @@ const plugin = {
           }
 
           const prompt = ctx.prompt ?? '';
-          const { formatted, enriched } = await cachedRuntime.processPrompt(prompt);
+          const { sections } = await cachedRuntime.processPrompt(prompt);
+          const formatted = formatSections(sections);
 
           if (formatted) {
-            api.logger.info(`[dot-ai] Injected: ${enriched.identities.length} ids, ${enriched.memories.length} mems, ${enriched.skills.length} skills`);
+            api.logger.info(`[dot-ai] Injected: ${sections.length} sections`);
             return { prependContext: formatted };
           }
         } catch (err) {
@@ -137,7 +142,7 @@ const plugin = {
       if (!cachedRuntime) return;
       const response = (ctx as { response?: string }).response ?? '';
       if (response) {
-        await cachedRuntime.learn(response);
+        await cachedRuntime.fire('agent_end', { response });
       }
     });
 

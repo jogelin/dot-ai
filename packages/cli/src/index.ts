@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import { argv, cwd, exit } from 'node:process';
+import { createRequire } from 'node:module';
 import { mkdir, writeFile, access, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
   DotAiRuntime,
   clearBootCache,
+  formatSections,
 } from '@dot-ai/core';
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../package.json') as { version: string };
 
 const args = argv.slice(2);
 const command = args[0];
@@ -35,7 +40,7 @@ async function main(): Promise<void> {
       break;
     case '--version':
     case '-v':
-      console.log('dot-ai v0.6.0');
+      console.log(`dot-ai v${PKG_VERSION}`);
       break;
     default:
       // Try to execute as a tool: dot-ai <domain> <action> [args...]
@@ -49,7 +54,7 @@ async function main(): Promise<void> {
 }
 
 function printHelp(): void {
-  console.log('dot-ai v0.6.0\n');
+  console.log(`dot-ai v${PKG_VERSION}\n`);
   console.log('Commands:');
   console.log('  init                          Create .ai/ directory with defaults');
   console.log('  boot                          Run boot and show workspace info');
@@ -341,7 +346,8 @@ async function cmdBoot(): Promise<void> {
   console.log(`Extensions: ${diag.extensions.length}`);
   console.log(`Vocabulary: ${diag.vocabularySize} labels`);
   console.log(`Tools: ${diag.capabilityCount}`);
-  console.log(`Tiers: ${diag.usedTiers.join(', ') || 'none'}`);
+  console.log(`Skills: ${diag.skillCount}`);
+  console.log(`Identities: ${diag.identityCount}`);
   console.log(`\nBoot complete in ${duration}ms`);
 
   await runtime.flush();
@@ -368,6 +374,8 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
   const result = await runtime.processPrompt(prompt);
   const duration = Math.round(performance.now() - start);
 
+  const formatted = formatSections(result.sections);
+
   if (jsonMode) {
     const output = {
       prompt,
@@ -380,33 +388,31 @@ async function cmdTrace(rawArgs: string[]): Promise<void> {
         source: s.source,
         chars: s.content.length,
       })),
-      totalChars: result.formatted.length,
-      estimatedTokens: Math.round(result.formatted.length / 4),
-      toolCount: result.capabilities.length,
+      totalChars: formatted.length,
+      estimatedTokens: Math.round(formatted.length / 4),
+      toolCount: runtime.capabilities.length,
       durationMs: duration,
     };
     console.log(JSON.stringify(output, null, 2));
   } else {
     console.log(`dot-ai trace — "${prompt}"\n`);
 
-    const labels = result.labels ?? result.enriched.labels;
-    console.log(`Labels: [${labels.map(l => l.name).join(', ')}]`);
+    console.log(`Labels: [${result.labels.map(l => l.name).join(', ')}]`);
 
-    if (result.sections && result.sections.length > 0) {
+    if (result.sections.length > 0) {
       console.log(`\nSections (${result.sections.length}):`);
       for (const s of result.sections) {
         console.log(`  [${s.priority}] ${s.title} (${s.source}, ${s.content.length} chars)`);
       }
     }
 
-    const routing = result.routing ?? result.enriched.routing;
-    console.log(`\nRouting: ${routing?.model ?? 'default'} (${routing?.reason ?? 'none'})`);
-    console.log(`Total: ${result.formatted.length.toLocaleString()} chars (~${Math.round(result.formatted.length / 4).toLocaleString()} tokens)`);
-    console.log(`Tools: ${result.capabilities.length}`);
+    console.log(`\nRouting: ${result.routing?.model ?? 'default'} (${result.routing?.reason ?? 'none'})`);
+    console.log(`Total: ${formatted.length.toLocaleString()} chars (~${Math.round(formatted.length / 4).toLocaleString()} tokens)`);
+    console.log(`Tools: ${runtime.capabilities.length}`);
 
     if (verbose) {
-      console.log(`\n── Injected markdown (${result.formatted.length.toLocaleString()} chars) ──`);
-      console.log(result.formatted);
+      console.log(`\n── Injected markdown (${formatted.length.toLocaleString()} chars) ──`);
+      console.log(formatted);
     }
 
     console.log(`\nTrace complete in ${duration}ms`);

@@ -49,11 +49,17 @@ async function main() {
       const json = JSON.parse(readFileSync(abs, 'utf-8'));
       const oldVersion = json.version;
       json.version = workspaceVersion;
+      // marketplace.json nests version inside plugins[].version
+      if (Array.isArray(json.plugins)) {
+        for (const plugin of json.plugins) {
+          plugin.version = workspaceVersion;
+        }
+      }
       if (!dryRun) {
         writeFileSync(abs, JSON.stringify(json, null, 2) + '\n');
       }
       console.log(
-        `${dryRun ? '[dry-run] ' : ''}Updated ${filePath}: ${oldVersion} → ${workspaceVersion}`,
+        `${dryRun ? '[dry-run] ' : ''}Updated ${filePath}: ${oldVersion ?? 'n/a'} → ${workspaceVersion}`,
       );
     } catch (err) {
       console.warn(`Warning: could not update ${filePath}:`, (err as Error).message);

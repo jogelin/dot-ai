@@ -19,11 +19,9 @@ export default function extRulesRouting(api: ExtensionAPI): void {
   const rules = DEFAULT_RULES;
   const fallback = 'sonnet';
 
-  api.on('resources_discover', async () => {
-    const labels = new Set<string>();
-    for (const rule of rules) for (const l of rule.labels) labels.add(l);
-    return { labels: Array.from(labels) };
-  });
+  const allLabels = new Set<string>();
+  for (const rule of rules) for (const l of rule.labels) allLabels.add(l);
+  api.contributeLabels(Array.from(allLabels));
 
   api.on('route', async (event) => {
     const labelNames = new Set(event.labels.map((l: { name: string }) => l.name.toLowerCase()));

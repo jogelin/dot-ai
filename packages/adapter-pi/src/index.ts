@@ -5,8 +5,7 @@
  * Bridges dot-ai's runtime to pi's extension API.
  * Full fidelity — all tiers supported, zero degradation.
  */
-import { DotAiRuntime } from '@dot-ai/core';
-import type { RuntimeOptions } from '@dot-ai/core';
+import { DotAiRuntime, formatSections } from '@dot-ai/core';
 
 // Pi extension API types (structural — no runtime dep on pi)
 interface PiExtensionAPI {
@@ -35,8 +34,7 @@ export default function dotAiPiExtension(pi: PiExtensionAPI): void {
     const workspaceRoot = process.cwd();
     runtime = new DotAiRuntime({
       workspaceRoot,
-      skipIdentities: true,
-    } satisfies RuntimeOptions);
+    });
     await runtime.boot();
 
     // Register capabilities as pi tools
@@ -87,23 +85,13 @@ export default function dotAiPiExtension(pi: PiExtensionAPI): void {
     const lastMessage = args[0] as { content?: string } | undefined;
     const prompt = lastMessage?.content ?? '';
     const result = await runtime.processPrompt(prompt);
-    const response: { systemPrompt: string; model?: string } = { systemPrompt: result.formatted };
+    const formatted = formatSections(result.sections);
+    const response: { systemPrompt: string; model?: string } = { systemPrompt: formatted };
     // If routing suggests a model change, propagate it to Pi
     if (result.routing?.model && result.routing.model !== 'default') {
       response.model = result.routing.model;
     }
     return response;
-  });
-
-  pi.on('context', async (...args: unknown[]) => {
-    if (!runtime) return;
-    const event = args[0] as { messages?: unknown[] } | undefined;
-    if (event?.messages) {
-      const results = await runtime.fire('context_modify', event);
-      if (results.length > 0) {
-        return results[0]; // Return first modifier result
-      }
-    }
   });
 
   pi.on('tool_call', async (...args: unknown[]) => {
@@ -175,7 +163,7 @@ export default function dotAiPiExtension(pi: PiExtensionAPI): void {
     const event = args[0] as { response?: string } | undefined;
     const response = event?.response ?? '';
     if (response) {
-      await runtime.learn(response);
+      await runtime.fire('agent_end', { response });
     }
   });
 

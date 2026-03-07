@@ -1,6 +1,106 @@
 import type { EnrichedContext, MemoryEntry, Skill, Task, Tool, RoutingResult, BudgetWarning } from './types.js';
+import type { Section } from './extension-types.js';
 import type { Logger } from './logger.js';
 import type { Capability } from './capabilities.js';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Section-based formatting (v7 primary)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface FormatSectionsOptions {
+  /** Max estimated tokens (chars / 4). When exceeded, sections are trimmed. */
+  tokenBudget?: number;
+  /** Optional logger for tracing */
+  logger?: Logger;
+}
+
+/**
+ * Format sections into a single markdown string.
+ * Sections are sorted by priority DESC and optionally trimmed to fit a token budget.
+ */
+export function formatSections(sections: Section[], options?: FormatSectionsOptions): string {
+  let result = [...sections];
+
+  // Sort by priority DESC
+  result.sort((a, b) => b.priority - a.priority);
+
+  // Trim if budget set
+  if (options?.tokenBudget) {
+    result = trimSections(result, options.tokenBudget, options.logger);
+  }
+
+  return assembleSections(result);
+}
+
+/**
+ * Assemble sorted sections into a single markdown string.
+ */
+export function assembleSections(sections: Section[]): string {
+  if (sections.length === 0) return '';
+
+  return sections
+    .map(s => {
+      if (s.title) {
+        return `## ${s.title}\n\n${s.content}`;
+      }
+      return s.content;
+    })
+    .join('\n\n---\n\n');
+}
+
+/**
+ * Trim sections to fit within a token budget.
+ * Respects trimStrategy: 'never' sections are never removed.
+ */
+export function trimSections(sections: Section[], budget: number, logger?: Logger): Section[] {
+  const estimateTokens = (secs: Section[]) =>
+    Math.round(secs.map(s => `## ${s.title}\n\n${s.content}`).join('\n\n---\n\n').length / 4);
+
+  let current = estimateTokens(sections);
+  if (current <= budget) return sections;
+
+  const result = [...sections];
+  const actions: string[] = [];
+
+  // Strategy 1: Truncate 'truncate' sections
+  for (let i = result.length - 1; i >= 0; i--) {
+    if (current <= budget) break;
+    const s = result[i];
+    if (s.trimStrategy === 'truncate' && s.content.length > 2000) {
+      result[i] = { ...s, content: s.content.slice(0, 2000) + '\n\n[...truncated]' };
+      actions.push(`truncated section: ${s.id}`);
+      current = estimateTokens(result);
+    }
+  }
+
+  // Strategy 2: Drop non-'never' sections (lowest priority first)
+  for (let i = result.length - 1; i >= 0; i--) {
+    if (current <= budget) break;
+    const s = result[i];
+    if (s.trimStrategy !== 'never') {
+      actions.push(`dropped section: ${s.id} (priority ${s.priority})`);
+      result.splice(i, 1);
+      current = estimateTokens(result);
+    }
+  }
+
+  if (actions.length > 0) {
+    const warning: BudgetWarning = { budget, actual: current, actions };
+    logger?.log({
+      timestamp: new Date().toISOString(),
+      level: current > budget ? 'warn' : 'info',
+      phase: 'format',
+      event: 'budget_trimmed',
+      data: warning as unknown as Record<string, unknown>,
+    });
+  }
+
+  return result;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EnrichedContext-based formatting (legacy — used by adapter-sync, tests)
+// ══════════════════════════════════════════════════════════════════════════════
 
 export interface FormatOptions {
   /** Skip identity sections (useful when already injected at session start) */

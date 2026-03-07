@@ -1,16 +1,13 @@
 {
   "name": "dot-ai",
   "description": "dot-ai — deterministic context enrichment for Claude Code",
-  "version": "0.5.2",
+  "version": "0.0.0",
   "author": {
     "name": "Jonathan Gelin",
     "url": "https://smartsdlc.dev"
   },
   "homepage": "https://github.com/jogelin/dot-ai",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jogelin/dot-ai"
-  },
+  "repository": "https://github.com/jogelin/dot-ai",
   "license": "MIT",
   "hooks": "hooks/hooks.json"
 }

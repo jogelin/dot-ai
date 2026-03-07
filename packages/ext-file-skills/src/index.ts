@@ -18,7 +18,7 @@ interface Skill {
   enabled?: boolean;
 }
 
-export default function extFileSkills(api: ExtensionAPI): void {
+export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
   const nodes = discoverNodes(api.workspaceRoot, parseScanDirs('projects'));
   const skillsDirs = nodes.map(n => ({ dir: join(n.path, 'skills'), node: n.name }));
   let cache: Skill[] | null = null;
@@ -53,15 +53,11 @@ export default function extFileSkills(api: ExtensionAPI): void {
     });
   }
 
-  api.on('resources_discover', async () => {
-    const skills = await listSkills();
-    const labels = new Set<string>();
-    for (const s of skills) {
-      for (const l of s.labels) labels.add(l);
-      for (const t of s.triggers ?? []) labels.add(t);
-    }
-    return { labels: Array.from(labels) };
-  });
+  // Eagerly discover and register all skills at boot
+  const bootSkills = await listSkills();
+  for (const skill of bootSkills) {
+    api.registerSkill(skill);
+  }
 
   api.on('context_enrich', async (event) => {
     const skills = await listSkills();

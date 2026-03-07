@@ -7,7 +7,10 @@ function createMockExtension(overrides?: Partial<LoadedExtension>): LoadedExtens
     path: '/mock/ext.ts',
     handlers: new Map(),
     tools: new Map(),
-    tiers: new Set(),
+    commands: new Map(),
+    skills: new Map(),
+    identities: new Map(),
+    labels: new Set(),
     ...overrides,
   };
 }
@@ -15,26 +18,26 @@ function createMockExtension(overrides?: Partial<LoadedExtension>): LoadedExtens
 describe('ExtensionRunner', () => {
   describe('fire', () => {
     it('fires events to registered handlers', async () => {
-      const handler = vi.fn().mockResolvedValue({ inject: 'hello' });
+      const handler = vi.fn().mockResolvedValue({ data: 'hello' });
       const ext = createMockExtension({
-        handlers: new Map([['context_inject', [handler]]]),
+        handlers: new Map([['agent_end', [handler]]]),
       });
       const runner = new ExtensionRunner([ext]);
-      const results = await runner.fire('context_inject', { prompt: 'test', labels: [] });
-      expect(handler).toHaveBeenCalledWith({ prompt: 'test', labels: [] }, undefined);
-      expect(results).toEqual([{ inject: 'hello' }]);
+      const results = await runner.fire('agent_end', { response: 'test' });
+      expect(handler).toHaveBeenCalledWith({ response: 'test' }, undefined);
+      expect(results).toEqual([{ data: 'hello' }]);
     });
 
     it('collects results from multiple extensions', async () => {
       const ext1 = createMockExtension({
-        handlers: new Map([['context_inject', [vi.fn().mockResolvedValue({ inject: 'a' })]]]),
+        handlers: new Map([['agent_end', [vi.fn().mockResolvedValue({ data: 'a' })]]]),
       });
       const ext2 = createMockExtension({
-        handlers: new Map([['context_inject', [vi.fn().mockResolvedValue({ inject: 'b' })]]]),
+        handlers: new Map([['agent_end', [vi.fn().mockResolvedValue({ data: 'b' })]]]),
       });
       const runner = new ExtensionRunner([ext1, ext2]);
-      const results = await runner.fire('context_inject', {});
-      expect(results).toEqual([{ inject: 'a' }, { inject: 'b' }]);
+      const results = await runner.fire('agent_end', {});
+      expect(results).toEqual([{ data: 'a' }, { data: 'b' }]);
     });
 
     it('skips void results', async () => {
@@ -48,25 +51,25 @@ describe('ExtensionRunner', () => {
     });
 
     it('handles errors in handlers (log and continue)', async () => {
-      const goodHandler = vi.fn().mockResolvedValue({ inject: 'ok' });
+      const goodHandler = vi.fn().mockResolvedValue({ data: 'ok' });
       const badHandler = vi.fn().mockRejectedValue(new Error('boom'));
       const ext = createMockExtension({
-        handlers: new Map([['context_inject', [badHandler, goodHandler]]]),
+        handlers: new Map([['agent_end', [badHandler, goodHandler]]]),
       });
       const runner = new ExtensionRunner([ext]);
-      const results = await runner.fire('context_inject', {});
-      expect(results).toEqual([{ inject: 'ok' }]);
+      const results = await runner.fire('agent_end', {});
+      expect(results).toEqual([{ data: 'ok' }]);
     });
 
     it('passes ctx as second argument to handlers', async () => {
-      const handler = vi.fn().mockResolvedValue({ inject: 'with-ctx' });
+      const handler = vi.fn().mockResolvedValue({ data: 'with-ctx' });
       const ext = createMockExtension({
-        handlers: new Map([['context_inject', [handler]]]),
+        handlers: new Map([['agent_end', [handler]]]),
       });
       const runner = new ExtensionRunner([ext]);
       const ctx = { workspaceRoot: '/test', events: { on: vi.fn(), emit: vi.fn() } };
-      await runner.fire('context_inject', { prompt: 'test', labels: [] }, ctx);
-      expect(handler).toHaveBeenCalledWith({ prompt: 'test', labels: [] }, ctx);
+      await runner.fire('agent_end', { response: 'test' }, ctx);
+      expect(handler).toHaveBeenCalledWith({ response: 'test' }, ctx);
     });
 
     it('returns empty array for events with no handlers', async () => {
@@ -158,33 +161,243 @@ describe('ExtensionRunner', () => {
     });
   });
 
+  describe('skills', () => {
+    it('merges skills across extensions', () => {
+      const skill1 = { name: 'deploy', description: 'Deploy', labels: ['deploy'], content: '...' };
+      const skill2 = { name: 'security', description: 'Security', labels: ['security'], content: '...' };
+      const ext1 = createMockExtension({ skills: new Map([['deploy', skill1]]) });
+      const ext2 = createMockExtension({ skills: new Map([['security', skill2]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      expect(runner.skills).toHaveLength(2);
+      expect(runner.skills.map(s => s.name)).toEqual(['deploy', 'security']);
+    });
+  });
+
+  describe('identities', () => {
+    it('merges identities across extensions', () => {
+      const id1 = { type: 'agents', content: '# AGENTS', source: 'ext-file-identity', priority: 100 };
+      const ext1 = createMockExtension({ identities: new Map([['agents:root', id1]]) });
+      const runner = new ExtensionRunner([ext1]);
+      expect(runner.identities).toHaveLength(1);
+      expect(runner.identities[0].type).toBe('agents');
+    });
+  });
+
+  describe('vocabularyLabels', () => {
+    it('collects labels from all extensions', () => {
+      const ext1 = createMockExtension({ labels: new Set(['deploy', 'security']) });
+      const ext2 = createMockExtension({ labels: new Set(['question', 'deploy']) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const labels = runner.vocabularyLabels;
+      expect(labels).toContain('deploy');
+      expect(labels).toContain('security');
+      expect(labels).toContain('question');
+      // No duplicates
+      expect(labels.filter(l => l === 'deploy')).toHaveLength(1);
+    });
+  });
+
+  describe('fireCollectSections', () => {
+    it('collects sections from multiple handlers', async () => {
+      const handler1 = vi.fn().mockResolvedValue({
+        sections: [{ id: 'sec-a', content: 'A' }],
+      });
+      const handler2 = vi.fn().mockResolvedValue({
+        sections: [{ id: 'sec-b', content: 'B' }],
+      });
+      const ext1 = createMockExtension({ handlers: new Map([['context_enrich', [handler1]]]) });
+      const ext2 = createMockExtension({ handlers: new Map([['context_enrich', [handler2]]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.sections).toHaveLength(2);
+      const ids = result.sections.map((s: { id?: string }) => s.id);
+      expect(ids).toContain('sec-a');
+      expect(ids).toContain('sec-b');
+    });
+
+    it('deduplicates sections by id (last-wins)', async () => {
+      const handler1 = vi.fn().mockResolvedValue({
+        sections: [{ id: 'shared', content: 'first' }],
+      });
+      const handler2 = vi.fn().mockResolvedValue({
+        sections: [{ id: 'shared', content: 'last' }],
+      });
+      const ext1 = createMockExtension({ handlers: new Map([['context_enrich', [handler1]]]) });
+      const ext2 = createMockExtension({ handlers: new Map([['context_enrich', [handler2]]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.sections).toHaveLength(1);
+      expect(result.sections[0].content).toBe('last');
+    });
+
+    it('keeps anonymous sections (no id)', async () => {
+      const handler1 = vi.fn().mockResolvedValue({
+        sections: [{ content: 'anon-1' }],
+      });
+      const handler2 = vi.fn().mockResolvedValue({
+        sections: [{ content: 'anon-2' }],
+      });
+      const ext1 = createMockExtension({ handlers: new Map([['context_enrich', [handler1]]]) });
+      const ext2 = createMockExtension({ handlers: new Map([['context_enrich', [handler2]]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.sections).toHaveLength(2);
+      const contents = result.sections.map((s: { content: string }) => s.content);
+      expect(contents).toContain('anon-1');
+      expect(contents).toContain('anon-2');
+    });
+
+    it('concatenates systemPrompt strings', async () => {
+      const handler1 = vi.fn().mockResolvedValue({ systemPrompt: 'You are helpful.' });
+      const handler2 = vi.fn().mockResolvedValue({ systemPrompt: 'Be concise.' });
+      const ext1 = createMockExtension({ handlers: new Map([['context_enrich', [handler1]]]) });
+      const ext2 = createMockExtension({ handlers: new Map([['context_enrich', [handler2]]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.systemPrompt).toBe('You are helpful.\nBe concise.');
+    });
+
+    it('returns empty sections array and empty systemPrompt when no handlers', async () => {
+      const runner = new ExtensionRunner([createMockExtension()]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.sections).toEqual([]);
+      expect(result.systemPrompt).toBe('');
+    });
+
+    it('handles handler errors gracefully', async () => {
+      const badHandler = vi.fn().mockRejectedValue(new Error('boom'));
+      const goodHandler = vi.fn().mockResolvedValue({
+        sections: [{ id: 'ok', content: 'good' }],
+      });
+      const ext = createMockExtension({
+        handlers: new Map([['context_enrich', [badHandler, goodHandler]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireCollectSections('context_enrich');
+      expect(result.sections).toHaveLength(1);
+      expect(result.sections[0].id).toBe('ok');
+    });
+  });
+
+  describe('fireFirstResult', () => {
+    it('returns first non-null result', async () => {
+      const handler = vi.fn().mockResolvedValue({ route: 'chat' });
+      const ext = createMockExtension({ handlers: new Map([['route', [handler]]]) });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireFirstResult('route', { message: 'hi' });
+      expect(result).toEqual({ route: 'chat' });
+    });
+
+    it('stops after first result (second handler not called)', async () => {
+      const handler1 = vi.fn().mockResolvedValue({ route: 'first' });
+      const handler2 = vi.fn().mockResolvedValue({ route: 'second' });
+      const ext1 = createMockExtension({ handlers: new Map([['route', [handler1]]]) });
+      const ext2 = createMockExtension({ handlers: new Map([['route', [handler2]]]) });
+      const runner = new ExtensionRunner([ext1, ext2]);
+      const result = await runner.fireFirstResult('route', {});
+      expect(result).toEqual({ route: 'first' });
+      expect(handler2).not.toHaveBeenCalled();
+    });
+
+    it('returns null when no handler returns a value', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      const ext = createMockExtension({ handlers: new Map([['route', [handler]]]) });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireFirstResult('route', {});
+      expect(result).toBeNull();
+    });
+
+    it('skips null/undefined results and returns next non-null', async () => {
+      const handler1 = vi.fn().mockResolvedValue(null);
+      const handler2 = vi.fn().mockResolvedValue(undefined);
+      const handler3 = vi.fn().mockResolvedValue({ route: 'found' });
+      const ext = createMockExtension({
+        handlers: new Map([['route', [handler1, handler2, handler3]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireFirstResult('route', {});
+      expect(result).toEqual({ route: 'found' });
+    });
+  });
+
+  describe('fireChainTransform', () => {
+    it('chains transform through handlers', async () => {
+      const handler1 = vi.fn().mockImplementation(async (data: { value: number }) => ({
+        value: data.value + 1,
+      }));
+      const handler2 = vi.fn().mockImplementation(async (data: { value: number }) => ({
+        value: data.value * 2,
+      }));
+      const ext = createMockExtension({
+        handlers: new Map([['label_extract', [handler1, handler2]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireChainTransform('label_extract', { value: 3 });
+      // (3 + 1) * 2 = 8
+      expect(result).toEqual({ value: 8 });
+    });
+
+    it('keeps previous value when handler returns undefined', async () => {
+      const handler1 = vi.fn().mockResolvedValue({ value: 42 });
+      const handler2 = vi.fn().mockResolvedValue(undefined);
+      const ext = createMockExtension({
+        handlers: new Map([['label_extract', [handler1, handler2]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireChainTransform('label_extract', { value: 0 });
+      expect(result).toEqual({ value: 42 });
+    });
+
+    it('short-circuits on input event with consumed: true', async () => {
+      const handler1 = vi.fn().mockResolvedValue({ text: 'consumed', consumed: true });
+      const handler2 = vi.fn().mockResolvedValue({ text: 'never' });
+      const ext = createMockExtension({
+        handlers: new Map([['input', [handler1, handler2]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireChainTransform('input', { text: 'original' });
+      expect(result).toEqual({ text: 'consumed', consumed: true });
+      expect(handler2).not.toHaveBeenCalled();
+    });
+
+    it('handles single handler', async () => {
+      const handler = vi.fn().mockResolvedValue({ label: 'question' });
+      const ext = createMockExtension({
+        handlers: new Map([['label_extract', [handler]]]),
+      });
+      const runner = new ExtensionRunner([ext]);
+      const result = await runner.fireChainTransform('label_extract', { label: 'unknown' });
+      expect(result).toEqual({ label: 'question' });
+    });
+
+    it('returns initial data when no handlers', async () => {
+      const runner = new ExtensionRunner([createMockExtension()]);
+      const initial = { value: 99 };
+      const result = await runner.fireChainTransform('label_extract', initial);
+      expect(result).toEqual({ value: 99 });
+    });
+  });
+
   describe('diagnostics', () => {
-    it('reports correct counts and tiers', () => {
+    it('reports correct counts', () => {
       const ext = createMockExtension({
         path: '/ext/test.ts',
         handlers: new Map([
-          ['context_inject', [vi.fn(), vi.fn()]],
+          ['context_enrich', [vi.fn(), vi.fn()]],
           ['tool_call', [vi.fn()]],
         ]),
         tools: new Map([['my_tool', { name: 'my_tool', description: '', parameters: {}, execute: vi.fn() }]]),
-        tiers: new Set(['universal'] as const),
+        skills: new Map([['deploy', { name: 'deploy', description: '', labels: [] }]]),
+        identities: new Map([['agents:root', { type: 'agents', content: '', source: '', priority: 100 }]]),
       });
       const runner = new ExtensionRunner([ext]);
       const diag = runner.diagnostics;
       expect(diag).toHaveLength(1);
       expect(diag[0].path).toBe('/ext/test.ts');
-      expect(diag[0].handlerCounts).toEqual({ context_inject: 2, tool_call: 1 });
+      expect(diag[0].handlerCounts).toEqual({ context_enrich: 2, tool_call: 1 });
       expect(diag[0].toolNames).toEqual(['my_tool']);
-      expect(diag[0].tiers).toEqual(['universal']);
-    });
-  });
-
-  describe('usedTiers', () => {
-    it('aggregates tiers from all extensions', () => {
-      const ext1 = createMockExtension({ tiers: new Set(['universal'] as const) });
-      const ext2 = createMockExtension({ tiers: new Set(['rich'] as const) });
-      const runner = new ExtensionRunner([ext1, ext2]);
-      expect(runner.usedTiers).toEqual(new Set(['universal', 'rich']));
+      expect(diag[0].skillNames).toEqual(['deploy']);
+      expect(diag[0].identityNames).toEqual(['agents:root']);
     });
   });
 });

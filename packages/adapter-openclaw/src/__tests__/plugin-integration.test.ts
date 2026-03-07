@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { DotAiRuntime, EventBus, ADAPTER_CAPABILITIES } from '@dot-ai/core';
+import { createRequire } from 'node:module';
+import { DotAiRuntime, EventBus, formatSections } from '@dot-ai/core';
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../../package.json') as { version: string };
 
 // ── Mock OpenClaw Plugin API ──
 
@@ -94,18 +98,18 @@ describe('OpenClaw Plugin Integration', () => {
       expect(tools[0].opts?.names).toContain('task_list');
     });
 
-    it('logs plugin version v6', async () => {
+    it('logs plugin version', async () => {
       const { api, logs } = createMockOpenClawApi();
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      expect(logs.some(l => l.includes('v6'))).toBe(true);
+      expect(logs.some(l => l.includes(`v${PKG_VERSION}`))).toBe(true);
     });
 
     it('has correct plugin metadata', async () => {
       const { default: plugin } = await import('../index.js');
       expect(plugin.id).toBe('dot-ai');
-      expect(plugin.version).toBe('6.0.0');
+      expect(plugin.version).toBe(PKG_VERSION);
       expect(plugin.kind).toBe('memory');
     });
   });
@@ -157,17 +161,20 @@ describe('OpenClaw Plugin Integration', () => {
     });
   });
 
-  describe('DotAiRuntime lifecycle (v6 extension-only)', () => {
-    it('boots and processes prompt', async () => {
+  describe('DotAiRuntime lifecycle (v7)', () => {
+    it('boots and processes prompt returning sections', async () => {
       const runtime = new DotAiRuntime({
         workspaceRoot: '/tmp/nonexistent',
-        skipIdentities: true,
       });
       await runtime.boot();
       expect(runtime.isBooted).toBe(true);
 
-      const { formatted } = await runtime.processPrompt('hello world');
-      expect(formatted).toBeDefined();
+      const { sections } = await runtime.processPrompt('hello world');
+      expect(sections).toBeDefined();
+      expect(Array.isArray(sections)).toBe(true);
+
+      const formatted = formatSections(sections);
+      expect(typeof formatted).toBe('string');
     });
 
     it('diagnostics show extension info', async () => {
@@ -181,30 +188,12 @@ describe('OpenClaw Plugin Integration', () => {
       expect(diag.capabilityCount).toBe(0);
     });
 
-    it('learn fires agent_end without throwing', async () => {
+    it('fire agent_end without throwing', async () => {
       const runtime = new DotAiRuntime({
         workspaceRoot: '/tmp/nonexistent',
       });
       await runtime.boot();
-      await runtime.learn('test response');
-    });
-  });
-
-  describe('OpenClaw adapter capability matrix', () => {
-    it('OpenClaw supports context_inject, agent_end, session_start', () => {
-      const supported = ADAPTER_CAPABILITIES['openclaw'];
-      expect(supported.has('context_inject')).toBe(true);
-      expect(supported.has('agent_end')).toBe(true);
-      expect(supported.has('session_start')).toBe(true);
-    });
-
-    it('OpenClaw does NOT support tool_call, tool_result, context_modify', () => {
-      const supported = ADAPTER_CAPABILITIES['openclaw'];
-      expect(supported.has('tool_call')).toBe(false);
-      expect(supported.has('tool_result')).toBe(false);
-      expect(supported.has('context_modify')).toBe(false);
-      expect(supported.has('turn_start')).toBe(false);
-      expect(supported.has('turn_end')).toBe(false);
+      await runtime.fire('agent_end', { response: 'test response' });
     });
   });
 

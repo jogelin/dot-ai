@@ -10,10 +10,19 @@ export default function(api) {
     }
   });
 
-  api.on('context_inject', async (event, ctx) => {
-    // Use ctx.workspaceRoot in injected context
+  api.on('context_enrich', async (_event, ctx) => {
+    // Use ctx.workspaceRoot in enriched context
     if (ctx?.workspaceRoot) {
-      return { inject: `Workspace: ${ctx.workspaceRoot}` };
+      return {
+        sections: [{
+          id: 'ctx-aware:workspace',
+          title: 'Workspace',
+          content: `Workspace: ${ctx.workspaceRoot}`,
+          priority: 30,
+          source: 'ctx-aware',
+          trimStrategy: 'drop',
+        }],
+      };
     }
   });
 

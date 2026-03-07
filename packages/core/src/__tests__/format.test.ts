@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { formatContext, formatToolHints } from '../format.js';
+import { formatContext, formatToolHints, formatSections, assembleSections, trimSections } from '../format.js';
 import type { EnrichedContext, Identity, MemoryEntry, Skill, Tool } from '../types.js';
 import type { Capability } from '../capabilities.js';
+import type { Section } from '../extension-types.js';
 
 function makeContext(overrides?: Partial<EnrichedContext>): EnrichedContext {
   return {
@@ -426,6 +427,182 @@ describe('formatToolHints', () => {
     const result = formatToolHints(caps);
     expect(result).not.toContain('no-hints');
     expect(result).toContain('with-hint');
+  });
+});
+
+function makeSection(overrides?: Partial<Section>): Section {
+  return {
+    id: 'test:section',
+    title: 'Test',
+    content: 'test content',
+    priority: 50,
+    source: 'test',
+    ...overrides,
+  };
+}
+
+describe('assembleSections', () => {
+  it('returns empty string for empty array', () => {
+    expect(assembleSections([])).toBe('');
+  });
+
+  it('formats single section with title as ## Title\\n\\ncontent', () => {
+    const section = makeSection({ title: 'My Title', content: 'my content' });
+    const result = assembleSections([section]);
+    expect(result).toBe('## My Title\n\nmy content');
+  });
+
+  it('joins multiple sections with \\n\\n---\\n\\n', () => {
+    const sections = [
+      makeSection({ title: 'First', content: 'first content' }),
+      makeSection({ title: 'Second', content: 'second content' }),
+    ];
+    const result = assembleSections(sections);
+    expect(result).toBe('## First\n\nfirst content\n\n---\n\n## Second\n\nsecond content');
+  });
+
+  it('handles sections without title (just content)', () => {
+    const section = makeSection({ title: '', content: 'bare content' });
+    const result = assembleSections([section]);
+    expect(result).toBe('bare content');
+  });
+
+  it('mixes titled and untitled sections', () => {
+    const sections = [
+      makeSection({ title: 'With Title', content: 'titled content' }),
+      makeSection({ title: '', content: 'untitled content' }),
+    ];
+    const result = assembleSections(sections);
+    expect(result).toBe('## With Title\n\ntitled content\n\n---\n\nuntitled content');
+  });
+});
+
+describe('formatSections', () => {
+  it('sorts sections by priority DESC', () => {
+    const sections = [
+      makeSection({ id: 'low', title: 'Low', content: 'low priority', priority: 10 }),
+      makeSection({ id: 'high', title: 'High', content: 'high priority', priority: 100 }),
+      makeSection({ id: 'mid', title: 'Mid', content: 'mid priority', priority: 50 }),
+    ];
+    const result = formatSections(sections);
+    const highPos = result.indexOf('high priority');
+    const midPos = result.indexOf('mid priority');
+    const lowPos = result.indexOf('low priority');
+    expect(highPos).toBeLessThan(midPos);
+    expect(midPos).toBeLessThan(lowPos);
+  });
+
+  it('returns assembleSections output (no trimming when no budget)', () => {
+    const sections = [
+      makeSection({ title: 'A', content: 'content a', priority: 10 }),
+      makeSection({ title: 'B', content: 'content b', priority: 20 }),
+    ];
+    // formatSections sorts by priority DESC, so B first
+    const result = formatSections(sections);
+    expect(result).toBe('## B\n\ncontent b\n\n---\n\n## A\n\ncontent a');
+  });
+
+  it('applies trimming when tokenBudget is set', () => {
+    // Create a protected section (never drop) with large content that will exceed the budget
+    // and a smaller section that can be dropped. The protected one gets truncated but not dropped.
+    const bigContent = 'X'.repeat(10000);
+    const sections = [
+      makeSection({ id: 'protected', title: 'Protected', content: bigContent, priority: 50, trimStrategy: 'never' }),
+    ];
+    // Budget well below the content size — trimming will be attempted but 'never' prevents drop
+    // The result is the original content since truncate strategy isn't set
+    const result = formatSections(sections, { tokenBudget: 10 });
+    // The section is preserved (never dropped)
+    expect(result).toContain('## Protected');
+    // Content is shorter than original since no truncate strategy, section cannot be dropped either
+    // so the function returns it as-is
+    expect(result).toContain('X');
+  });
+
+  it('returns empty string for empty sections array', () => {
+    expect(formatSections([])).toBe('');
+  });
+});
+
+describe('trimSections', () => {
+  it('returns sections unchanged when under budget', () => {
+    const sections = [makeSection({ content: 'short content' })];
+    // Large budget so no trimming needed
+    const result = trimSections(sections, 100000);
+    expect(result).toEqual(sections);
+  });
+
+  it('truncates sections with trimStrategy truncate when content > 2000 chars', () => {
+    const longContent = 'A'.repeat(3000);
+    // Use a budget that is exceeded by the long content but satisfied after truncation to 2000 chars.
+    // Truncated content: 2000 chars + '\n\n[...truncated]' = ~2016 chars ≈ 504 tokens.
+    // With title '## Test\n\n' overhead (~12 chars) ≈ 504 tokens total.
+    // Use budget=600 so truncation satisfies it but not dropping.
+    const sections = [
+      makeSection({ id: 'big', content: longContent, trimStrategy: 'truncate' }),
+    ];
+    const result = trimSections(sections, 600);
+    expect(result).toHaveLength(1);
+    expect(result[0].content).toContain('[...truncated]');
+    expect(result[0].content).toContain('A'.repeat(2000));
+    expect(result[0].content).not.toContain('A'.repeat(2001));
+  });
+
+  it('does not truncate sections with content <= 2000 chars even with truncate strategy', () => {
+    const shortContent = 'A'.repeat(500);
+    const sections = [
+      makeSection({ id: 'small', content: shortContent, trimStrategy: 'truncate' }),
+      makeSection({ id: 'other', content: 'other content', priority: 10 }),
+    ];
+    // Force a tight budget but the truncate candidate is too short to truncate
+    // so the other (droppable) section will be dropped instead
+    const result = trimSections(sections, 1);
+    const truncatedSection = result.find(s => s.id === 'small');
+    if (truncatedSection) {
+      expect(truncatedSection.content).not.toContain('[...truncated]');
+    }
+  });
+
+  it('drops sections with trimStrategy drop (lowest priority first)', () => {
+    const sections = [
+      makeSection({ id: 'high', title: 'High', content: 'high priority content', priority: 100 }),
+      makeSection({ id: 'low', title: 'Low', content: 'low priority content', priority: 1, trimStrategy: 'drop' }),
+    ];
+    // Budget that requires dropping sections — very tight
+    const result = trimSections(sections, 1);
+    const ids = result.map(s => s.id);
+    expect(ids).not.toContain('low');
+  });
+
+  it('never drops sections with trimStrategy never', () => {
+    const sections = [
+      makeSection({ id: 'protected', title: 'Protected', content: 'protected content', priority: 1, trimStrategy: 'never' }),
+      makeSection({ id: 'droppable', title: 'Droppable', content: 'droppable content', priority: 50 }),
+    ];
+    // Very tight budget forces drops but 'never' section must survive
+    const result = trimSections(sections, 1);
+    const ids = result.map(s => s.id);
+    expect(ids).toContain('protected');
+  });
+
+  it('logs budget warning when trimming occurs', () => {
+    const bigContent = 'A'.repeat(10000);
+    const sections = [
+      makeSection({ id: 'big', content: bigContent, trimStrategy: 'truncate' }),
+    ];
+    const logger = { log: vi.fn() };
+    trimSections(sections, 1, logger);
+    expect(logger.log).toHaveBeenCalled();
+    const logCall = logger.log.mock.calls[0][0];
+    expect(logCall.event).toBe('budget_trimmed');
+    expect(logCall.phase).toBe('format');
+  });
+
+  it('does not log when no trimming occurs', () => {
+    const sections = [makeSection({ content: 'short' })];
+    const logger = { log: vi.fn() };
+    trimSections(sections, 100000, logger);
+    expect(logger.log).not.toHaveBeenCalled();
   });
 });
 

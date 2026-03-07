@@ -29,7 +29,7 @@
     "releaseTagPattern": "v{version}",
     "version": {
       "conventionalCommits": true,
-      "fallbackCurrentVersionResolver": "disk",
+      "currentVersionResolver": "git-tag",
       "git": {
         "commit": false,
         "tag": false

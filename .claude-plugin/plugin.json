@@ -1,7 +1,7 @@
 {
   "name": "dot-ai",
   "description": "dot-ai — deterministic context enrichment for Claude Code",
-  "version": "0.5.2",
+  "version": "0.0.0",
   "author": {
     "name": "Jonathan Gelin",
     "url": "https://smartsdlc.dev"

@@ -2,19 +2,13 @@
  * Tests for hook.ts logic patterns.
  *
  * hook.ts is a CLI entry point (self-executing, reads from stdin) so we cannot
- * import its handlers directly. Instead we:
- *   1. Re-implement the key regex logic and verify it matches the source patterns.
- *   2. Test the handler behaviours by calling the equivalent logic through
- *      a thin reimplementation that accepts the same mocked DotAiRuntime.
- *
- * The regexes under test are the canonical ones from hook.ts:
- *   - Memory-file detection:  /memory\/[^\s]*\.md$/i
- *   - Bash memory-write:      /memory\/[^\s]*\.md/i  +  /(?:>|tee|cp|mv|cat\s*<<|echo\s.*>)/i
+ * import its handlers directly. Instead we re-implement the key regex logic
+ * and test handler behaviors through thin reimplementations.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ADAPTER_CAPABILITIES } from '@dot-ai/core';
-import type { DotAiRuntime } from '@dot-ai/core';
+import { formatSections } from '@dot-ai/core';
+import type { DotAiRuntime, Section } from '@dot-ai/core';
 
 // ── Regex constants (copied verbatim from hook.ts) ──────────────────────────
 
@@ -23,8 +17,6 @@ const BASH_MEMORY_PATH_RE = /memory\/[^\s]*\.md/i;
 const BASH_WRITE_OP_RE = /(?:>|tee|cp|mv|cat\s*<<|echo\s.*>)/i;
 
 // ── Minimal event-handler reimplementations ──────────────────────────────────
-// These mirror hook.ts handler logic but accept an already-constructed runtime
-// instead of calling createRuntime(), letting us inject mocks cleanly.
 
 interface BlockResult { decision: 'block'; reason: string }
 interface AllowResult { decision?: never }
@@ -33,12 +25,11 @@ type PreToolResult = BlockResult | AllowResult | null;
 async function handlePreToolUse(
   event: Record<string, unknown>,
   runtime: Pick<DotAiRuntime, 'fireToolCall'>,
-  out: string[] = [],  // collect stdout writes for assertions
+  out: string[] = [],
 ): Promise<PreToolResult> {
   const toolName = (event.tool_name ?? '') as string;
   const input = (event.tool_input ?? {}) as Record<string, unknown>;
 
-  // Extension check first
   const extensionResult = await runtime.fireToolCall({ tool: toolName, input });
   if (extensionResult?.decision === 'block') {
     const payload: BlockResult = { decision: 'block', reason: extensionResult.reason ?? 'Blocked by extension' };
@@ -46,7 +37,6 @@ async function handlePreToolUse(
     return payload;
   }
 
-  // Hardcoded memory-file blocking
   if (toolName === 'Write' || toolName === 'Edit') {
     const filePath = (input.file_path ?? input.path ?? '') as string;
     if (filePath && MEMORY_FILE_RE.test(filePath)) {
@@ -82,7 +72,8 @@ async function handlePromptSubmit(
   const prompt = (event.prompt ?? event.content ?? '') as string;
   if (!prompt) return;
 
-  const { formatted } = await runtime.processPrompt(prompt);
+  const { sections } = await runtime.processPrompt(prompt);
+  const formatted = formatSections(sections);
   if (formatted) {
     out.push(JSON.stringify({ result: formatted }));
   }
@@ -94,19 +85,19 @@ async function handlePreCompact(
 ): Promise<void> {
   const summary = (event.summary ?? event.content ?? '') as string;
   if (summary) {
-    await runtime.fire('agent_end', {
-      response: `[compaction] ${summary.slice(0, 1000)}`,
+    await runtime.fire('session_compact', {
+      summary: summary.slice(0, 1000),
     });
   }
 }
 
 async function handleStop(
   event: Record<string, unknown>,
-  runtime: Pick<DotAiRuntime, 'learn'>,
+  runtime: Pick<DotAiRuntime, 'fire'>,
 ): Promise<void> {
   const response = (event.response ?? event.content ?? '') as string;
   if (response) {
-    await runtime.learn(response);
+    await runtime.fire('agent_end', { response });
   }
 }
 
@@ -119,27 +110,25 @@ function handleSessionStart(
   errOut.push(`[dot-ai] Booted\n`);
   if (diag.extensions.length > 0) {
     errOut.push(`[dot-ai] ${diag.extensions.length} extension(s), ${diag.capabilityCount} tool(s)\n`);
-    for (const ext of diag.extensions) {
-      for (const eventName of Object.keys(ext.handlerCounts)) {
-        if (!ADAPTER_CAPABILITIES['claude-code'].has(eventName)) {
-          errOut.push(
-            `[dot-ai] Warning: Extension ${ext.path} uses '${eventName}' (not supported by Claude Code adapter)\n`,
-          );
-        }
-      }
-    }
   }
 }
 
 // ── Mock factory ─────────────────────────────────────────────────────────────
 
 function makeRuntime(): DotAiRuntime {
+  const systemSection: Section = {
+    id: 'dot-ai:system',
+    title: 'dot-ai',
+    content: 'dot-ai workspace active.',
+    priority: 95,
+    source: 'core',
+    trimStrategy: 'never',
+  };
   return {
     fireToolCall: vi.fn().mockResolvedValue(null),
-    processPrompt: vi.fn().mockResolvedValue({ formatted: '', enriched: {}, capabilities: [] }),
-    learn: vi.fn().mockResolvedValue(undefined),
+    processPrompt: vi.fn().mockResolvedValue({ sections: [systemSection], labels: [], routing: null }),
     fire: vi.fn().mockResolvedValue([]),
-    diagnostics: { extensions: [], usedTiers: [], capabilityCount: 0, vocabularySize: 0 },
+    diagnostics: { extensions: [], capabilityCount: 0, vocabularySize: 0, skillCount: 0, identityCount: 0 },
     flush: vi.fn().mockResolvedValue(undefined),
     boot: vi.fn().mockResolvedValue(undefined),
     shutdown: vi.fn().mockResolvedValue(undefined),
@@ -464,66 +453,48 @@ describe('handlePromptSubmit', () => {
     out = [];
   });
 
-  it('calls processPrompt and writes JSON result to stdout', async () => {
+  it('calls processPrompt and writes formatted JSON result to stdout', async () => {
+    const testSection: Section = { id: 'test', title: 'Test', content: 'enriched context', priority: 50, source: 'test' };
     vi.mocked(runtime.processPrompt).mockResolvedValue({
-      formatted: 'enriched context',
-      enriched: {} as never,
-      capabilities: [],
+      sections: [testSection],
+      labels: [],
+      routing: null,
     });
 
     await handlePromptSubmit({ prompt: 'how do I do X?' }, runtime, out);
 
     expect(runtime.processPrompt).toHaveBeenCalledWith('how do I do X?');
-    expect(JSON.parse(out[0])).toEqual({ result: 'enriched context' });
+    expect(out).toHaveLength(1);
+    const parsed = JSON.parse(out[0]);
+    expect(parsed.result).toContain('enriched context');
   });
 
   it('reads prompt from content field if prompt is missing', async () => {
-    vi.mocked(runtime.processPrompt).mockResolvedValue({
-      formatted: 'ctx',
-      enriched: {} as never,
-      capabilities: [],
-    });
-
     await handlePromptSubmit({ content: 'alt prompt' }, runtime, out);
-
     expect(runtime.processPrompt).toHaveBeenCalledWith('alt prompt');
-  });
-
-  it('does not write to stdout when formatted is empty', async () => {
-    vi.mocked(runtime.processPrompt).mockResolvedValue({
-      formatted: '',
-      enriched: {} as never,
-      capabilities: [],
-    });
-
-    await handlePromptSubmit({ prompt: 'hello' }, runtime, out);
-
-    expect(out).toHaveLength(0);
   });
 
   it('returns early without calling processPrompt when prompt is empty', async () => {
     await handlePromptSubmit({ prompt: '' }, runtime, out);
-
     expect(runtime.processPrompt).not.toHaveBeenCalled();
     expect(out).toHaveLength(0);
   });
 
   it('returns early when neither prompt nor content present', async () => {
     await handlePromptSubmit({}, runtime, out);
-
     expect(runtime.processPrompt).not.toHaveBeenCalled();
   });
 });
 
 describe('handlePreCompact', () => {
-  it('fires agent_end with compaction summary', async () => {
+  it('fires session_compact with summary', async () => {
     const fire = vi.fn().mockResolvedValue([]);
     const runtime = { fire } as unknown as DotAiRuntime;
 
     await handlePreCompact({ summary: 'session wrapped up nicely' }, runtime);
 
-    expect(fire).toHaveBeenCalledWith('agent_end', {
-      response: '[compaction] session wrapped up nicely',
+    expect(fire).toHaveBeenCalledWith('session_compact', {
+      summary: 'session wrapped up nicely',
     });
   });
 
@@ -535,7 +506,7 @@ describe('handlePreCompact', () => {
     await handlePreCompact({ summary: longSummary }, runtime);
 
     const call = fire.mock.calls[0][1];
-    expect(call.response.length).toBe('[compaction] '.length + 1000);
+    expect(call.summary.length).toBe(1000);
   });
 
   it('reads from content field when summary is absent', async () => {
@@ -544,8 +515,8 @@ describe('handlePreCompact', () => {
 
     await handlePreCompact({ content: 'fallback summary' }, runtime);
 
-    expect(fire).toHaveBeenCalledWith('agent_end', {
-      response: '[compaction] fallback summary',
+    expect(fire).toHaveBeenCalledWith('session_compact', {
+      summary: 'fallback summary',
     });
   });
 
@@ -566,28 +537,24 @@ describe('handleStop', () => {
     runtime = makeRuntime();
   });
 
-  it('calls runtime.learn with the response', async () => {
+  it('fires agent_end with the response', async () => {
     await handleStop({ response: 'I completed the task.' }, runtime);
-
-    expect(runtime.learn).toHaveBeenCalledWith('I completed the task.');
+    expect(runtime.fire).toHaveBeenCalledWith('agent_end', { response: 'I completed the task.' });
   });
 
   it('reads from content field when response is absent', async () => {
     await handleStop({ content: 'alt response' }, runtime);
-
-    expect(runtime.learn).toHaveBeenCalledWith('alt response');
+    expect(runtime.fire).toHaveBeenCalledWith('agent_end', { response: 'alt response' });
   });
 
-  it('does not call learn when response is empty', async () => {
+  it('does not fire when response is empty', async () => {
     await handleStop({ response: '' }, runtime);
-
-    expect(runtime.learn).not.toHaveBeenCalled();
+    expect(runtime.fire).not.toHaveBeenCalled();
   });
 
-  it('does not call learn when neither response nor content present', async () => {
+  it('does not fire when neither response nor content present', async () => {
     await handleStop({}, runtime);
-
-    expect(runtime.learn).not.toHaveBeenCalled();
+    expect(runtime.fire).not.toHaveBeenCalled();
   });
 });
 
@@ -598,11 +565,12 @@ describe('handleSessionStart', () => {
       ...makeRuntime(),
       diagnostics: {
         extensions: [
-          { path: '/ext/my-ext.js', handlerCounts: { prompt_submit: 1 }, toolNames: [], commandNames: [], tiers: [] },
+          { path: '/ext/my-ext.js', handlerCounts: { context_enrich: 1 }, toolNames: [], commandNames: [], skillNames: [], identityNames: [] },
         ],
-        usedTiers: [],
         capabilityCount: 0,
         vocabularySize: 0,
+        skillCount: 0,
+        identityCount: 0,
       },
     };
 
@@ -611,66 +579,11 @@ describe('handleSessionStart', () => {
     expect(errOut.some(l => l.includes('1 extension(s)'))).toBe(true);
   });
 
-  it('warns about events not supported by Claude Code adapter', () => {
-    const errOut: string[] = [];
-    const unsupportedEvent = '__definitely_not_supported__';
-    const runtime = {
-      ...makeRuntime(),
-      diagnostics: {
-        extensions: [
-          { path: '/ext/my-ext.js', handlerCounts: { [unsupportedEvent]: 1 }, toolNames: [], commandNames: [], tiers: [] },
-        ],
-        usedTiers: [],
-        capabilityCount: 0,
-        vocabularySize: 0,
-      },
-    };
-
-    handleSessionStart({}, runtime, errOut);
-
-    const warnings = errOut.filter(l => l.includes('Warning'));
-    expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings[0]).toContain(unsupportedEvent);
-    expect(warnings[0]).toContain('/ext/my-ext.js');
-  });
-
-  it('does not warn for events that ARE supported', () => {
-    const errOut: string[] = [];
-    const supportedEvent = [...ADAPTER_CAPABILITIES['claude-code']][0];
-    const runtime = {
-      ...makeRuntime(),
-      diagnostics: {
-        extensions: [
-          { path: '/ext/my-ext.js', handlerCounts: { [supportedEvent]: 1 }, toolNames: [], commandNames: [], tiers: [] },
-        ],
-        usedTiers: [],
-        capabilityCount: 0,
-        vocabularySize: 0,
-      },
-    };
-
-    handleSessionStart({}, runtime, errOut);
-
-    const warnings = errOut.filter(l => l.includes('Warning'));
-    expect(warnings).toHaveLength(0);
-  });
-
   it('logs boot message when no extensions are loaded', () => {
     const errOut: string[] = [];
     handleSessionStart({}, makeRuntime(), errOut);
 
     expect(errOut.some(l => l.includes('Booted'))).toBe(true);
     expect(errOut.filter(l => l.includes('extension')).length).toBe(0);
-  });
-});
-
-describe('ADAPTER_CAPABILITIES claude-code set', () => {
-  it('is a Set', () => {
-    expect(ADAPTER_CAPABILITIES['claude-code']).toBeInstanceOf(Set);
-  });
-
-  it('contains expected event names', () => {
-    const set = ADAPTER_CAPABILITIES['claude-code'];
-    expect(set.size).toBeGreaterThan(0);
   });
 });
