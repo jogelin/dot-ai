@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { DotAiRuntime, EventBus, formatSections } from '@dot-ai/core';
 
@@ -145,7 +145,10 @@ describe('OpenClaw Plugin Integration', () => {
       expect(logs.some(l => l.includes('Sub-agent') || l.includes('cron'))).toBe(true);
     });
 
-    it('skips when no workspaceDir', async () => {
+    it('skips when no workspaceDir and no .ai/ in cwd', async () => {
+      // Mock cwd to a directory without .ai/
+      const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/tmp');
+
       const { api, hooks, logs } = createMockOpenClawApi();
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
@@ -157,7 +160,9 @@ describe('OpenClaw Plugin Integration', () => {
       );
 
       expect(result).toBeUndefined();
-      expect(logs.some(l => l.includes('No workspaceDir'))).toBe(true);
+      expect(logs.some(l => l.includes('No .ai/ found'))).toBe(true);
+
+      cwdSpy.mockRestore();
     });
   });
 
