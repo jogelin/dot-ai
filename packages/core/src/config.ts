@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import type { DotAiConfig, ExtensionsConfig } from './types.js';
 
 /**
@@ -62,13 +63,51 @@ function settingsJsonToConfig(json: Record<string, unknown>): DotAiConfig {
 }
 
 /**
+ * Merge two configs: global (base) + project (override).
+ * Arrays (paths, packages) are concatenated and deduplicated.
+ * Scalar values from project take precedence.
+ */
+function mergeConfigs(global: DotAiConfig, project: DotAiConfig): DotAiConfig {
+  const merged: DotAiConfig = { ...global, ...project };
+
+  // Merge extensions arrays (global + project, deduplicated)
+  if (global.extensions || project.extensions) {
+    const globalExt = global.extensions ?? {};
+    const projectExt = project.extensions ?? {};
+    merged.extensions = {
+      paths: dedup([...(globalExt.paths ?? []), ...(projectExt.paths ?? [])]),
+      packages: dedup([...(globalExt.packages ?? []), ...(projectExt.packages ?? [])]),
+    };
+    // Clean up empty arrays
+    if (merged.extensions.paths!.length === 0) delete merged.extensions.paths;
+    if (merged.extensions.packages!.length === 0) delete merged.extensions.packages;
+    if (!merged.extensions.paths && !merged.extensions.packages) delete merged.extensions;
+  }
+
+  // Project debug/workspace override global
+  if (project.debug) merged.debug = project.debug;
+  if (project.workspace) merged.workspace = project.workspace;
+
+  return merged;
+}
+
+function dedup(arr: string[]): string[] {
+  return [...new Set(arr)];
+}
+
+/**
  * Load config from workspace root.
- * Tries settings.json first, falls back to empty config.
+ *
+ * Loads from two sources and merges them:
+ * 1. Global: ~/.ai/settings.json (user-level defaults)
+ * 2. Project: {workspaceRoot}/.ai/settings.json (project-level overrides)
+ *
+ * Arrays (packages, extensions) are merged. Scalar values from project win.
  */
 export async function loadConfig(workspaceRoot: string): Promise<DotAiConfig> {
-  const settingsConfig = await loadSettingsJson(workspaceRoot);
-  if (settingsConfig) return settingsConfig;
-  return {};
+  const globalConfig = await loadSettingsJson(homedir()) ?? {};
+  const projectConfig = await loadSettingsJson(workspaceRoot) ?? {};
+  return mergeConfigs(globalConfig, projectConfig);
 }
 
 /**
