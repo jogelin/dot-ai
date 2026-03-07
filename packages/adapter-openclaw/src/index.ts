@@ -178,7 +178,7 @@ const plugin = {
     // Service registration
     api.registerService({
       id: 'dot-ai',
-      start: (svc) => svc.logger.info('[dot-ai] Active'),
+      start: (svc) => svc.logger.info(`[dot-ai] Active (workspace: ${configuredWorkspace ?? 'cwd'})`),
       stop: (svc) => svc.logger.info('[dot-ai] Stopped'),
     });
   },
