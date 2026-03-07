@@ -476,17 +476,54 @@ The central configuration file at `.ai/settings.json`:
 }
 ```
 
+### Global Configuration
+
+User-level defaults can be set in `~/.ai/settings.json`. These are merged with project-level settings (arrays deduplicated, project scalars win):
+
+```json
+{
+  "packages": [
+    "@dot-ai/ext-file-identity",
+    "@dot-ai/ext-file-memory"
+  ]
+}
+```
+
+### Auto-Install
+
+Packages listed in `settings.json` are **automatically installed** into `.ai/packages/` at boot if not already present. No manual `npm install` needed.
+
+### Workspace Resolution
+
+Each adapter resolves the workspace root (the directory containing `.ai/`) and passes it to `DotAiRuntime`. The resolution priority varies by adapter:
+
+**OpenClaw adapter:**
+
+| Priority | Source | Use Case |
+|----------|--------|----------|
+| 1 | `process.cwd()` | CLI / local usage where cwd is the project |
+| 2 | `pluginConfig.workspace` | Gateway / Discord / TUI where cwd is not the project |
+| 3 | `ctx.workspaceDir` | OpenClaw fallback |
+
+**Claude Code adapter:** Uses the hook's `cwd` (always the project directory).
+
+**Pi adapter:** Uses the configured `workspaceRoot` option.
+
 ### OpenClaw Configuration
+
+In `openclaw.json`, configure the workspace path for gateway/Discord/TUI environments:
 
 ```json
 {
   "plugins": {
-    "dot-ai": {
-      "workspaceRoot": "~/dev/my-workspace",
-      "modelRouting": {
-        "enabled": true,
-        "defaultSubagentModel": "anthropic/claude-haiku",
-        "maxConcurrentSubagents": 8
+    "entries": {
+      "dot-ai": {
+        "workspace": "/Users/you/dev/my-project",
+        "modelRouting": {
+          "enabled": true,
+          "defaultSubagentModel": "anthropic/claude-haiku",
+          "maxConcurrentSubagents": 8
+        }
       }
     }
   }
