@@ -303,6 +303,32 @@ Adapters bridge agents and dot-ai. Each adapter uses `DotAiRuntime` internally a
 
 ---
 
+## Naming Conventions
+
+### Package Naming
+
+All packages follow strict naming patterns under the `@dot-ai/` scope:
+
+| Pattern | Purpose | Examples |
+|---------|---------|---------|
+| `@dot-ai/core` | Core runtime engine | `@dot-ai/core` |
+| `@dot-ai/cli` | CLI tool | `@dot-ai/cli` |
+| `@dot-ai/adapter-*` | Agent adapters | `@dot-ai/adapter-claude`, `@dot-ai/adapter-openclaw`, `@dot-ai/adapter-pi`, `@dot-ai/adapter-sync` |
+| `@dot-ai/ext-*` | Extensions | `@dot-ai/ext-file-memory`, `@dot-ai/ext-sqlite-memory`, `@dot-ai/ext-rules-routing` |
+
+**Rules:**
+- Adapters are **always** `@dot-ai/adapter-{agent}` — never `@dot-ai/{agent}`
+- Extensions are **always** `@dot-ai/ext-{type}-{name}` — the `ext-` prefix distinguishes from adapters
+- Directory names under `packages/` match the suffix: `packages/adapter-claude/`, `packages/ext-file-memory/`
+
+### Configuration
+
+- Project config: `.ai/settings.json` (never `dot-ai.yml`)
+- Global config: `~/.ai/settings.json` (merged with project, arrays deduplicated, project scalars win)
+- OpenClaw plugin config: `plugins.entries.dot-ai.config` in `openclaw.json`
+
+---
+
 ## Key Design Decisions
 
 ### 1. Extension-Only Architecture (v7)
