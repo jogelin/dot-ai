@@ -94,11 +94,16 @@ const plugin = {
         _event: unknown,
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
-        const workspaceDir = ctx.workspaceDir;
-        if (!workspaceDir) {
+        const rawWorkspaceDir = ctx.workspaceDir;
+        if (!rawWorkspaceDir) {
           api.logger.info('[dot-ai] No workspaceDir, skipping');
           return;
         }
+
+        // OpenClaw may pass the .ai/ dir itself — we need the parent (workspace root)
+        const workspaceDir = rawWorkspaceDir.endsWith('/.ai') || rawWorkspaceDir.endsWith('\\.ai')
+          ? rawWorkspaceDir.slice(0, -4)
+          : rawWorkspaceDir;
 
         const isSubagent = ctx.sessionKey?.includes(':subagent:') || ctx.sessionKey?.includes(':cron:');
         if (isSubagent) {
@@ -108,6 +113,7 @@ const plugin = {
 
         try {
           if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
+            api.logger.info(`[dot-ai] workspaceRoot=${workspaceDir}`);
             cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
             await cachedRuntime.boot();
             cachedWorkspace = workspaceDir;
