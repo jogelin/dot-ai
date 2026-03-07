@@ -1,3 +1,19 @@
+## 0.11.1 (2026-03-07)
+
+### 🚀 Features
+
+- **core:** merge global ~/.ai/settings.json with project config ([4ee87cd](https://github.com/jogelin/dot-ai/commit/4ee87cd))
+
+### 🩹 Fixes
+
+- **adapter-openclaw:** strip .ai suffix from workspaceDir ([20b5a64](https://github.com/jogelin/dot-ai/commit/20b5a64))
+- **adapter-openclaw:** detect .ai/ from cwd instead of relying on workspaceDir ([4b482cb](https://github.com/jogelin/dot-ai/commit/4b482cb))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.0 (2026-03-07)
 
 ### 🚀 Features
