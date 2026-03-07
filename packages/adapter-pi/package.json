@@ -1,5 +1,5 @@
 {
-  "name": "@dot-ai/pi",
+  "name": "@dot-ai/adapter-pi",
   "version": "0.11.5",
   "repository": {
     "type": "git",

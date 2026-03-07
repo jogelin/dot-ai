@@ -392,7 +392,7 @@ export class DotAiRuntime {
 
 ### Task 4.3 — Adapter Pi (NEW package)
 **File:** `packages/adapter-pi/src/index.ts`
-**package.json:** `@dot-ai/pi`
+**package.json:** `@dot-ai/adapter-pi`
 
 - This IS a pi extension: `export default function(pi: ExtensionAPI)`
 - `pi.on('session_start')`:
