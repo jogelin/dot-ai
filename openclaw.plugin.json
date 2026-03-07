@@ -7,9 +7,9 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "workspaceRoot": {
+      "workspace": {
         "type": "string",
-        "description": "Root directory containing .ai/"
+        "description": "Absolute path to the project directory containing .ai/. Used when gateway/Discord/TUI cannot detect the workspace from cwd."
       },
       "modelRouting": {
         "type": "object",
@@ -25,28 +25,6 @@
           "maxConcurrentSubagents": {
             "type": "number",
             "default": 8
-          }
-        }
-      },
-      "customProviders": {
-        "type": "array",
-        "description": "Custom provider modules to register at boot. Each entry loads a workspace-owned module.",
-        "items": {
-          "type": "object",
-          "required": [
-            "type",
-            "module"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "type": {
-              "type": "string",
-              "description": "Provider type name (must match config.yaml providers.tasks.type)"
-            },
-            "module": {
-              "type": "string",
-              "description": "Absolute path to the module exporting the provider class"
-            }
           }
         }
       }
@@ -72,9 +50,9 @@
     "skills/context-strategy"
   ],
   "uiHints": {
-    "workspaceRoot": {
-      "label": "Workspace Root",
-      "placeholder": "~/dev/my-workspace/.ai"
+    "workspace": {
+      "label": "Workspace",
+      "placeholder": "~/dev/my-project"
     },
     "modelRouting.enabled": {
       "label": "Enable Model Routing"

@@ -84,12 +84,11 @@ const plugin = {
   register(api: OpenClawPluginApi) {
     api.logger.info(`[dot-ai] Plugin loaded (v${PKG_VERSION})`);
 
-    // Resolve workspace root from plugin config (set once in openclaw.json)
-    // This is the primary way to configure the workspace for gateway/Discord/TUI
-    // where process.cwd() is not the user's project directory.
-    const configuredWorkspaceRoot = api.pluginConfig?.workspaceRoot as string | undefined;
-    if (configuredWorkspaceRoot) {
-      api.logger.info(`[dot-ai] workspaceRoot from config: ${configuredWorkspaceRoot}`);
+    // Capture plugin config workspace for use in before_agent_start handler.
+    // Set in openclaw.json: plugins.entries.dot-ai.workspace = "/path/to/project"
+    const configuredWorkspace = api.pluginConfig?.workspace as string | undefined;
+    if (configuredWorkspace) {
+      api.logger.info(`[dot-ai] workspace from config: ${configuredWorkspace}`);
     }
 
     // Register tools from core capabilities (delegates to extensions)
@@ -122,11 +121,11 @@ const plugin = {
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
         // Resolve workspace root with priority:
-        // 1. Plugin config (openclaw.json "dot-ai.workspaceRoot") — for gateway/Discord/TUI
-        // 2. cwd detection (walk up looking for .ai/) — for local CLI usage
+        // 1. cwd detection (walk up looking for .ai/) — for Claude Code/Pi/local CLI
+        // 2. Plugin config (openclaw.json "dot-ai.workspace") — for gateway/Discord/TUI
         // 3. OpenClaw's ctx.workspaceDir — fallback
         const cwdWorkspace = findWorkspaceRoot(process.cwd());
-        const rawWorkspaceDir = configuredWorkspaceRoot ?? cwdWorkspace ?? ctx.workspaceDir;
+        const rawWorkspaceDir = cwdWorkspace ?? configuredWorkspace ?? ctx.workspaceDir;
 
         if (!rawWorkspaceDir) {
           api.logger.info('[dot-ai] No workspaceRoot configured, no .ai/ in cwd, no workspaceDir — skipping');
