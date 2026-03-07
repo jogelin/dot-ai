@@ -7,7 +7,7 @@
  */
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join } from 'node:path';
 import { DotAiRuntime, formatSections } from '@dot-ai/core';
 
 const require = createRequire(import.meta.url);
@@ -58,20 +58,10 @@ let cachedRuntime: DotAiRuntime | null = null;
 let cachedWorkspace: string | null = null;
 
 /**
- * Find workspace root by walking up from a starting directory looking for .ai/.
- * Returns the directory containing .ai/, or null if not found.
+ * Check if a directory contains a .ai/ workspace.
  */
-function findWorkspaceRoot(startDir: string): string | null {
-  let dir = resolve(startDir);
-  while (true) {
-    if (existsSync(join(dir, '.ai'))) {
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break; // reached filesystem root
-    dir = parent;
-  }
-  return null;
+function hasWorkspace(dir: string): boolean {
+  return existsSync(join(dir, '.ai'));
 }
 
 const plugin = {
@@ -121,10 +111,11 @@ const plugin = {
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
         // Resolve workspace root with priority:
-        // 1. cwd detection (walk up looking for .ai/) — for Claude Code/Pi/local CLI
+        // 1. cwd — if process.cwd() has .ai/ (Claude Code, Pi, local CLI)
         // 2. Plugin config (openclaw.json "dot-ai.workspace") — for gateway/Discord/TUI
         // 3. OpenClaw's ctx.workspaceDir — fallback
-        const cwdWorkspace = findWorkspaceRoot(process.cwd());
+        const cwd = process.cwd();
+        const cwdWorkspace = hasWorkspace(cwd) ? cwd : null;
         const rawWorkspaceDir = cwdWorkspace ?? configuredWorkspace ?? ctx.workspaceDir;
 
         if (!rawWorkspaceDir) {
