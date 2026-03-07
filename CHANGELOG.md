@@ -1,3 +1,15 @@
+## 0.10.1 (2026-03-07)
+
+### 🚀 Features
+
+- **core:** integrate .ai/packages/ into extension discovery ([620e7e8](https://github.com/jogelin/dot-ai/commit/620e7e8))
+- **core:** auto-install packages from settings.json like Pi ([469e15c](https://github.com/jogelin/dot-ai/commit/469e15c))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.10.0 (2026-03-07)
 
 ### 🚀 Features

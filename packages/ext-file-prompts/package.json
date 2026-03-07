@@ -1,6 +1,6 @@
 {
   "name": "@dot-ai/ext-file-prompts",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "File-based prompt template extension for dot-ai",
   "type": "module",
   "main": "dist/extension.js",

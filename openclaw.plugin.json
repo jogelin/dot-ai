@@ -2,7 +2,7 @@
   "id": "dot-ai",
   "name": "dot-ai — Universal AI Workspace Convention",
   "description": "Workspace convention with model routing and context enforcement",
-  "version": "0.0.0",
+  "version": "0.10.1",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -14,9 +14,18 @@
       "modelRouting": {
         "type": "object",
         "properties": {
-          "enabled": { "type": "boolean", "default": true },
-          "defaultSubagentModel": { "type": "string", "default": "anthropic/claude-haiku" },
-          "maxConcurrentSubagents": { "type": "number", "default": 8 }
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "defaultSubagentModel": {
+            "type": "string",
+            "default": "anthropic/claude-haiku"
+          },
+          "maxConcurrentSubagents": {
+            "type": "number",
+            "default": 8
+          }
         }
       },
       "customProviders": {
@@ -24,7 +33,10 @@
         "description": "Custom provider modules to register at boot. Each entry loads a workspace-owned module.",
         "items": {
           "type": "object",
-          "required": ["type", "module"],
+          "required": [
+            "type",
+            "module"
+          ],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -60,8 +72,15 @@
     "skills/context-strategy"
   ],
   "uiHints": {
-    "workspaceRoot": { "label": "Workspace Root", "placeholder": "~/dev/my-workspace/.ai" },
-    "modelRouting.enabled": { "label": "Enable Model Routing" },
-    "modelRouting.defaultSubagentModel": { "label": "Default Sub-agent Model" }
+    "workspaceRoot": {
+      "label": "Workspace Root",
+      "placeholder": "~/dev/my-workspace/.ai"
+    },
+    "modelRouting.enabled": {
+      "label": "Enable Model Routing"
+    },
+    "modelRouting.defaultSubagentModel": {
+      "label": "Default Sub-agent Model"
+    }
   }
 }
