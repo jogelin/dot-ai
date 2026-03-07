@@ -1,3 +1,15 @@
+## 0.11.6 (2026-03-07)
+
+### 🩹 Fixes
+
+- **adapter-pi:** rename package from @dot-ai/pi to @dot-ai/adapter-pi ([c89c272](https://github.com/jogelin/dot-ai/commit/c89c272))
+- **ext-sqlite-memory:** default to .ai/memory.db when root is provided ([5298a0e](https://github.com/jogelin/dot-ai/commit/5298a0e))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.5 (2026-03-07)
 
 ### 🩹 Fixes
