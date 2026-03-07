@@ -521,6 +521,19 @@ Uses `.claude-plugin/plugin.json` for metadata and skill registration.
 4. Subscribe to events (`context_enrich`, `tool_call`, `agent_end`, etc.)
 5. Extensions are loaded automatically at boot — no registration needed
 
+### Release Process
+
+Releases are **CI-only** — never run the release script locally.
+
+- **Trigger:** Manual `workflow_dispatch` on GitHub Actions (`.github/workflows/release.yml`)
+- **Versioning:** All packages use **fixed versioning** (same version). Current version is resolved from **git tags**, not `package.json`.
+- **Bump detection:** Automatic via [conventional commits](https://www.conventionalcommits.org/) (`feat:` → minor, `fix:` → patch)
+- **What happens:**
+  1. Bumps all `packages/*/package.json`
+  2. Syncs plugin manifests (`openclaw.plugin.json`, `.claude-plugin/plugin.json`, etc.)
+  3. Generates `CHANGELOG.md`, creates git commit & tag
+  4. Publishes all packages to npm
+
 ### Skill Development Guidelines
 
 - Follow INDEX/SKILL pattern for skills >100 lines
