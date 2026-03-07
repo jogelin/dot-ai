@@ -1,3 +1,18 @@
+## 0.11.4 (2026-03-07)
+
+### 🚀 Features
+
+- **adapter-openclaw:** add workspace and modelRouting to configSchema ([1bd9e04](https://github.com/jogelin/dot-ai/commit/1bd9e04))
+
+### 🩹 Fixes
+
+- remove modelRouting from openclaw configSchema ([06e1807](https://github.com/jogelin/dot-ai/commit/06e1807))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.11.3 (2026-03-07)
 
 ### 🩹 Fixes
