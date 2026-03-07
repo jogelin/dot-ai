@@ -84,6 +84,14 @@ const plugin = {
   register(api: OpenClawPluginApi) {
     api.logger.info(`[dot-ai] Plugin loaded (v${PKG_VERSION})`);
 
+    // Resolve workspace root from plugin config (set once in openclaw.json)
+    // This is the primary way to configure the workspace for gateway/Discord/TUI
+    // where process.cwd() is not the user's project directory.
+    const configuredWorkspaceRoot = api.pluginConfig?.workspaceRoot as string | undefined;
+    if (configuredWorkspaceRoot) {
+      api.logger.info(`[dot-ai] workspaceRoot from config: ${configuredWorkspaceRoot}`);
+    }
+
     // Register tools from core capabilities (delegates to extensions)
     api.registerTool(
       (_ctx: Record<string, unknown>) => {
@@ -113,18 +121,19 @@ const plugin = {
         _event: unknown,
         ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
       ) => {
-        // Resolve workspace root: walk up from cwd looking for .ai/ directory.
-        // Falls back to openclaw's workspaceDir if cwd has no .ai/.
-        const cwd = process.cwd();
-        const cwdWorkspace = findWorkspaceRoot(cwd);
-        const rawWorkspaceDir = cwdWorkspace ?? ctx.workspaceDir;
+        // Resolve workspace root with priority:
+        // 1. Plugin config (openclaw.json "dot-ai.workspaceRoot") — for gateway/Discord/TUI
+        // 2. cwd detection (walk up looking for .ai/) — for local CLI usage
+        // 3. OpenClaw's ctx.workspaceDir — fallback
+        const cwdWorkspace = findWorkspaceRoot(process.cwd());
+        const rawWorkspaceDir = configuredWorkspaceRoot ?? cwdWorkspace ?? ctx.workspaceDir;
 
         if (!rawWorkspaceDir) {
-          api.logger.info('[dot-ai] No .ai/ found in cwd and no workspaceDir, skipping');
+          api.logger.info('[dot-ai] No workspaceRoot configured, no .ai/ in cwd, no workspaceDir — skipping');
           return;
         }
 
-        // Strip trailing .ai/ if openclaw passed the .ai dir itself
+        // Strip trailing .ai/ if the path points to the .ai dir itself
         const workspaceDir = rawWorkspaceDir.endsWith('/.ai') || rawWorkspaceDir.endsWith('\\.ai')
           ? rawWorkspaceDir.slice(0, -4)
           : rawWorkspaceDir;

@@ -160,7 +160,7 @@ describe('OpenClaw Plugin Integration', () => {
       );
 
       expect(result).toBeUndefined();
-      expect(logs.some(l => l.includes('No .ai/ found'))).toBe(true);
+      expect(logs.some(l => l.includes('No workspaceRoot configured'))).toBe(true);
 
       cwdSpy.mockRestore();
     });
