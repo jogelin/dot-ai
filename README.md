@@ -520,12 +520,7 @@ In `openclaw.json`, configure the workspace path for gateway/Discord/TUI environ
       "dot-ai": {
         "enabled": true,
         "config": {
-          "workspace": "/Users/you/dev/my-project",
-          "modelRouting": {
-            "enabled": true,
-            "defaultSubagentModel": "anthropic/claude-haiku",
-            "maxConcurrentSubagents": 8
-          }
+          "workspace": "/Users/you/dev/my-project"
         }
       }
     }

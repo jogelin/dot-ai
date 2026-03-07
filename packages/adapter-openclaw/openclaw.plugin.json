@@ -8,23 +8,6 @@
       "workspace": {
         "type": "string",
         "description": "Absolute path to the project directory containing .ai/. Used when gateway/Discord/TUI cannot detect the workspace from cwd."
-      },
-      "modelRouting": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          },
-          "defaultSubagentModel": {
-            "type": "string",
-            "default": "anthropic/claude-haiku"
-          },
-          "maxConcurrentSubagents": {
-            "type": "number",
-            "default": 8
-          }
-        }
       }
     }
   }
