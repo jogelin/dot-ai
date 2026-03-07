@@ -1,3 +1,18 @@
+## 0.10.0 (2026-03-07)
+
+### 🚀 Features
+
+- v6 extension API, git-tag versioning, release script fix ([889cc34](https://github.com/jogelin/dot-ai/commit/889cc34))
+
+### 🩹 Fixes
+
+- **release:** replace conventionalCommits shorthand with explicit config ([a12d768](https://github.com/jogelin/dot-ai/commit/a12d768))
+
+### ❤️ Thank You
+
+- Claude Opus 4.6
+- Jonathan Gelin @jogelin
+
 ## 0.9.0 (2026-03-06)
 
 ### 🩹 Fixes
