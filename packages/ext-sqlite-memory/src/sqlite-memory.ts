@@ -29,7 +29,7 @@ export class SqliteMemoryProvider {
 
   constructor(options: Record<string, unknown> = {}) {
     const root = (options.root as string) ?? process.cwd();
-    const rawPath = (options.path as string) ?? ':memory:';
+    const rawPath = (options.path as string) ?? (options.root ? '.ai/memory.db' : ':memory:');
     const dbPath = rawPath === ':memory:' ? rawPath : (rawPath.startsWith('/') ? rawPath : join(root, rawPath));
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
