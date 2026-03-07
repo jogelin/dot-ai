@@ -85,8 +85,8 @@ export { NoopLogger, JsonFileLogger, StderrLogger } from './logger.js';
 export { loadConfig, migrateConfig } from './config.js';
 
 // ── Package Manager ──
-export { install, remove, listPackages, resolvePackages } from './package-manager.js';
-export type { PackageInfo } from './package-manager.js';
+export { install, remove, listPackages, resolvePackages, ensurePackagesInstalled } from './package-manager.js';
+export type { PackageInfo, MissingPackageAction } from './package-manager.js';
 
 // ── Boot Cache ──
 export { computeChecksum, loadBootCache, writeBootCache, clearBootCache } from './boot-cache.js';

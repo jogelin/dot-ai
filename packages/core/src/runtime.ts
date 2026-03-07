@@ -2,6 +2,7 @@ import { loadConfig } from './config.js';
 import { toolDefinitionToCapability } from './capabilities.js';
 import type { Capability } from './capabilities.js';
 import { discoverExtensions, createV6CollectorAPI } from './extension-loader.js';
+import { ensurePackagesInstalled } from './package-manager.js';
 import { ExtensionRunner, EventBus } from './extension-runner.js';
 import type {
   ToolCallEvent, ToolCallResult, ExtensionDiagnostic,
@@ -92,8 +93,29 @@ export class DotAiRuntime {
     // Create event bus
     this._eventBus = new EventBus();
 
-    // Discover extensions
+    // Auto-install packages from settings.json before discovery
     const extConfig = this.options.extensions ?? rawConfig.extensions;
+    if (extConfig?.packages?.length) {
+      const installResult = await ensurePackagesInstalled(
+        this.options.workspaceRoot,
+        extConfig.packages,
+      );
+      if (installResult.installed.length > 0 || installResult.errors.length > 0) {
+        this.logger.log({
+          timestamp: new Date().toISOString(),
+          level: installResult.errors.length > 0 ? 'warn' : 'info',
+          phase: 'boot',
+          event: 'packages_installed',
+          data: {
+            installed: installResult.installed,
+            skipped: installResult.skipped,
+            errors: installResult.errors,
+          },
+        });
+      }
+    }
+
+    // Discover extensions
     const extPaths = await discoverExtensions(this.options.workspaceRoot, extConfig);
 
     // Load extensions via collector API
