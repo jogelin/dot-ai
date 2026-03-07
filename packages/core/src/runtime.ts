@@ -159,10 +159,10 @@ export class DotAiRuntime {
   private async loadExtensions(extensionPaths: string[]) {
     if (extensionPaths.length === 0) return [];
 
-    let jitiImport: ((id: string) => unknown) | undefined;
+    let _jitiLoader: ((id: string) => unknown) | undefined;
     try {
       const { createJiti } = await import('jiti');
-      jitiImport = createJiti(import.meta.url, { interopDefault: true });
+      _jitiLoader = createJiti(import.meta.url, { interopDefault: true });
     } catch {
       this.logger.log({
         timestamp: new Date().toISOString(),
@@ -178,8 +178,8 @@ export class DotAiRuntime {
     for (const extPath of extensionPaths) {
       try {
         let mod: Record<string, unknown>;
-        if (jitiImport) {
-          mod = jitiImport(extPath) as Record<string, unknown>;
+        if (_jitiLoader) {
+          mod = _jitiLoader(extPath) as Record<string, unknown>;
         } else {
           mod = await import(extPath) as Record<string, unknown>;
         }
