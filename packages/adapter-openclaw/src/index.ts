@@ -75,7 +75,7 @@ const plugin = {
     api.logger.info(`[dot-ai] Plugin loaded (v${PKG_VERSION})`);
 
     // Capture plugin config workspace for use in before_agent_start handler.
-    // Set in openclaw.json: plugins.entries.dot-ai.workspace = "/path/to/project"
+    // Set in openclaw.json: plugins.entries.dot-ai.config.workspace = "/path/to/project"
     const configuredWorkspace = api.pluginConfig?.workspace as string | undefined;
     if (configuredWorkspace) {
       api.logger.info(`[dot-ai] workspace from config: ${configuredWorkspace}`);
