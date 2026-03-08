@@ -309,10 +309,8 @@ export class DotAiRuntime {
         'Source of truth: `.ai/` directory. Do NOT edit agent workspace files for context.',
       ];
 
-      const statusParts = [];
-      if (skillNames.length > 0) statusParts.push(`Skills: ${skillNames.join(', ')}.`);
-      if (toolNames.length > 0) statusParts.push(`Tools: ${toolNames.join(', ')}.`);
-      if (statusParts.length > 0) archLines.push('', statusParts.join(' '));
+      if (skillNames.length > 0) archLines.push(`${skillNames.length} skills available.`);
+      if (toolNames.length > 0) archLines.push(`Tools: ${toolNames.join(', ')}.`);
 
       sections.push({
         id: 'dot-ai:system',

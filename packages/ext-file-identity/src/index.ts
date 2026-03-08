@@ -3,20 +3,12 @@
  *
  * Loads AGENTS.md, SOUL.md, USER.md, IDENTITY.md from .ai/
  *
- * Progressive disclosure: if a file has a YAML frontmatter with `summary:`,
- * only the summary is injected by default. The full content is available
- * via the agent's file-reading tools (e.g. `read .ai/AGENTS.md`).
+ * Progressive disclosure strategy:
+ * 1. If file has frontmatter `summary:` → use that (user-defined compact version)
+ * 2. If file is small (≤ 500 chars) → inject full content (already compact)
+ * 3. Otherwise → auto-extract: headings + first bullet/paragraph per section
  *
- * Example frontmatter:
- * ```
- * ---
- * summary: |
- *   Agent rules: safety-first, git discipline, no duplication.
- *   Full rules: read `.ai/AGENTS.md`
- * ---
- * # AGENTS.md - Full Rules
- * ...
- * ```
+ * Full content always available via `read .ai/{file}`
  */
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -34,10 +26,14 @@ const PROJECT_FILES = [
   { type: 'agent', file: 'AGENT.md', priority: 50 },
 ];
 
+/** Max chars for auto-compact (files under this are injected in full) */
+const COMPACT_THRESHOLD = 500;
+
+/** Max chars for auto-extracted summary */
+const MAX_SUMMARY_CHARS = 600;
+
 /**
  * Parse YAML frontmatter from markdown content.
- * Returns { summary, body } where summary is from frontmatter
- * and body is the content after the frontmatter.
  */
 function parseFrontmatter(content: string): { summary?: string; body: string } {
   if (!content.startsWith('---')) return { body: content };
@@ -47,7 +43,7 @@ function parseFrontmatter(content: string): { summary?: string; body: string } {
   const frontmatter = content.slice(4, endIdx);
   const body = content.slice(endIdx + 4).replace(/^\s+/, '');
 
-  // Extract summary field from YAML (simple parser, no deps)
+  // Multi-line summary
   const summaryMatch = frontmatter.match(/^summary:\s*\|?\s*\n([\s\S]*?)(?=\n\w|\n---|\s*$)/m);
   if (summaryMatch) {
     const summary = summaryMatch[1]
@@ -65,6 +61,82 @@ function parseFrontmatter(content: string): { summary?: string; body: string } {
   }
 
   return { body: content };
+}
+
+/**
+ * Auto-extract a compact summary from markdown content.
+ * Strategy:
+ * - H1 title: always include
+ * - Content between H1 and first H2: include (often has key info like name, etc.)
+ * - Each H2 section: heading + first bullet/paragraph line only
+ * Deterministic, no LLM.
+ */
+function autoExtract(content: string): string {
+  const lines = content.split('\n');
+  const result: string[] = [];
+  let seenFirstH2 = false;
+  let currentSection = '';
+  let sectionHasContent = false;
+
+  for (const line of lines) {
+    // H1 — always include
+    if (line.startsWith('# ') && !line.startsWith('## ')) {
+      result.push(line);
+      continue;
+    }
+
+    // Content between H1 and first H2 — include all non-empty lines (key info)
+    if (!seenFirstH2 && !line.startsWith('#') && line.trim()) {
+      result.push(line);
+      continue;
+    }
+
+    // H2 — include heading, prepare for first content line
+    if (line.startsWith('## ')) {
+      seenFirstH2 = true;
+      currentSection = line;
+      sectionHasContent = false;
+      result.push(line);
+      continue;
+    }
+
+    // Skip H3+ headings in summary
+    if (line.startsWith('###')) continue;
+
+    // First meaningful content line after a H2
+    if (currentSection && !sectionHasContent && line.trim()) {
+      if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('> ') || !line.startsWith('#')) {
+        result.push(line);
+        sectionHasContent = true;
+      }
+    }
+  }
+
+  let summary = result.join('\n').trim();
+  if (summary.length > MAX_SUMMARY_CHARS) {
+    summary = summary.slice(0, MAX_SUMMARY_CHARS) + '…';
+  }
+  return summary;
+}
+
+/**
+ * Build the injected content for an identity file.
+ * Progressive: summary (frontmatter or auto) + reference to full file.
+ */
+function buildContent(cached: { summary?: string; body: string; full: string }, file: string): string {
+  // User-defined summary takes priority
+  if (cached.summary) {
+    return `${cached.summary}\n\n> Full rules: \`read .ai/${file}\``;
+  }
+
+  // Small files: inject in full (already compact enough)
+  if (cached.full.length <= COMPACT_THRESHOLD) {
+    return cached.full;
+  }
+
+  // Auto-extract for larger files
+  const extracted = autoExtract(cached.full);
+  return `${extracted}\n\n> Full content: \`read .ai/${file}\``;
 }
 
 export default async function extFileIdentity(api: ExtensionAPI): Promise<void> {
@@ -86,7 +158,6 @@ export default async function extFileIdentity(api: ExtensionAPI): Promise<void> 
         const key = `${node.name}:${type}`;
         fileCache.set(key, { ...parsed, full });
 
-        // Register with full content for runtime.identities accessor
         api.registerIdentity({ type, content: full, source: 'ext-file-identity', priority, node: node.name });
       } catch { /* skip */ }
     }
@@ -101,15 +172,10 @@ export default async function extFileIdentity(api: ExtensionAPI): Promise<void> 
         const cached = fileCache.get(key);
         if (!cached) continue;
 
-        // Progressive disclosure: use summary if available, full content otherwise
-        const content = cached.summary
-          ? `${cached.summary}\n\n> Full content: read \`.ai/${file}\``
-          : cached.full;
-
         sections.push({
           id: `identity:${type}:${node.name}`,
           title: file.replace('.md', ''),
-          content,
+          content: buildContent(cached, file),
           priority,
           source: 'ext-file-identity',
           trimStrategy: 'never' as const,
