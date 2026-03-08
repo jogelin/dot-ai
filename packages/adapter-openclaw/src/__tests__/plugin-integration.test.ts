@@ -13,6 +13,12 @@ interface CapturedHook {
   options?: { priority?: number };
 }
 
+interface CapturedInternalHook {
+  events: string | string[];
+  handler: (...args: unknown[]) => unknown;
+  opts?: { name?: string; description?: string };
+}
+
 interface CapturedService {
   id: string;
   start: (ctx: { logger: { info: (msg: string) => void } }) => void;
@@ -27,6 +33,7 @@ interface CapturedTool {
 function createMockOpenClawApi() {
   const logs: string[] = [];
   const hooks: CapturedHook[] = [];
+  const internalHooks: CapturedInternalHook[] = [];
   const services: CapturedService[] = [];
   const tools: CapturedTool[] = [];
 
@@ -43,6 +50,13 @@ function createMockOpenClawApi() {
     ) {
       hooks.push({ event, handler, options });
     },
+    registerHook(
+      events: string | string[],
+      handler: (...args: unknown[]) => unknown,
+      opts?: { name?: string; description?: string },
+    ) {
+      internalHooks.push({ events, handler, opts });
+    },
     registerService(service: CapturedService) {
       services.push(service);
     },
@@ -51,31 +65,70 @@ function createMockOpenClawApi() {
     },
   };
 
-  return { api, logs, hooks, services, tools };
+  return { api, logs, hooks, internalHooks, services, tools };
 }
 
 // ── Tests ──
 
 describe('OpenClaw Plugin Integration', () => {
   describe('plugin.register() structure', () => {
-    it('registers before_agent_start hook with priority 10', async () => {
+    it('registers before_prompt_build hook with priority 10', async () => {
       const { api, hooks } = createMockOpenClawApi();
 
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      const beforeStart = hooks.find(h => h.event === 'before_agent_start');
-      expect(beforeStart).toBeDefined();
-      expect(beforeStart!.options?.priority).toBe(10);
+      const beforeBuild = hooks.find(h => h.event === 'before_prompt_build');
+      expect(beforeBuild).toBeDefined();
+      expect(beforeBuild!.options?.priority).toBe(10);
     });
 
-    it('registers after_agent_end hook', async () => {
+    it('registers agent:bootstrap internal hook', async () => {
+      const { api, internalHooks } = createMockOpenClawApi();
+      const { default: plugin } = await import('../index.js');
+      plugin.register(api as never);
+
+      const bootstrapHook = internalHooks.find(h => h.events === 'agent:bootstrap');
+      expect(bootstrapHook).toBeDefined();
+      expect(bootstrapHook!.opts?.name).toBe('dot-ai-bootstrap-filter');
+    });
+
+    it('agent:bootstrap hook removes all bootstrap files', async () => {
+      const { api, internalHooks } = createMockOpenClawApi();
+      const { default: plugin } = await import('../index.js');
+      plugin.register(api as never);
+
+      const bootstrapHook = internalHooks.find(h => h.events === 'agent:bootstrap')!;
+      const event = {
+        type: 'agent',
+        action: 'bootstrap',
+        sessionKey: 'test',
+        context: {
+          workspaceDir: '/tmp/test',
+          bootstrapFiles: [
+            { name: 'AGENTS.md', path: '/tmp/AGENTS.md', content: '# Agents', missing: false },
+            { name: 'SOUL.md', path: '/tmp/SOUL.md', content: '# Soul', missing: false },
+            { name: 'IDENTITY.md', path: '/tmp/IDENTITY.md', content: '# Identity', missing: false },
+            { name: 'USER.md', path: '/tmp/USER.md', content: '# User', missing: false },
+            { name: 'TOOLS.md', path: '/tmp/TOOLS.md', content: '# Tools', missing: false },
+            { name: 'HEARTBEAT.md', path: '/tmp/HEARTBEAT.md', content: '', missing: false },
+          ],
+        },
+        timestamp: new Date(),
+        messages: [],
+      };
+
+      bootstrapHook.handler(event);
+      expect(event.context.bootstrapFiles).toEqual([]);
+    });
+
+    it('registers agent_end hook', async () => {
       const { api, hooks } = createMockOpenClawApi();
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      const afterEnd = hooks.find(h => h.event === 'after_agent_end');
-      expect(afterEnd).toBeDefined();
+      const agentEnd = hooks.find(h => h.event === 'agent_end');
+      expect(agentEnd).toBeDefined();
     });
 
     it('registers dot-ai service', async () => {
@@ -114,16 +167,16 @@ describe('OpenClaw Plugin Integration', () => {
     });
   });
 
-  describe('before_agent_start → boot → processPrompt', () => {
+  describe('before_prompt_build → boot → processPrompt', () => {
     it('skips sub-agent sessions', async () => {
       const { api, hooks, logs } = createMockOpenClawApi();
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      const beforeStart = hooks.find(h => h.event === 'before_agent_start')!;
-      const result = await beforeStart.handler(
-        {},
-        { workspaceDir: '/tmp/test', sessionKey: 'session:subagent:1', prompt: 'hello' },
+      const beforeBuild = hooks.find(h => h.event === 'before_prompt_build')!;
+      const result = await beforeBuild.handler(
+        { prompt: 'hello' },
+        { workspaceDir: '/tmp/test', sessionKey: 'session:subagent:1' },
       );
 
       expect(result).toBeUndefined();
@@ -135,10 +188,10 @@ describe('OpenClaw Plugin Integration', () => {
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      const beforeStart = hooks.find(h => h.event === 'before_agent_start')!;
-      const result = await beforeStart.handler(
-        {},
-        { workspaceDir: '/tmp/test', sessionKey: 'session:cron:cleanup', prompt: 'cleanup' },
+      const beforeBuild = hooks.find(h => h.event === 'before_prompt_build')!;
+      const result = await beforeBuild.handler(
+        { prompt: 'cleanup' },
+        { workspaceDir: '/tmp/test', sessionKey: 'session:cron:cleanup' },
       );
 
       expect(result).toBeUndefined();
@@ -146,21 +199,20 @@ describe('OpenClaw Plugin Integration', () => {
     });
 
     it('skips when no workspaceDir and no .ai/ in cwd', async () => {
-      // Mock cwd to a directory without .ai/
       const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/tmp');
 
       const { api, hooks, logs } = createMockOpenClawApi();
       const { default: plugin } = await import('../index.js');
       plugin.register(api as never);
 
-      const beforeStart = hooks.find(h => h.event === 'before_agent_start')!;
-      const result = await beforeStart.handler(
-        {},
+      const beforeBuild = hooks.find(h => h.event === 'before_prompt_build')!;
+      const result = await beforeBuild.handler(
         { prompt: 'hello' },
+        {},
       );
 
       expect(result).toBeUndefined();
-      expect(logs.some(l => l.includes('No workspaceRoot configured'))).toBe(true);
+      expect(logs.some(l => l.includes('No workspace found'))).toBe(true);
 
       cwdSpy.mockRestore();
     });

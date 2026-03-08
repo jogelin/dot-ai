@@ -1,22 +1,29 @@
 /**
- * dot-ai OpenClaw plugin v7
+ * dot-ai OpenClaw plugin v8
  *
- * Hooks into before_agent_start to run the full dot-ai pipeline via DotAiRuntime.
- * Uses the v7 extension-based pipeline — no providers required.
- * Returns enriched context as prependContext for the agent.
+ * Full integration with OpenClaw hook system:
+ * - agent:bootstrap hook → removes ALL OpenClaw workspace files (dot-ai owns context)
+ * - before_prompt_build → injects dot-ai context (static → prependSystemContext, dynamic → prependContext)
+ * - agent_end → feeds response back to runtime
+ * - Tools → delegates to runtime capabilities (memory, tasks, etc.)
  */
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { DotAiRuntime, formatSections } from '@dot-ai/core';
+import { DotAiRuntime, assembleSections } from '@dot-ai/core';
+import type { Section } from '@dot-ai/core';
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../package.json') as { version: string };
 
-// Inline OpenClaw plugin API types
+// ════════════════════════════════════════════════════════════════════════════
+// Inline OpenClaw plugin API types (avoid hard dependency on OpenClaw internals)
+// ════════════════════════════════════════════════════════════════════════════
+
 interface OpenClawLogger {
   info(msg: string): void;
   debug?(msg: string): void;
+  warn?(msg: string): void;
 }
 
 interface OpenClawPluginApi {
@@ -24,11 +31,13 @@ interface OpenClawPluginApi {
   pluginConfig?: Record<string, unknown>;
   on(
     event: string,
-    handler: (
-      event: unknown,
-      ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
-    ) => Promise<{ prependContext?: string } | void> | void,
+    handler: (event: unknown, ctx: Record<string, unknown>) => Promise<Record<string, unknown> | void> | void,
     options?: { priority?: number },
+  ): void;
+  registerHook(
+    events: string | string[],
+    handler: (event: InternalHookEvent) => Promise<void> | void,
+    opts?: { name?: string; description?: string },
   ): void;
   registerService(service: {
     id: string;
@@ -36,6 +45,22 @@ interface OpenClawPluginApi {
     stop(ctx: { logger: OpenClawLogger }): void;
   }): void;
   registerTool(tool: OpenClawTool | OpenClawToolFactory, opts?: { name?: string; names?: string[] }): void;
+}
+
+interface InternalHookEvent {
+  type: string;
+  action: string;
+  sessionKey: string;
+  context: Record<string, unknown>;
+  timestamp: Date;
+  messages: string[];
+}
+
+interface BootstrapFile {
+  name: string;
+  path: string;
+  content?: string;
+  missing: boolean;
 }
 
 interface OpenClawToolResult {
@@ -53,16 +78,85 @@ interface OpenClawTool {
 
 type OpenClawToolFactory = (ctx: Record<string, unknown>) => OpenClawTool | OpenClawTool[] | null;
 
-// Session-level cache
+// ════════════════════════════════════════════════════════════════════════════
+// Runtime cache
+// ════════════════════════════════════════════════════════════════════════════
+
 let cachedRuntime: DotAiRuntime | null = null;
 let cachedWorkspace: string | null = null;
 
-/**
- * Check if a directory contains a .ai/ workspace.
- */
 function hasWorkspace(dir: string): boolean {
   return existsSync(join(dir, '.ai'));
 }
+
+function resolveWorkspace(
+  configuredWorkspace: string | undefined,
+  ctxWorkspaceDir: string | undefined,
+): string | null {
+  const cwd = process.cwd();
+  const cwdWorkspace = hasWorkspace(cwd) ? cwd : null;
+  const raw = cwdWorkspace ?? configuredWorkspace ?? ctxWorkspaceDir;
+  if (!raw) return null;
+  // Strip trailing .ai/ if present
+  return raw.endsWith('/.ai') || raw.endsWith('\\.ai') ? raw.slice(0, -4) : raw;
+}
+
+async function ensureRuntime(
+  workspaceDir: string,
+  logger: OpenClawLogger,
+): Promise<DotAiRuntime> {
+  if (cachedRuntime && cachedWorkspace === workspaceDir) {
+    return cachedRuntime;
+  }
+
+  logger.info(`[dot-ai] workspaceRoot=${workspaceDir}`);
+  cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
+  await cachedRuntime.boot();
+  cachedWorkspace = workspaceDir;
+  logger.info(`[dot-ai] Runtime booted (v${PKG_VERSION})`);
+
+  const diag = cachedRuntime.diagnostics;
+  logger.info(`[dot-ai] extensions=${diag.extensions.length}, capabilities=${diag.capabilityCount}`);
+  if (diag.vocabularySize !== undefined) {
+    logger.info(`[dot-ai] Vocabulary size: ${diag.vocabularySize}`);
+  }
+
+  return cachedRuntime;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Section splitting: static (cacheable) vs dynamic (per-turn)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Static sections = identity files + system section (trimStrategy: 'never').
+ * These rarely change and benefit from provider prompt caching.
+ *
+ * Dynamic sections = memory, skills, tasks, tools, project agents.
+ * These change based on the current prompt.
+ */
+function splitSections(sections: Section[]): { static: Section[]; dynamic: Section[] } {
+  const staticSections: Section[] = [];
+  const dynamicSections: Section[] = [];
+
+  for (const section of sections) {
+    if (section.trimStrategy === 'never') {
+      staticSections.push(section);
+    } else {
+      dynamicSections.push(section);
+    }
+  }
+
+  // Sort each group by priority DESC
+  staticSections.sort((a, b) => b.priority - a.priority);
+  dynamicSections.sort((a, b) => b.priority - a.priority);
+
+  return { static: staticSections, dynamic: dynamicSections };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Plugin definition
+// ════════════════════════════════════════════════════════════════════════════
 
 const plugin = {
   id: 'dot-ai',
@@ -74,19 +168,40 @@ const plugin = {
   register(api: OpenClawPluginApi) {
     api.logger.info(`[dot-ai] Plugin loaded (v${PKG_VERSION})`);
 
-    // Capture plugin config workspace for use in before_agent_start handler.
-    // Set in openclaw.json: plugins.entries.dot-ai.config.workspace = "/path/to/project"
     const configuredWorkspace = api.pluginConfig?.workspace as string | undefined;
     if (configuredWorkspace) {
       api.logger.info(`[dot-ai] workspace from config: ${configuredWorkspace}`);
     }
 
-    // Register tools from core capabilities (delegates to extensions)
+    // ══════════════════════════════════════════════════════════════════════
+    // Internal Hook: agent:bootstrap — remove ALL OpenClaw workspace files
+    // dot-ai owns the full context; OpenClaw's AGENTS.md, SOUL.md, etc. are stubs.
+    // ══════════════════════════════════════════════════════════════════════
+
+    api.registerHook(
+      'agent:bootstrap',
+      (event: InternalHookEvent) => {
+        if (event.type !== 'agent' || event.action !== 'bootstrap') return;
+        const ctx = event.context as { bootstrapFiles?: BootstrapFile[] };
+        if (!Array.isArray(ctx.bootstrapFiles)) return;
+
+        const removed = ctx.bootstrapFiles.map(f => f.name);
+        // Clear ALL bootstrap files — dot-ai provides everything
+        ctx.bootstrapFiles = [];
+
+        api.logger.debug?.(`[dot-ai] Removed ${removed.length} OpenClaw bootstrap files: ${removed.join(', ')}`);
+      },
+      { name: 'dot-ai-bootstrap-filter', description: 'Remove OpenClaw workspace files — dot-ai owns context' },
+    );
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Tools: delegate to runtime capabilities
+    // ══════════════════════════════════════════════════════════════════════
+
     api.registerTool(
       (_ctx: Record<string, unknown>) => {
         if (!cachedRuntime?.isBooted) return null;
-        const capabilities = cachedRuntime.capabilities;
-        return capabilities.map((cap): OpenClawTool => ({
+        return cachedRuntime.capabilities.map((cap): OpenClawTool => ({
           name: cap.name,
           label: cap.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
           description: cap.description,
@@ -103,61 +218,56 @@ const plugin = {
       { names: ['memory_recall', 'memory_store', 'task_list', 'task_create', 'task_update'] },
     );
 
-    // Hook: before_agent_start — run the full pipeline
+    // ══════════════════════════════════════════════════════════════════════
+    // Plugin Hook: before_prompt_build — inject dot-ai context
+    // Replaces legacy before_agent_start. Has access to messages[] and
+    // supports prependSystemContext for prompt caching.
+    // ══════════════════════════════════════════════════════════════════════
+
     api.on(
-      'before_agent_start',
+      'before_prompt_build',
       async (
         _event: unknown,
-        ctx: { workspaceDir?: string; sessionKey?: string; prompt?: string },
+        ctx: Record<string, unknown>,
       ) => {
-        // Resolve workspace root with priority:
-        // 1. cwd — if process.cwd() has .ai/ (Claude Code, Pi, local CLI)
-        // 2. Plugin config (openclaw.json "dot-ai.workspace") — for gateway/Discord/TUI
-        // 3. OpenClaw's ctx.workspaceDir — fallback
-        const cwd = process.cwd();
-        const cwdWorkspace = hasWorkspace(cwd) ? cwd : null;
-        const rawWorkspaceDir = cwdWorkspace ?? configuredWorkspace ?? ctx.workspaceDir;
-
-        if (!rawWorkspaceDir) {
-          api.logger.info('[dot-ai] No workspaceRoot configured, no .ai/ in cwd, no workspaceDir — skipping');
+        const workspaceDir = resolveWorkspace(configuredWorkspace, ctx.workspaceDir as string | undefined);
+        if (!workspaceDir) {
+          api.logger.info('[dot-ai] No workspace found — skipping');
           return;
         }
 
-        // Strip trailing .ai/ if the path points to the .ai dir itself
-        const workspaceDir = rawWorkspaceDir.endsWith('/.ai') || rawWorkspaceDir.endsWith('\\.ai')
-          ? rawWorkspaceDir.slice(0, -4)
-          : rawWorkspaceDir;
-
-        const isSubagent = ctx.sessionKey?.includes(':subagent:') || ctx.sessionKey?.includes(':cron:');
+        const sessionKey = ctx.sessionKey as string | undefined;
+        const isSubagent = sessionKey?.includes(':subagent:') || sessionKey?.includes(':cron:');
         if (isSubagent) {
           api.logger.debug?.('[dot-ai] Sub-agent/cron session, skipping');
           return;
         }
 
         try {
-          if (!cachedRuntime || cachedWorkspace !== workspaceDir) {
-            api.logger.info(`[dot-ai] workspaceRoot=${workspaceDir}`);
-            cachedRuntime = new DotAiRuntime({ workspaceRoot: workspaceDir });
-            await cachedRuntime.boot();
-            cachedWorkspace = workspaceDir;
-            api.logger.info(`[dot-ai] Runtime booted (v${PKG_VERSION})`);
+          const runtime = await ensureRuntime(workspaceDir, api.logger);
+          const prompt = ((_event as { prompt?: string })?.prompt) ?? '';
+          const { sections } = await runtime.processPrompt(prompt);
 
-            // Log extension diagnostics
-            const diag = cachedRuntime.diagnostics;
-            api.logger.info(`[dot-ai] extensions=${diag.extensions.length}, capabilities=${diag.capabilityCount}`);
-            if (diag.vocabularySize !== undefined) {
-              api.logger.info(`[dot-ai] Vocabulary size: ${diag.vocabularySize}`);
-            }
+          if (sections.length === 0) return;
+
+          const { static: staticSections, dynamic: dynamicSections } = splitSections(sections);
+
+          const result: Record<string, string> = {};
+
+          // Static context → prependSystemContext (cached by providers like Anthropic)
+          if (staticSections.length > 0) {
+            result.prependSystemContext = assembleSections(staticSections);
           }
 
-          const prompt = ctx.prompt ?? '';
-          const { sections } = await cachedRuntime.processPrompt(prompt);
-          const formatted = formatSections(sections);
-
-          if (formatted) {
-            api.logger.info(`[dot-ai] Injected: ${sections.length} sections`);
-            return { prependContext: formatted };
+          // Dynamic context → prependContext (per-turn, changes with each prompt)
+          if (dynamicSections.length > 0) {
+            result.prependContext = assembleSections(dynamicSections);
           }
+
+          const totalSections = staticSections.length + dynamicSections.length;
+          api.logger.info(`[dot-ai] Injected: ${totalSections} sections (${staticSections.length} cached, ${dynamicSections.length} per-turn)`);
+
+          return result;
         } catch (err) {
           api.logger.info(`[dot-ai] Pipeline error: ${err}`);
         }
@@ -166,8 +276,11 @@ const plugin = {
       { priority: 10 },
     );
 
-    // Hook: after_agent_end — feed response back to runtime for learning + extension events
-    api.on('after_agent_end', async (_event, ctx) => {
+    // ══════════════════════════════════════════════════════════════════════
+    // Plugin Hook: agent_end — feed response back to runtime
+    // ══════════════════════════════════════════════════════════════════════
+
+    api.on('agent_end', async (_event, ctx) => {
       if (!cachedRuntime) return;
       const response = (ctx as { response?: string }).response ?? '';
       if (response) {
@@ -175,7 +288,10 @@ const plugin = {
       }
     });
 
+    // ══════════════════════════════════════════════════════════════════════
     // Service registration
+    // ══════════════════════════════════════════════════════════════════════
+
     api.registerService({
       id: 'dot-ai',
       start: (svc) => svc.logger.info(`[dot-ai] Active (workspace: ${configuredWorkspace ?? 'cwd'})`),
