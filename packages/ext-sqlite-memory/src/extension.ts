@@ -17,11 +17,16 @@ export default function(api: ExtensionAPI) {
     const labelNames = event.labels.map(l => l.name);
     const memories = await provider.search(event.prompt, labelNames);
 
+    const MAX_ENTRIES = 5;
+    const MAX_ENTRY_CHARS = 200;
     const description = provider.describe();
     const content = memories.length > 0
-      ? `> ${description}\n\n${memories.slice(0, 10).map(m => {
+      ? `> ${description}\n\n${memories.slice(0, MAX_ENTRIES).map(m => {
           const date = m.date ? ` (${m.date})` : '';
-          return `- ${m.content}${date}`;
+          const truncated = m.content.length > MAX_ENTRY_CHARS
+            ? m.content.slice(0, MAX_ENTRY_CHARS) + '…'
+            : m.content;
+          return `- ${truncated}${date}`;
         }).join('\n')}`
       : `> ${description}\n\nNo relevant memories found for this prompt.`;
 
