@@ -1,3 +1,13 @@
+## 0.13.0 (2026-03-08)
+
+### 🚀 Features
+
+- auto-extract identity summaries + compact system section ([e83a7e0](https://github.com/jogelin/dot-ai/commit/e83a7e0))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.12.0 (2026-03-08)
 
 ### 🚀 Features
