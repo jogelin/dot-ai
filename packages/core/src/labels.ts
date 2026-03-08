@@ -13,8 +13,12 @@ export function extractLabels(prompt: string, vocabulary: string[]): Label[] {
   const labels: Label[] = [];
   const seen = new Set<string>();
 
+  // Skip very short labels (≤2 chars) — too many false positives (e.g. "og", "ha", "ai")
+  const MIN_LABEL_LENGTH = 3;
+
   for (const word of vocabulary) {
     if (seen.has(word)) continue;
+    if (word.length < MIN_LABEL_LENGTH) continue;
     const regex = new RegExp(`\\b${escapeRegex(word)}\\b`, 'i');
     if (regex.test(prompt)) {
       seen.add(word);
