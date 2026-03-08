@@ -27,9 +27,10 @@ const ROOT_FILES = [
   { type: 'agents', file: 'AGENTS.md', priority: 100, strategy: 'always' as const },
   { type: 'soul', file: 'SOUL.md', priority: 90, strategy: 'always' as const },
   { type: 'user', file: 'USER.md', priority: 80, strategy: 'contextual' as const,
-    contextualLabels: ['user', 'personal', 'preferences', 'about', 'family', 'profile', 'who', 'name', 'timezone', 'language', 'style'] },
+    contextualLabels: ['user', 'personal', 'preferences', 'about', 'family', 'profile', 'who', 'name', 'timezone', 'language', 'style',
+      'préférences', 'profil', 'fuseau', 'langue', 'personnel'] },
   { type: 'identity', file: 'IDENTITY.md', priority: 70, strategy: 'contextual' as const,
-    contextualLabels: ['identity', 'project', 'company', 'brand', 'mission'] },
+    contextualLabels: ['identity', 'project', 'company', 'brand', 'mission', 'identité', 'projet', 'entreprise', 'marque'] },
 ];
 
 const PROJECT_FILES = [
