@@ -1,3 +1,13 @@
+## 0.14.0 (2026-03-08)
+
+### 🚀 Features
+
+- 3-level injection, dedup loading, skill catalog, manual trigger fix ([5211386](https://github.com/jogelin/dot-ai/commit/5211386))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.13.0 (2026-03-08)
 
 ### 🚀 Features
