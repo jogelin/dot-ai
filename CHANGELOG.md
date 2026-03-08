@@ -1,3 +1,20 @@
+## 0.11.7 (2026-03-08)
+
+### 🚀 Features
+
+- **adapter-openclaw:** upgrade to v8 plugin architecture ([0f0cc3e](https://github.com/jogelin/dot-ai/commit/0f0cc3e))
+- **core:** add architecture overview to dot-ai:system section ([31b30f8](https://github.com/jogelin/dot-ai/commit/31b30f8))
+
+### 🩹 Fixes
+
+- **core:** skip labels shorter than 3 chars to avoid false positives ([56087c3](https://github.com/jogelin/dot-ai/commit/56087c3))
+- **ext-file-skills:** respect manual trigger — skip label matching ([c08859d](https://github.com/jogelin/dot-ai/commit/c08859d))
+- **memory:** limit context injection to 5 entries × 200 chars ([91ce257](https://github.com/jogelin/dot-ai/commit/91ce257))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.11.6 (2026-03-07)
 
 ### 🩹 Fixes
