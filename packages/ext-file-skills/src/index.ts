@@ -45,16 +45,36 @@ export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
   const META = new Set(['always', 'auto', 'manual', 'boot', 'heartbeat', 'pipeline', 'audit']);
 
   function matchSkills(skills: Skill[], labelNames: Set<string>): Skill[] {
-    return skills.filter(skill => {
-      // Skills with trigger 'manual' are only injected on explicit request, not by label matching
-      const isManual = skill.triggers?.includes('manual') ?? false;
-      if (isManual) return false;
+    const scored = skills
+      .map(skill => {
+        // Skills with trigger 'manual' are only injected on explicit request
+        const isManual = skill.triggers?.includes('manual') ?? false;
+        if (isManual) return { skill, score: 0 };
 
-      const labelMatch = skill.labels.some(sl => labelNames.has(sl.toLowerCase()));
-      const triggerMatch = skill.triggers?.some(t => !META.has(t) && labelNames.has(t.toLowerCase())) ?? false;
-      const alwaysMatch = skill.triggers?.includes('always') ?? false;
-      return labelMatch || triggerMatch || alwaysMatch;
-    });
+        // 'always' trigger → automatic match
+        const alwaysMatch = skill.triggers?.includes('always') ?? false;
+        if (alwaysMatch) return { skill, score: 10 };
+
+        // Custom trigger match (non-meta triggers found in labels) → strong signal
+        const triggerMatches = (skill.triggers ?? [])
+          .filter(t => !META.has(t) && labelNames.has(t.toLowerCase())).length;
+        if (triggerMatches > 0) return { skill, score: 5 + triggerMatches };
+
+        // Label matching: count how many skill labels match
+        const labelMatches = skill.labels.filter(sl => labelNames.has(sl.toLowerCase())).length;
+        const totalLabels = skill.labels.length;
+
+        // Require at least 2 label matches, OR 1 match if the skill has only 1 label
+        if (labelMatches === 0) return { skill, score: 0 };
+        if (totalLabels === 1 && labelMatches === 1) return { skill, score: 2 };
+        if (labelMatches < 2) return { skill, score: 0 };
+
+        return { skill, score: labelMatches };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.map(({ skill }) => skill);
   }
 
   // Eagerly discover and register all skills at boot

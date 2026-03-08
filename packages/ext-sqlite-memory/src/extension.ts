@@ -42,27 +42,9 @@ export default function(api: ExtensionAPI) {
     };
   });
 
-  api.on('agent_end', async (event) => {
-    const response = event.response;
-    if (!response || response.length < 100) return;
-    if (response.includes('NO_REPLY') || response.includes('HEARTBEAT_OK')) return;
-    const CONVERSATIONAL_PREFIXES = ['OK', 'Done', "Here's", "I've", 'Sure', 'No problem', 'Voilà', "C'est fait"];
-    const trimmed = response.trimStart();
-    if (CONVERSATIONAL_PREFIXES.some(prefix => trimmed.startsWith(prefix))) return;
-
-    const MAX_LEARN_LENGTH = 500;
-    const truncated = response.length > MAX_LEARN_LENGTH
-      ? response.slice(0, MAX_LEARN_LENGTH) + '…'
-      : response;
-
-    try {
-      await provider.store({
-        content: truncated,
-        type: 'log',
-        date: new Date().toISOString().slice(0, 10),
-      });
-    } catch { /* ignore store errors */ }
-  });
+  // Auto-learning disabled — produces too much noise (tables, summaries, context).
+  // Memory should be managed explicitly via memory_store tool.
+  // To re-enable, add an `agent_end` handler that filters responses more strictly.
 
   api.registerTool({
     name: 'memory_recall',
