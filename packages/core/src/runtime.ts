@@ -298,18 +298,36 @@ export class DotAiRuntime {
       sections = collected.sections;
     }
 
-    // Add core system section
+    // Add core system section with architecture overview
     if (this._runner) {
       const skillNames = this._runner.skills.map(s => s.name);
       const toolNames = this._runner.tools.map(t => t.name);
-      const parts = ['dot-ai workspace active.'];
-      if (skillNames.length > 0) parts.push(`Skills: ${skillNames.join(', ')}.`);
-      if (toolNames.length > 0) parts.push(`Tools: ${toolNames.join(', ')}.`);
+
+      const archLines = [
+        'Your context is managed by **dot-ai**, a workspace convention that enriches your prompt automatically.',
+        '',
+        '**How it works:** dot-ai reads `.ai/` directories in the workspace, discovers identity files (AGENTS.md, SOUL.md, USER.md, IDENTITY.md), skills, tools, memory, and tasks — then injects relevant sections into your context at each turn.',
+        '',
+        '- **Identity files** → `.ai/*.md` — always injected (who you are, rules, user info)',
+        '- **Skills** → `.ai/skills/{name}/SKILL.md` — injected when prompt matches skill labels/triggers',
+        '- **Memory** → SQLite FTS5 in `.ai/memory.db` — searched per-prompt, use memory_recall/memory_store tools',
+        '- **Tasks** → `.ai/tasks.json` — active tasks injected, use task_list/task_create/task_update tools',
+        '- **Tools** → `.ai/tools/*.yaml` — tool metadata injected when labels match',
+        '- **Project agents** → `projects/{name}/.ai/AGENT.md` — injected when project name detected in prompt',
+        '',
+        'Source of truth for all context is `.ai/` in the workspace root. Do NOT create or edit files in the agent\'s own workspace/config directory for context — dot-ai manages injection.',
+        `For dot-ai internals and extension development: read the \`dot-ai\` or \`dot-ai-architecture\` skill.`,
+      ];
+
+      const statusParts = [];
+      if (skillNames.length > 0) statusParts.push(`Skills: ${skillNames.join(', ')}.`);
+      if (toolNames.length > 0) statusParts.push(`Tools: ${toolNames.join(', ')}.`);
+      if (statusParts.length > 0) archLines.push('', statusParts.join(' '));
 
       sections.push({
         id: 'dot-ai:system',
         title: 'dot-ai',
-        content: parts.join(' '),
+        content: archLines.join('\n'),
         priority: 95,
         source: 'core',
         trimStrategy: 'never',
