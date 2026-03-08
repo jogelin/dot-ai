@@ -46,6 +46,10 @@ export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
 
   function matchSkills(skills: Skill[], labelNames: Set<string>): Skill[] {
     return skills.filter(skill => {
+      // Skills with trigger 'manual' are only injected on explicit request, not by label matching
+      const isManual = skill.triggers?.includes('manual') ?? false;
+      if (isManual) return false;
+
       const labelMatch = skill.labels.some(sl => labelNames.has(sl.toLowerCase()));
       const triggerMatch = skill.triggers?.some(t => !META.has(t) && labelNames.has(t.toLowerCase())) ?? false;
       const alwaysMatch = skill.triggers?.includes('always') ?? false;
