@@ -1,3 +1,13 @@
+## 0.12.0 (2026-03-08)
+
+### 🚀 Features
+
+- progressive disclosure + smarter matching + stop auto-learning ([85fbb57](https://github.com/jogelin/dot-ai/commit/85fbb57))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.11.7 (2026-03-08)
 
 ### 🚀 Features
