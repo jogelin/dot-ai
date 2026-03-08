@@ -47,27 +47,23 @@ export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
   function matchSkills(skills: Skill[], labelNames: Set<string>): Skill[] {
     const scored = skills
       .map(skill => {
-        // Skills with trigger 'manual' are only injected on explicit request
         const isManual = skill.triggers?.includes('manual') ?? false;
-        if (isManual) return { skill, score: 0 };
 
         // 'always' trigger → automatic match
-        const alwaysMatch = skill.triggers?.includes('always') ?? false;
-        if (alwaysMatch) return { skill, score: 10 };
+        if (skill.triggers?.includes('always')) return { skill, score: 10 };
 
         // Custom trigger match (non-meta triggers found in labels) → strong signal
+        // Triggers always match, even for manual skills (trigger = explicit intent)
         const triggerMatches = (skill.triggers ?? [])
           .filter(t => !META.has(t) && labelNames.has(t.toLowerCase())).length;
         if (triggerMatches > 0) return { skill, score: 5 + triggerMatches };
 
-        // Label matching: count how many skill labels match
-        const labelMatches = skill.labels.filter(sl => labelNames.has(sl.toLowerCase())).length;
-        const totalLabels = skill.labels.length;
+        // Manual skills without trigger match → skip label matching
+        if (isManual) return { skill, score: 0 };
 
-        // Require at least 2 label matches, OR 1 match if the skill has only 1 label
+        // Label matching: any match counts, score by count for ranking
+        const labelMatches = skill.labels.filter(sl => labelNames.has(sl.toLowerCase())).length;
         if (labelMatches === 0) return { skill, score: 0 };
-        if (totalLabels === 1 && labelMatches === 1) return { skill, score: 2 };
-        if (labelMatches < 2) return { skill, score: 0 };
 
         return { skill, score: labelMatches };
       })

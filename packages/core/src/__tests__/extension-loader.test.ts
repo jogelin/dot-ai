@@ -224,4 +224,30 @@ describe('discoverExtensions', () => {
     const matching = paths.filter(p => p.includes('shared.ts'));
     expect(matching).toHaveLength(1);
   });
+
+  it('skips config.packages already loaded from .ai/packages/', async () => {
+    // Setup package in .ai/packages/ (step 3)
+    const pkgDir = join(testDir, '.ai', 'packages');
+    const extPkgDir = join(pkgDir, 'node_modules', '@dot-ai', 'ext-file-skills');
+    await mkdir(join(extPkgDir, 'dist'), { recursive: true });
+    await writeFile(join(pkgDir, 'package.json'), JSON.stringify({
+      dependencies: { '@dot-ai/ext-file-skills': '0.13.0' },
+    }));
+    await writeFile(join(extPkgDir, 'package.json'), JSON.stringify({
+      name: '@dot-ai/ext-file-skills',
+      version: '0.13.0',
+      'dot-ai': { extensions: ['./dist/index.js'] },
+    }));
+    await writeFile(join(extPkgDir, 'dist', 'index.js'), 'export default function() {}');
+
+    // config.packages lists the same package (step 5) — should be skipped
+    const paths = await discoverExtensions(testDir, {
+      packages: ['@dot-ai/ext-file-skills'],
+    });
+
+    // Should only appear once (from .ai/packages/, not from config.packages)
+    const matching = paths.filter(p => p.includes('ext-file-skills'));
+    expect(matching).toHaveLength(1);
+    expect(matching[0]).toContain('.ai/packages/');
+  });
 });

@@ -93,8 +93,11 @@ async function discoverExtensionsInDir(dir: string): Promise<string[]> {
  *
  * Reads the package.json created by `npm --prefix .ai/packages/` and resolves
  * extension entry points from each installed package's "dot-ai.extensions" field.
+ *
+ * Returns both the resolved paths and the package names found, so the caller
+ * can skip these packages when resolving from workspace node_modules.
  */
-async function resolveInstalledPackages(workspaceRoot: string): Promise<string[]> {
+async function resolveInstalledPackages(workspaceRoot: string): Promise<{ paths: string[]; packageNames: string[] }> {
   const packagesDir = join(workspaceRoot, '.ai', 'packages');
   const pkgJsonPath = join(packagesDir, 'package.json');
 
@@ -102,19 +105,20 @@ async function resolveInstalledPackages(workspaceRoot: string): Promise<string[]
     const raw = await readFile(pkgJsonPath, 'utf-8');
     const pkg = JSON.parse(raw) as Record<string, unknown>;
     const deps = pkg.dependencies as Record<string, string> | undefined;
-    if (!deps) return [];
+    if (!deps) return { paths: [], packageNames: [] };
 
     const paths: string[] = [];
-    for (const name of Object.keys(deps)) {
+    const packageNames = Object.keys(deps);
+    for (const name of packageNames) {
       const pkgDir = join(packagesDir, 'node_modules', name);
       const entries = await resolveExtensionEntries(pkgDir);
       if (entries) {
         paths.push(...entries);
       }
     }
-    return paths;
+    return { paths, packageNames };
   } catch {
-    return [];
+    return { paths: [], packageNames: [] };
   }
 }
 
@@ -127,6 +131,10 @@ async function resolveInstalledPackages(workspaceRoot: string): Promise<string[]
  * 3. Installed packages: .ai/packages/node_modules/ (installed via dot-ai install)
  * 4. Configured paths: settings.json "extensions" array (explicit paths/dirs)
  * 5. Configured packages: settings.json "packages" array (npm package names resolved from workspace node_modules)
+ *
+ * Deduplication: Step 3 records which package names were already loaded from .ai/packages/.
+ * Step 5 skips any package already loaded in step 3 to avoid duplicate extension loading
+ * when the same package exists in both .ai/packages/ and the workspace's node_modules/.
  */
 export async function discoverExtensions(
   workspaceRoot: string,
@@ -134,6 +142,8 @@ export async function discoverExtensions(
 ): Promise<string[]> {
   const seen = new Set<string>();
   const allPaths: string[] = [];
+  // Track package names loaded from .ai/packages/ to avoid duplicates in step 5
+  const loadedPackageNames = new Set<string>();
 
   const addPaths = (paths: string[]) => {
     for (const p of paths) {
@@ -152,7 +162,11 @@ export async function discoverExtensions(
   addPaths(await discoverExtensionsInDir(join(homedir(), '.ai', 'extensions')));
 
   // 3. Installed packages: .ai/packages/node_modules/
-  addPaths(await resolveInstalledPackages(workspaceRoot));
+  const { paths: installedPaths, packageNames } = await resolveInstalledPackages(workspaceRoot);
+  addPaths(installedPaths);
+  for (const name of packageNames) {
+    loadedPackageNames.add(name);
+  }
 
   // 4. Explicitly configured paths from settings.json "extensions" array
   if (config?.paths) {
@@ -180,9 +194,11 @@ export async function discoverExtensions(
   }
 
   // 5. Configured npm packages from settings.json "packages" array
-  // These are resolved from the workspace's own node_modules
+  // These are resolved from the workspace's own node_modules.
+  // Skip packages already loaded from .ai/packages/ (step 3) to avoid duplicates.
   if (config?.packages) {
     for (const pkg of config.packages) {
+      if (loadedPackageNames.has(pkg)) continue;
       try {
         const { createRequire } = await import('node:module');
         const require = createRequire(join(workspaceRoot, 'package.json'));

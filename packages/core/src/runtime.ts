@@ -298,10 +298,15 @@ export class DotAiRuntime {
       sections = collected.sections;
     }
 
-    // Add core system section with architecture overview
+    // Add core system section with architecture overview + skill catalog
     if (this._runner) {
-      const skillNames = this._runner.skills.map(s => s.name);
+      const allSkills = this._runner.skills;
       const toolNames = this._runner.tools.map(t => t.name);
+
+      // Identify which skills were injected in this turn
+      const injectedSkillIds = new Set(
+        sections.filter(s => s.id?.startsWith('skill:')).map(s => s.id!.replace('skill:', '')),
+      );
 
       const archLines = [
         'Context managed by **dot-ai** — reads `.ai/` in workspace, injects relevant sections per-turn.',
@@ -309,8 +314,24 @@ export class DotAiRuntime {
         'Source of truth: `.ai/` directory. Do NOT edit agent workspace files for context.',
       ];
 
-      if (skillNames.length > 0) archLines.push(`${skillNames.length} skills available.`);
       if (toolNames.length > 0) archLines.push(`Tools: ${toolNames.join(', ')}.`);
+
+      // Skill catalog: show injected skills, then list available (non-injected) skills by name
+      if (allSkills.length > 0) {
+        const nonInjected = allSkills.filter(s => !injectedSkillIds.has(s.name));
+        if (injectedSkillIds.size > 0) {
+          archLines.push(`Active skills: ${[...injectedSkillIds].join(', ')}.`);
+        }
+        if (nonInjected.length > 0) {
+          // Show up to 15 non-injected skill names for awareness
+          const shown = nonInjected.slice(0, 15).map(s => s.name);
+          const remaining = nonInjected.length - shown.length;
+          let catalogLine = `Other skills: ${shown.join(', ')}`;
+          if (remaining > 0) catalogLine += ` (+${remaining} more)`;
+          catalogLine += '. Ask to load any skill by name.';
+          archLines.push(catalogLine);
+        }
+      }
 
       sections.push({
         id: 'dot-ai:system',

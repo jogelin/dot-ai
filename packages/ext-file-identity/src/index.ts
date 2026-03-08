@@ -15,11 +15,21 @@ import { join } from 'node:path';
 import type { ExtensionAPI } from '@dot-ai/core';
 import { discoverNodes, parseScanDirs } from '@dot-ai/core';
 
+/**
+ * Root identity files with injection strategy:
+ * - 'always': injected every turn (core operating rules, personality)
+ * - 'contextual': injected as full summary when labels match, otherwise one-liner reference
+ *
+ * contextualLabels: if any of these labels are present, inject the full summary.
+ * When none match, inject a minimal reference so the agent knows the file exists.
+ */
 const ROOT_FILES = [
-  { type: 'agents', file: 'AGENTS.md', priority: 100 },
-  { type: 'soul', file: 'SOUL.md', priority: 90 },
-  { type: 'user', file: 'USER.md', priority: 80 },
-  { type: 'identity', file: 'IDENTITY.md', priority: 70 },
+  { type: 'agents', file: 'AGENTS.md', priority: 100, strategy: 'always' as const },
+  { type: 'soul', file: 'SOUL.md', priority: 90, strategy: 'always' as const },
+  { type: 'user', file: 'USER.md', priority: 80, strategy: 'contextual' as const,
+    contextualLabels: ['user', 'personal', 'preferences', 'about', 'family', 'profile', 'who', 'name', 'timezone', 'language', 'style'] },
+  { type: 'identity', file: 'IDENTITY.md', priority: 70, strategy: 'contextual' as const,
+    contextualLabels: ['identity', 'project', 'company', 'brand', 'mission'] },
 ];
 
 const PROJECT_FILES = [
@@ -163,14 +173,40 @@ export default async function extFileIdentity(api: ExtensionAPI): Promise<void> 
     }
   }
 
+  // Contribute contextual labels to vocabulary so they can be extracted from prompts
+  for (const rf of ROOT_FILES) {
+    if (rf.strategy === 'contextual' && 'contextualLabels' in rf) {
+      api.contributeLabels(rf.contextualLabels!);
+    }
+  }
+
   api.on('context_enrich', async (event) => {
     const sections = [];
+    const labelNames = new Set(event.labels.map((l: { name: string }) => l.name.toLowerCase()));
 
     for (const node of rootNodes) {
-      for (const { type, file, priority } of ROOT_FILES) {
+      for (const rootFile of ROOT_FILES) {
+        const { type, file, priority, strategy } = rootFile;
         const key = `${node.name}:${type}`;
         const cached = fileCache.get(key);
         if (!cached) continue;
+
+        // Contextual files: check if any contextual labels match
+        if (strategy === 'contextual' && 'contextualLabels' in rootFile) {
+          const hasContext = rootFile.contextualLabels!.some(l => labelNames.has(l.toLowerCase()));
+          if (!hasContext) {
+            // Inject minimal reference only (agent knows file exists, can read if needed)
+            sections.push({
+              id: `identity:${type}:${node.name}`,
+              title: file.replace('.md', ''),
+              content: `> Available: \`read .ai/${file}\``,
+              priority: priority - 10, // lower priority for references
+              source: 'ext-file-identity',
+              trimStrategy: 'drop' as const,
+            });
+            continue;
+          }
+        }
 
         sections.push({
           id: `identity:${type}:${node.name}`,
@@ -183,7 +219,6 @@ export default async function extFileIdentity(api: ExtensionAPI): Promise<void> 
       }
     }
 
-    const labelNames = new Set(event.labels.map((l: { name: string }) => l.name));
     for (const node of projectNodes) {
       if (!labelNames.has(node.name)) continue;
       for (const { type, file, priority } of PROJECT_FILES) {
