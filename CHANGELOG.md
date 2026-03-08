@@ -1,3 +1,13 @@
+## 0.15.0 (2026-03-08)
+
+### 🚀 Features
+
+- **ext-file-skills:** description-based matching replaces manual/auto labels ([17068b4](https://github.com/jogelin/dot-ai/commit/17068b4))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.14.1 (2026-03-08)
 
 ### 🚀 Features

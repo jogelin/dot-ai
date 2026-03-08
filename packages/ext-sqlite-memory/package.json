@@ -1,6 +1,6 @@
 {
   "name": "@dot-ai/ext-sqlite-memory",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "SQLite FTS5 memory extension for dot-ai",
   "type": "module",
   "main": "dist/extension.js",
