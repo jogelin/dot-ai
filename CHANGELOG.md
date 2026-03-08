@@ -1,3 +1,17 @@
+## 0.14.1 (2026-03-08)
+
+### 🚀 Features
+
+- **ext-file-identity:** add French contextual labels for USER.md/IDENTITY.md ([424faf8](https://github.com/jogelin/dot-ai/commit/424faf8))
+
+### 🩹 Fixes
+
+- **simulate:** update batch test expectations, improve prompts ([f73c065](https://github.com/jogelin/dot-ai/commit/f73c065))
+
+### ❤️ Thank You
+
+- Jonathan Gelin @jogelin
+
 ## 0.14.0 (2026-03-08)
 
 ### 🚀 Features
