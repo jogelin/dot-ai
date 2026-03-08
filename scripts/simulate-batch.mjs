@@ -116,7 +116,7 @@ const prompts = [
   // ═══════════════════════════════════════════════════════════════════════
   { prompt: "check mes emails", expect: "no skill", cat: "gws" },
   { prompt: "qu'est-ce que j'ai dans mon agenda demain ?", expect: "no skill", cat: "gws" },
-  { prompt: "envoie un email via gmail", expect: "no skill", cat: "gws" },
+  { prompt: "envoie un email via gmail", expect: "gws-gmail", cat: "gws" },
 
   // ═══════════════════════════════════════════════════════════════════════
   // 14. VAN / ECOLE CAILLOU (project routing)
