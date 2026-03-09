@@ -1,0 +1,18 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`adapter / pi — systemPrompt format > snapshot: formatted output structure > formatted output matches snapshot for consistent structure 1`] = `
+[
+  {
+    "id": "dot-ai:system",
+    "priority": 95,
+    "source": "core",
+    "trimStrategy": "never",
+  },
+  {
+    "id": "skill:deploy",
+    "priority": 60,
+    "source": "ext-file-skills",
+    "trimStrategy": "drop",
+  },
+]
+`;

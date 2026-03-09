@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/core" },
+    { "path": "packages/e2e" },
     { "path": "packages/ext-file-identity" },
     { "path": "packages/ext-file-memory" },
     { "path": "packages/ext-file-prompts" },

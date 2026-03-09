@@ -129,6 +129,37 @@ importers:
         specifier: ^2.0.0
         version: 2.6.1
 
+  packages/e2e:
+    dependencies:
+      '@dot-ai/adapter-claude':
+        specifier: workspace:*
+        version: link:../adapter-claude
+      '@dot-ai/adapter-pi':
+        specifier: workspace:*
+        version: link:../adapter-pi
+      '@dot-ai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@dot-ai/ext-file-identity':
+        specifier: workspace:*
+        version: link:../ext-file-identity
+      '@dot-ai/ext-file-memory':
+        specifier: workspace:*
+        version: link:../ext-file-memory
+      '@dot-ai/ext-file-skills':
+        specifier: workspace:*
+        version: link:../ext-file-skills
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.12
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.0.18(@types/node@22.19.12)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/ext-file-identity:
     dependencies:
       '@dot-ai/core':

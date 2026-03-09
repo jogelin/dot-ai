@@ -309,26 +309,44 @@ export class DotAiRuntime {
       );
 
       const archLines = [
-        'Context managed by **dot-ai** — reads `.ai/` in workspace, injects relevant sections per-turn.',
-        'Identity (`.ai/*.md`) always present. Skills, memory, tasks, project agents injected when relevant.',
-        'Source of truth: `.ai/` directory. Do NOT edit agent workspace files for context.',
+        'Context managed by **dot-ai** — reads `.ai/` in workspace.',
+        'Identity always present. Extensions inject relevant context per-turn.',
       ];
 
-      if (toolNames.length > 0) archLines.push(`Tools: ${toolNames.join(', ')}.`);
+      // Extension metadata rows (contributed at boot via api.contributeMetadata())
+      // Each extension declares its category, backend, and tools so the agent knows
+      // what's available without scanning hundreds of extensions itself.
+      const extMetadata = this._runner.metadata;
+      for (const meta of extMetadata) {
+        const cap = meta.category.charAt(0).toUpperCase() + meta.category.slice(1);
+        let line = `${cap}: ${meta.backend}`;
+        if (meta.stats?.count !== undefined) line += ` (${meta.stats.count} registered)`;
+        if (meta.tools?.length) line += ` — ${meta.tools.join(', ')}`;
+        archLines.push(line);
+      }
 
-      // Skill catalog: show injected skills, then list available (non-injected) skills by name
+      // Fallback: if no extension contributed metadata, list all tools directly
+      if (extMetadata.length === 0 && toolNames.length > 0) {
+        archLines.push(`Tools: ${toolNames.join(', ')}.`);
+      }
+
+      // Skill catalog (only when skills extension didn't contribute metadata —
+      // if it did, the count is already in the metadata line above)
+      const hasSkillsMetadata = extMetadata.some(m => m.category === 'skills');
       if (allSkills.length > 0) {
         const nonInjected = allSkills.filter(s => !injectedSkillIds.has(s.name));
+        if (!hasSkillsMetadata) {
+          archLines.push(`Skills: ${allSkills.length} registered.`);
+        }
         if (injectedSkillIds.size > 0) {
           archLines.push(`Active skills: ${[...injectedSkillIds].join(', ')}.`);
         }
         if (nonInjected.length > 0) {
-          // Show up to 15 non-injected skill names for awareness
           const shown = nonInjected.slice(0, 15).map(s => s.name);
           const remaining = nonInjected.length - shown.length;
           let catalogLine = `Other skills: ${shown.join(', ')}`;
           if (remaining > 0) catalogLine += ` (+${remaining} more)`;
-          catalogLine += '. Ask to load any skill by name.';
+          catalogLine += '. Ask to load any by name.';
           archLines.push(catalogLine);
         }
       }

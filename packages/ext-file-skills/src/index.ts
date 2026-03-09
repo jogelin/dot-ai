@@ -155,8 +155,33 @@ function indexSkill(skill: Skill): SkillIndex {
   };
 }
 
-/** Minimum score to be considered a match */
-const MIN_SCORE = 1.5;
+/**
+ * Minimum score to be considered a match (below this → not injected at all).
+ * Raised from 1.5 to 2.5 so single weak-signal matches (one label hit with no
+ * name/word overlap) don't inject noisy overviews.
+ */
+const MIN_SCORE = 2.5;
+
+/**
+ * Score threshold for directive-level injection.
+ *
+ * ≥ DIRECTIVE_THRESHOLD → detailLevel 'directive': "→ Use skill: name — description"
+ * MIN_SCORE–DIRECTIVE_THRESHOLD → detailLevel 'overview': "name: description"
+ *
+ * At the typical scoring weights:
+ *   label hit  → +2 (per label)
+ *   name part  → +3 (per matching name segment ≥5 chars)
+ *   word overlap → overlap²/sqrt(skill_word_count) (superlinear)
+ *
+ * Typical ranges:
+ *   2 labels (no name, little overlap) → ~4-6        → overview
+ *   2 labels + name match              → ~7-10       → overview/directive boundary
+ *   3+ labels + name match             → ~11+        → directive
+ *   4 labels + name + strong overlap   → ~15+        → directive
+ *
+ * 'always' trigger skills bypass both thresholds and inject full content.
+ */
+const DIRECTIVE_THRESHOLD = 8.0;
 
 /**
  * Score a skill against a prompt. Higher = more relevant.
@@ -266,6 +291,54 @@ export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
   // Pre-build the index at boot
   await getIndex();
 
+  // Tell the core what we are — contributes to the dot-ai:system section
+  api.contributeMetadata({
+    category: 'skills',
+    backend: 'File-based',
+    tools: ['load_skill'],
+    stats: { count: bootSkills.length },
+  });
+
+  // On-demand skill loader: agent can request full SKILL.md content for any registered skill
+  api.registerTool({
+    name: 'load_skill',
+    description: 'Load the full content of a skill file. Use when you need the complete instructions for a skill that was mentioned in the system section. Skill names are listed under "Other skills:" in the dot-ai system section.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Skill name exactly as shown in the system section (e.g. "deploy-production", "git-workflow").',
+        },
+      },
+      required: ['name'],
+    },
+    async execute(input) {
+      const name = input['name'];
+      if (typeof name !== 'string') {
+        return { content: 'Error: "name" must be a string.', isError: true };
+      }
+      const skills = await listSkills();
+      const skill = skills.find(s => s.name === name);
+      if (!skill) {
+        const available = skills.map(s => s.name).join(', ');
+        return {
+          content: `Skill "${name}" not found. Available skills: ${available || '(none)'}`,
+          isError: true,
+        };
+      }
+      let content = skill.content;
+      if (!content) {
+        try {
+          content = await readFile(skill.path, 'utf-8');
+        } catch {
+          return { content: `Error reading skill file for "${name}".`, isError: true };
+        }
+      }
+      return { content: content ?? skill.description, details: { name, path: skill.path } };
+    },
+  });
+
   api.on('context_enrich', async (event) => {
     const index = await getIndex();
     const prompt = (event as { prompt?: string }).prompt ?? '';
@@ -281,18 +354,41 @@ export default async function extFileSkills(api: ExtensionAPI): Promise<void> {
     if (scored.length === 0) return;
 
     const sections = [];
-    for (const { idx } of scored.slice(0, 5)) {
-      let content = idx.skill.content;
-      if (!content) {
-        try { content = await readFile(idx.skill.path, 'utf-8'); } catch { continue; }
+    for (const { idx, score } of scored.slice(0, 5)) {
+      let content: string;
+      let detailLevel: 'full' | 'directive' | 'overview';
+
+      if (idx.always) {
+        // 'always' trigger: this skill must always be present with its full content.
+        // It represents critical context (persona, rules, architecture) that the agent
+        // needs verbatim on every turn.
+        let full = idx.skill.content;
+        if (!full) {
+          try { full = await readFile(idx.skill.path, 'utf-8'); } catch { continue; }
+        }
+        content = full ?? idx.skill.description;
+        detailLevel = 'full';
+      } else if (score >= DIRECTIVE_THRESHOLD) {
+        // High confidence match — guide the agent to use the skill explicitly.
+        // Full content is available via load_skill tool or native file sync.
+        content = `→ Use skill: ${idx.skill.name} — ${idx.skill.description}`;
+        detailLevel = 'directive';
+      } else {
+        // Low-medium confidence — surface name + description only.
+        // The agent can decide if it's relevant; full content on demand.
+        content = `${idx.skill.name}: ${idx.skill.description}`;
+        detailLevel = 'overview';
       }
+
       sections.push({
         id: `skill:${idx.skill.name}`,
         title: `Skill: ${idx.skill.name}`,
-        content: content ?? idx.skill.description,
+        content,
         priority: 60,
         source: 'ext-file-skills',
         trimStrategy: 'drop' as const,
+        detailLevel,
+        matchScore: score,
       });
     }
     return { sections };
@@ -327,5 +423,5 @@ function extractArray(yaml: string, key: string): string[] {
 }
 
 // Export for testing
-export { tokenize, stem, removeDiacritics, scoreSkill, indexSkill, MIN_SCORE };
+export { tokenize, stem, removeDiacritics, scoreSkill, indexSkill, MIN_SCORE, DIRECTIVE_THRESHOLD };
 export type { SkillIndex };

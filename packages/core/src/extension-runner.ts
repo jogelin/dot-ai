@@ -11,6 +11,7 @@ import type {
   CollectedSections,
   CommandDefinition,
   InputResult,
+  ExtensionMetadata,
 } from './extension-types.js';
 import type { Skill, Identity } from './types.js';
 
@@ -279,6 +280,13 @@ export class ExtensionRunner {
     }
 
     return Array.from(identityMap.values());
+  }
+
+  /** Get all metadata contributed by extensions via api.contributeMetadata() */
+  get metadata(): ExtensionMetadata[] {
+    return this.extensions
+      .filter(ext => ext.metadata !== undefined)
+      .map(ext => ext.metadata!);
   }
 
   /** Get all vocabulary labels contributed by extensions */

@@ -51,6 +51,16 @@ export interface Section {
    * - 'drop': remove entirely (default)
    */
   trimStrategy?: 'never' | 'truncate' | 'drop';
+  /**
+   * Detail level — set by extensions to signal how much context is in this section.
+   * - 'directive': high-relevance, actionable ("→ Use skill: name — description")
+   * - 'overview':  medium-relevance, informational ("name: description")
+   * - 'full':      full file content (legacy / explicit request)
+   * Omit for sections where the concept doesn't apply (memory, identity, system).
+   */
+  detailLevel?: 'directive' | 'overview' | 'full';
+  /** Match score that produced this section (for debugging / tie-breaking) */
+  matchScore?: number;
 }
 
 // ── label_extract (chain-transform) ──────────────────────────────────────────
@@ -221,6 +231,25 @@ export type ExtensionEvent =
 // Loaded Extension
 // ══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Metadata an extension contributes at boot time via `api.contributeMetadata()`.
+ * Used by the core to build the dot-ai:system section so the agent always knows
+ * what backends and tools are available — without scanning every extension.
+ */
+export interface ExtensionMetadata {
+  /** Category label (e.g. 'memory', 'skills', 'identity', 'routing') */
+  category: string;
+  /** Human-readable backend description (e.g. 'File-based', 'SQLite') */
+  backend: string;
+  /** Tool names this extension registers (shown in system section) */
+  tools?: string[];
+  /**
+   * Arbitrary stats to surface in the system section.
+   * Convention: numeric values → shown as "(N registered)", string values → shown as-is.
+   */
+  stats?: Record<string, number | string>;
+}
+
 /** A loaded extension with its handlers, tools, commands, skills, and identities */
 export interface LoadedExtension {
   path: string;
@@ -230,6 +259,8 @@ export interface LoadedExtension {
   skills: Map<string, Skill>;
   identities: Map<string, Identity>;
   labels: Set<string>;
+  /** Metadata contributed by this extension at boot (via api.contributeMetadata()) */
+  metadata?: ExtensionMetadata;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

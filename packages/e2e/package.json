@@ -1,0 +1,32 @@
+{
+  "name": "@dot-ai/e2e",
+  "version": "0.14.1",
+  "private": true,
+  "description": "End-to-end scenario tests for dot-ai — validates prompt generation per agent",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:baseline": "vitest run src/scenarios/baseline",
+    "test:features": "vitest run src/scenarios/features",
+    "test:adapters": "vitest run src/scenarios/adapters"
+  },
+  "dependencies": {
+    "@dot-ai/core": "workspace:*",
+    "@dot-ai/adapter-pi": "workspace:*",
+    "@dot-ai/adapter-claude": "workspace:*",
+    "@dot-ai/ext-file-skills": "workspace:*",
+    "@dot-ai/ext-file-memory": "workspace:*",
+    "@dot-ai/ext-file-identity": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jogelin/dot-ai",
+    "directory": "packages/e2e"
+  }
+}

@@ -76,6 +76,21 @@ export interface ExtensionAPI {
   /** Contribute labels to the global vocabulary (for label matching) */
   contributeLabels(labels: string[]): void;
 
+  /**
+   * Contribute structured metadata about this extension.
+   * Called at boot time (inside the extension factory function).
+   * The core assembles these into the dot-ai:system section so the agent
+   * always knows what backends and tools are available.
+   *
+   * @example
+   * api.contributeMetadata({
+   *   category: 'memory',
+   *   backend: 'File-based',
+   *   tools: ['memory_recall', 'memory_store'],
+   * });
+   */
+  contributeMetadata(meta: import('./extension-types.js').ExtensionMetadata): void;
+
   // ── Inter-extension communication ──
 
   events: {

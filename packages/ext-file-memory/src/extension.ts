@@ -4,22 +4,33 @@ import { FileMemoryProvider } from './file-memory.js';
 export default function(api: ExtensionAPI) {
   const provider = new FileMemoryProvider({ ...api.config, root: api.workspaceRoot });
 
+  // Tell the core what we are so the system section can describe our backend
+  api.contributeMetadata({
+    category: 'memory',
+    backend: 'File-based',
+    tools: ['memory_recall', 'memory_store'],
+  });
+
   api.on('context_enrich', async (event) => {
     const labelNames = event.labels.map(l => l.name);
     const memories = await provider.search(event.prompt, labelNames);
 
+    // Suppress section entirely when no memories found — zero noise policy.
+    // An empty "No relevant memories found" message wastes tokens and trains
+    // the agent to ignore the section. If the agent needs to recall something,
+    // it can call the memory_recall tool directly.
+    if (memories.length === 0) return;
+
     const MAX_ENTRIES = 5;
     const MAX_ENTRY_CHARS = 200;
     const description = provider.describe();
-    const content = memories.length > 0
-      ? `> ${description}\n\n${memories.slice(0, MAX_ENTRIES).map(m => {
-          const date = m.date ? ` (${m.date})` : '';
-          const truncated = m.content.length > MAX_ENTRY_CHARS
-            ? m.content.slice(0, MAX_ENTRY_CHARS) + '…'
-            : m.content;
-          return `- ${truncated}${date}`;
-        }).join('\n')}`
-      : `> ${description}\n\nNo relevant memories found for this prompt.`;
+    const content = `> ${description}\n\n${memories.slice(0, MAX_ENTRIES).map(m => {
+      const date = m.date ? ` (${m.date})` : '';
+      const truncated = m.content.length > MAX_ENTRY_CHARS
+        ? m.content.slice(0, MAX_ENTRY_CHARS) + '…'
+        : m.content;
+      return `- ${truncated}${date}`;
+    }).join('\n')}`;
 
     return {
       sections: [{

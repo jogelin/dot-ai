@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { ExtensionAPI } from './extension-api.js';
-import type { LoadedExtension, ToolDefinition, CommandDefinition } from './extension-types.js';
+import type { LoadedExtension, ToolDefinition, CommandDefinition, ExtensionMetadata } from './extension-types.js';
 import type { ExtensionsConfig, Skill, Identity } from './types.js';
 
 function isExtensionFile(name: string): boolean {
@@ -260,6 +260,9 @@ export function createV6CollectorAPI(
     },
     contributeLabels(labels: string[]) {
       for (const label of labels) extension.labels.add(label);
+    },
+    contributeMetadata(meta: ExtensionMetadata) {
+      extension.metadata = meta;
     },
     events: eventBus ?? {
       on: () => {},

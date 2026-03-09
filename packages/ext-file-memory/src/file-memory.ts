@@ -33,7 +33,9 @@ export class FileMemoryProvider {
             if (line.trim() === '') continue;
             const lineLower = line.toLowerCase();
 
-            const queryMatch = lower.split(/\s+/).some(word => word.length > 2 && lineLower.includes(word));
+            // Require word length > 3 to avoid substring false positives
+            // ("the" matches "authentication" as a substring, "weather" hits "there", etc.)
+            const queryMatch = lower.split(/\s+/).some(word => word.length > 3 && lineLower.includes(word));
             const labelMatch = labelSet.size > 0 && [...labelSet].some(l => lineLower.includes(l));
 
             if (queryMatch || labelMatch) {
